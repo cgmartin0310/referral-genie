@@ -8,15 +8,18 @@ import MainLayout from '../../../components/layout/MainLayout';
 import CampaignForm from '../../../components/CampaignForm';
 import { formatDateForInput } from '../../../lib/utils';
 
-export default function EditCampaignPage({ params }: { params: { id: string } }) {
+export default function EditCampaignPage({ params }: { params: Promise<{ id: string }> }) {
   const [isLoading, setIsLoading] = useState(true);
   const [campaignData, setCampaignData] = useState<any>(null);
+  const [campaignId, setCampaignId] = useState<string>('');
   
   useEffect(() => {
     const fetchCampaign = async () => {
       try {
         setIsLoading(true);
-        const { data } = await axios.get(`/api/campaigns/${params.id}`);
+        const { id } = await params;
+        setCampaignId(id);
+        const { data } = await axios.get(`/api/campaigns/${id}`);
         
         // Format dates for the form
         const formattedData = {
@@ -35,7 +38,7 @@ export default function EditCampaignPage({ params }: { params: { id: string } })
     };
     
     fetchCampaign();
-  }, [params.id]);
+  }, [params]);
   
   if (isLoading) {
     return (
@@ -72,7 +75,7 @@ export default function EditCampaignPage({ params }: { params: { id: string } })
       </div>
       
       <CampaignForm 
-        campaignId={params.id}
+        campaignId={campaignId}
         defaultValues={{
           name: campaignData.name,
           description: campaignData.description || '',

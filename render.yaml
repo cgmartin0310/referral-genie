@@ -1,0 +1,26 @@
+databases:
+  - name: referral-genie-db
+    databaseName: referral_genie
+    user: referral_genie_user
+    region: oregon # or your preferred region
+
+services:
+  - type: web
+    name: referral-genie
+    runtime: node
+    region: oregon # should match your database region
+    buildCommand: npm install && npm run build && npx prisma migrate deploy
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: referral-genie-db
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: HUMBLE_FAX_API_KEY
+        sync: false # You'll set this in Render dashboard
+      - key: HUMBLE_FAX_API_SECRET
+        sync: false # You'll set this in Render dashboard
+      - key: HUMBLE_FAX_WEBHOOK_URL
+        sync: false # You'll set this after deployment 

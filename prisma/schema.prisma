@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ReferralSource {
+  id               String            @id @default(cuid())
+  name             String
+  address          String?
+  city             String?
+  state            String?
+  zipCode          String?
+  clinicLocation   String?           // Jacksonville, Wilmington, Beulaville, Goldsboro, Nashville
+  contactPerson    String?
+  contactTitle     String?
+  contactPhone     String?
+  contactEmail     String?
+  faxNumber        String?
+  npiNumber        String?           // National Provider Identifier
+  website          String?
+  notes            String?
+  rating           Float?            // 1-5 star rating
+  expectedMonthlyReferrals Int?      // Expected number of referrals per month
+  numberOfProviders Int?             // Number of providers at this referral source
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  categoryId       String?
+  category         ReferralCategory? @relation(fields: [categoryId], references: [id])
+  interactions     Interaction[]
+  campaigns        CampaignToReferralSource[]
+}
+
+model ReferralCategory {
+  id              String            @id @default(cuid())
+  name            String            @unique
+  description     String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  referralSources ReferralSource[]
+}
+
+model Interaction {
+  id               String         @id @default(cuid())
+  referralSourceId String
+  referralSource   ReferralSource @relation(fields: [referralSourceId], references: [id])
+  type             String         // CALL, EMAIL, MEETING, REFERRAL, etc.
+  date             DateTime
+  notes            String?
+  outcome          String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+model Campaign {
+  id               String                    @id @default(cuid())
+  name             String
+  description      String?
+  startDate        DateTime
+  endDate          DateTime?
+  status           String                    @default("DRAFT") // DRAFT, ACTIVE, COMPLETED, CANCELLED
+  type             String                    // EMAIL, CALL, EVENT, FAX etc.
+  content          String?                   // Campaign content or template
+  documentUrl      String?                   // URL to the stored document for fax campaigns
+  documentName     String?                   // Original filename of the document
+  // Cover sheet information for fax campaigns
+  coverSheetFromName  String?                // Sender name for fax cover sheet
+  coverSheetFromNumber String?               // Sender fax number for cover sheet
+  coverSheetCompanyInfo String?              // Sender company info for cover sheet
+  coverSheetSubject   String?                // Subject for the fax cover sheet
+  coverSheetMessage   String?                // Message for the fax cover sheet
+  includeCoverSheet  Boolean                 @default(true) // Whether to include cover sheet
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  referralSources  CampaignToReferralSource[]
+}
+
+model CampaignToReferralSource {
+  campaignId       String
+  referralSourceId String
+  status           String          @default("PENDING") // PENDING, SENT, OPENED, CLICKED, RESPONDED
+  sentAt           DateTime?
+  responseAt       DateTime?
+  response         String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  campaign         Campaign        @relation(fields: [campaignId], references: [id])
+  referralSource   ReferralSource  @relation(fields: [referralSourceId], references: [id])
+
+  @@id([campaignId, referralSourceId])
+}

@@ -1,0 +1,14 @@
+HumbleFax API Setup Instructions
+==============================
+
+1. Edit the .env.local file in the root directory of your project
+
+2. Add the following lines with your actual API credentials:
+
+# HumbleFax API credentials
+HUMBLE_FAX_API_KEY=your_api_key_here
+HUMBLE_FAX_API_SECRET=your_secret_key_here
+HUMBLE_FAX_API_URL=https://api.humblefax.com/v1
+
+3. Restart the development server with:
+npm run dev 

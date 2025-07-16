@@ -2,6 +2,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { createReadStream } from 'fs';
 import { createWriteStream } from 'fs';
+import { writeFile } from 'fs/promises';
 import { pipeline } from 'stream/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -315,7 +316,7 @@ export class HumbleFaxClient {
   }
   
   /**
-   * Upload an attachment for a temporary fax
+   * Upload an attachment to a temporary fax
    * @param tmpFaxId The ID of the temporary fax
    * @param fileUrl The URL of the file to upload
    * @returns The HumbleFax API response
@@ -323,15 +324,41 @@ export class HumbleFaxClient {
   async uploadAttachment(tmpFaxId: string, fileUrl: string): Promise<HumbleFaxResponse> {
     try {
       console.log(`Uploading attachment to ${this.apiUrl}/attachment/${tmpFaxId}`);
+      console.log(`Attempting to download file from: ${fileUrl}`);
       
       // First download the file from URL to a temporary location
       const fileName = fileUrl.split('/').pop() || 'document.pdf';
       const tempFilePath = join(tmpdir(), fileName);
       
-      // Download the file
-      const fileResponse = await axios.get(fileUrl, { responseType: 'stream' });
-      const writer = createWriteStream(tempFilePath);
-      await pipeline(fileResponse.data, writer);
+      try {
+        // Try to download the file
+        const fileResponse = await axios.get(fileUrl, { responseType: 'stream' });
+        const writer = createWriteStream(tempFilePath);
+        await pipeline(fileResponse.data, writer);
+        console.log(`Successfully downloaded file to: ${tempFilePath}`);
+      } catch (downloadError) {
+        console.error('Failed to download file from URL:', fileUrl);
+        console.error('Download error:', downloadError);
+        
+        // If download fails, try to read from local filesystem
+        if (fileUrl.startsWith('/uploads/')) {
+          const localPath = join(process.cwd(), 'public', fileUrl);
+          console.log(`Attempting to read from local path: ${localPath}`);
+          
+          try {
+            // Check if file exists locally
+            const { readFile } = await import('fs/promises');
+            const fileBuffer = await readFile(localPath);
+            await writeFile(tempFilePath, fileBuffer);
+            console.log(`Successfully read file from local filesystem`);
+          } catch (localError) {
+            console.error('Failed to read file from local filesystem:', localError);
+            throw new Error(`File not accessible: ${fileUrl}`);
+          }
+        } else {
+          throw downloadError;
+        }
+      }
       
       // Create form data for the file upload
       const form = new FormData();
@@ -365,7 +392,8 @@ export class HumbleFaxClient {
         return {
           success: false,
           error: error.response.data.error || 'Unknown error',
-          status: error.response.status.toString()
+          status: error.response.status.toString(),
+          details: error.response.data
         };
       }
       

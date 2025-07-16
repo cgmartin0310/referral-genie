@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { signOut, useSession } from 'next-auth/react';
 import { 
   HomeIcon, 
   UserGroupIcon, 
   CalendarIcon, 
   MegaphoneIcon, 
   ChartBarIcon,
-  MagnifyingGlassIcon 
+  MagnifyingGlassIcon,
+  ArrowRightOnRectangleIcon 
 } from '@heroicons/react/24/outline';
 
 function classNames(...classes: string[]) {
@@ -26,6 +28,7 @@ export const navigation = [
 
 export default function Navigation() {
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   return (
     <nav className="flex flex-1 flex-col">
@@ -57,6 +60,26 @@ export default function Navigation() {
               </li>
             ))}
           </ul>
+        </li>
+        <li className="mt-auto">
+          <div className="border-t border-gray-200 pt-4">
+            {session?.user && (
+              <div className="px-2 mb-2">
+                <p className="text-xs text-gray-500">Logged in as</p>
+                <p className="text-sm font-medium text-gray-700">{session.user.name}</p>
+              </div>
+            )}
+            <button
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              className="text-gray-700 hover:text-indigo-600 hover:bg-gray-50 group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold w-full"
+            >
+              <ArrowRightOnRectangleIcon
+                className="text-gray-400 group-hover:text-indigo-600 h-6 w-6 shrink-0"
+                aria-hidden="true"
+              />
+              Sign out
+            </button>
+          </div>
         </li>
       </ul>
     </nav>

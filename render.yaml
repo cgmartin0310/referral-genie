@@ -29,4 +29,12 @@ services:
       - key: GOOGLE_PLACES_API_KEY
         sync: false # You'll set this in Render dashboard
       - key: DEFAULT_FAX_NUMBER
-        sync: false # Optional: Your default FROM fax number 
+        sync: false # Optional: Your default FROM fax number
+      - key: NEXTAUTH_SECRET
+        generateValue: true # Generates a random secret
+      - key: NEXTAUTH_URL
+        sync: false # Set to https://your-app-name.onrender.com
+      - key: AUTH_USERNAME
+        sync: false # Set your login username (default: admin)
+      - key: AUTH_PASSWORD
+        sync: false # Set your login password (default: referralgenie2024) 

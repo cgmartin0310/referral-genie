@@ -15,6 +15,7 @@ interface HumbleFaxResponse {
   error?: string;
   status?: string;
   data?: any;
+  details?: any;
 }
 
 interface HumbleFaxSendParams {

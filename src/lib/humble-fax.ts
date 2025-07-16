@@ -363,7 +363,11 @@ export class HumbleFaxClient {
       
       // Create form data for the file upload
       const form = new FormData();
-      form.append(fileName, createReadStream(tempFilePath));
+      // Use 'file' as the field name - this is what HumbleFax expects
+      form.append('file', createReadStream(tempFilePath), fileName);
+      
+      console.log(`Form data prepared with file: ${fileName}`);
+      console.log(`Uploading to URL: ${this.apiUrl}/attachment/${tmpFaxId}`);
       
       // Upload to HumbleFax
       const response = await axios.post(`${this.apiUrl}/attachment/${tmpFaxId}`, form, {

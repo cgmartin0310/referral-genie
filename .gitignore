@@ -43,3 +43,6 @@ next-env.d.ts
 # uploads
 /public/uploads/*
 !/public/uploads/.gitkeep
+
+# migrations (contains sensitive data)
+/migrations/

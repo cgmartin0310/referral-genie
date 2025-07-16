@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
-    "migrate-data": "tsx scripts/migrate-data.ts"
+    "migrate-data": "tsx migrations/migrate-data.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.2",

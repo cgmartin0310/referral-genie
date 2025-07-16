@@ -22,5 +22,9 @@ services:
         sync: false # You'll set this in Render dashboard
       - key: HUMBLE_FAX_API_SECRET
         sync: false # You'll set this in Render dashboard
+      - key: HUMBLE_FAX_API_URL
+        value: https://api.humblefax.com
       - key: HUMBLE_FAX_WEBHOOK_URL
-        sync: false # You'll set this after deployment 
+        sync: false # You'll set this after deployment
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false # You'll set this in Render dashboard 

@@ -27,4 +27,6 @@ services:
       - key: HUMBLE_FAX_WEBHOOK_URL
         sync: false # You'll set this after deployment
       - key: GOOGLE_PLACES_API_KEY
-        sync: false # You'll set this in Render dashboard 
+        sync: false # You'll set this in Render dashboard
+      - key: DEFAULT_FAX_NUMBER
+        sync: false # Optional: Your default FROM fax number 

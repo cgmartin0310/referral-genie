@@ -5,12 +5,10 @@ import { executeWithRetry } from '../../../../lib/db-helpers';
 // Get a single campaign with its referral sources
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Explicitly await and clone the params object for Next.js 15.3.1
-    const paramsCopy = await Promise.resolve({ ...params });
-    const id = String(paramsCopy.id);
+    const { id } = await params;
     
     const campaign = await executeWithRetry(() =>
       prisma.campaign.findUnique({
@@ -43,7 +41,7 @@ export async function GET(
 // Update a campaign
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   let data: {
     name?: string;
@@ -59,9 +57,7 @@ export async function PUT(
   } = {};
 
   try {
-    // For Next.js 15.3.1, we need to await params
-    const paramsCopy = await params;
-    const id = String(paramsCopy.id);
+    const { id } = await params;
     
     data = await request.json();
 
@@ -163,12 +159,10 @@ export async function PUT(
 // Delete a campaign
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // For Next.js 15.3.1, we need to await params
-    const paramsCopy = await params;
-    const id = String(paramsCopy.id);
+    const { id } = await params;
     
     // Check if campaign exists
     const exists = await executeWithRetry(() =>

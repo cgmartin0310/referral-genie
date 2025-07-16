@@ -6,15 +6,13 @@ import { HumbleFaxClient } from '../../../../../lib/humble-fax';
 // Setup the HumbleFax client
 const humbleFaxClient = new HumbleFaxClient();
 
-// Send a campaign
+// Send campaign to selected referral sources
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Explicitly await and clone the params object for Next.js 15.3.1
-    const paramsCopy = await Promise.resolve({ ...params });
-    const id = String(paramsCopy.id);
+    const { id } = await params;
     
     // Get the campaign with referral sources
     const campaign = await executeWithRetry(() =>

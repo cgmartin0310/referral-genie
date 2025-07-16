@@ -5,11 +5,10 @@ import { executeWithRetry } from '../../../../lib/db-helpers';
 // Get a single interaction
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // For Next.js 15.3.1, we need to stringify params
-    const id = String(params.id);
+    const { id } = await params;
     
     const interaction = await executeWithRetry(() =>
       prisma.interaction.findUnique({
@@ -47,11 +46,10 @@ export async function GET(
 // Update an interaction
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // For Next.js 15.3.1, we need to stringify params
-    const id = String(params.id);
+    const { id } = await params;
     const data = await request.json();
 
     // Check if interaction exists
@@ -107,11 +105,10 @@ export async function PUT(
 // Delete an interaction
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // For Next.js 15.3.1, we need to stringify params
-    const id = String(params.id);
+    const { id } = await params;
     
     // Check if interaction exists
     const exists = await executeWithRetry(() =>

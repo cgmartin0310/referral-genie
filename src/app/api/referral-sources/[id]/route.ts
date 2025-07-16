@@ -5,12 +5,11 @@ import { executeWithRetry } from '../../../../lib/db-helpers';
 // Get a single referral source
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // For Next.js 15.3.1, we need to await params
-    const paramsCopy = await params;
-    const id = String(paramsCopy.id);
+    const { id } = await params;
     
     const referralSource = await executeWithRetry(() =>
       prisma.referralSource.findUnique({
@@ -40,7 +39,7 @@ export async function GET(
 // Update a referral source
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   let data: {
     name?: string;
@@ -65,8 +64,7 @@ export async function PUT(
 
   try {
     // For Next.js 15.3.1, we need to await params
-    const paramsCopy = await params;
-    const id = String(paramsCopy.id);
+    const { id } = await params;
     
     data = await request.json();
 
@@ -135,12 +133,11 @@ export async function PUT(
 // Delete a referral source
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // For Next.js 15.3.1, we need to await params
-    const paramsCopy = await params;
-    const id = String(paramsCopy.id);
+    const { id } = await params;
     
     // Check if referral source exists
     const exists = await executeWithRetry(() =>

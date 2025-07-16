@@ -5,11 +5,11 @@ import { executeWithRetry } from '../../../../../lib/db-helpers';
 // Update cover sheet settings for a campaign
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Get campaign ID
-    const id = String(params.id);
+    const { id } = await params;
     
     // Parse request body
     const data = await request.json();

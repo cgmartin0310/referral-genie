@@ -96,8 +96,8 @@ export async function POST(
         });
         
         // Format fax numbers correctly - this is critical for the API
-        const toFaxNumber = formatPhoneNumber(referralSource.faxNumber);
-        const fromFaxNumber = formatPhoneNumber(campaign.coverSheetFromNumber) || '17045695946'; // Use default if not set
+        const toFaxNumber = formatPhoneNumber(referralSource.faxNumber || undefined);
+        const fromFaxNumber = formatPhoneNumber(campaign.coverSheetFromNumber || undefined) || '17045695946'; // Use default if not set
         
         // Prepare fax metadata
         const metadata = {

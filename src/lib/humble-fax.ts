@@ -196,6 +196,103 @@ export class HumbleFaxClient {
   }
 
   /**
+   * Alternative method: Send a fax with attachment in a single request
+   * This method tries to send the fax with the attachment included directly
+   * @param params The fax send parameters
+   * @returns The HumbleFax API response
+   */
+  async sendFaxDirect(params: HumbleFaxSendParams): Promise<HumbleFaxResponse> {
+    try {
+      console.log('Attempting direct fax send with attachment...');
+      
+      // Download and prepare the file
+      const fileName = params.documentUrl.split('/').pop() || 'document.pdf';
+      const tempFilePath = join(tmpdir(), fileName);
+      
+      try {
+        // Try to download the file
+        const fileResponse = await axios.get(params.documentUrl, { responseType: 'stream' });
+        const writer = createWriteStream(tempFilePath);
+        await pipeline(fileResponse.data, writer);
+        console.log(`Successfully downloaded file to: ${tempFilePath}`);
+      } catch (downloadError) {
+        console.error('Failed to download file from URL:', params.documentUrl);
+        
+        // If download fails, try to read from local filesystem
+        if (params.documentUrl.startsWith('/uploads/')) {
+          const localPath = join(process.cwd(), 'public', params.documentUrl);
+          console.log(`Attempting to read from local path: ${localPath}`);
+          
+          try {
+            const { readFile } = await import('fs/promises');
+            const fileBuffer = await readFile(localPath);
+            await writeFile(tempFilePath, fileBuffer);
+            console.log(`Successfully read file from local filesystem`);
+          } catch (localError) {
+            console.error('Failed to read file from local filesystem:', localError);
+            throw new Error(`File not accessible: ${params.documentUrl}`);
+          }
+        } else {
+          throw downloadError;
+        }
+      }
+      
+      // Create form data with all parameters
+      const form = new FormData();
+      form.append('to', params.to);
+      form.append('file', createReadStream(tempFilePath), fileName);
+      
+      if (params.coverSheet?.includeCoversheet) {
+        form.append('includeCoversheet', 'true');
+        form.append('fromName', params.coverSheet.fromName || '');
+        form.append('fromNumber', params.coverSheet.fromNumber || '');
+        form.append('toName', params.coverSheet.toName || '');
+        form.append('subject', params.coverSheet.subject || '');
+        form.append('message', params.coverSheet.message || '');
+      }
+      
+      // Try direct send endpoint
+      console.log(`Attempting direct send to ${this.apiUrl}/send`);
+      const response = await axios.post(`${this.apiUrl}/send`, form, {
+        auth: {
+          username: this.apiKey,
+          password: this.apiSecret
+        },
+        headers: {
+          ...form.getHeaders()
+        }
+      });
+      
+      console.log('Direct send API response:', response.data);
+      
+      return {
+        success: true,
+        faxId: response.data.faxId || response.data.id,
+        data: response.data
+      };
+    } catch (error) {
+      console.error('Error in direct fax send:', error);
+      
+      if (axios.isAxiosError(error) && error.response) {
+        console.log('Direct send error response:', error.response.data);
+        console.log('Direct send error status:', error.response.status);
+        
+        return {
+          success: false,
+          error: error.response.data.error || 'Direct send failed',
+          status: error.response.status.toString(),
+          details: error.response.data
+        };
+      }
+      
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
    * Create a temporary fax
    * @param params The create temporary fax parameters
    * @returns The HumbleFax API response
@@ -342,18 +439,42 @@ export class HumbleFaxClient {
         console.error('Download error:', downloadError);
         
         // If download fails, try to read from local filesystem
-        if (fileUrl.startsWith('/uploads/')) {
-          const localPath = join(process.cwd(), 'public', fileUrl);
+        if (fileUrl.startsWith('/uploads/') || fileUrl.includes('/uploads/')) {
+          // Extract just the path portion if it's a full URL
+          let uploadPath = fileUrl;
+          if (fileUrl.includes('://')) {
+            const urlParts = new URL(fileUrl);
+            uploadPath = urlParts.pathname;
+          }
+          
+          const localPath = join(process.cwd(), 'public', uploadPath);
           console.log(`Attempting to read from local path: ${localPath}`);
           
           try {
             // Check if file exists locally
-            const { readFile } = await import('fs/promises');
+            const { readFile, access } = await import('fs/promises');
+            await access(localPath); // This will throw if file doesn't exist
+            console.log(`File exists at: ${localPath}`);
+            
             const fileBuffer = await readFile(localPath);
+            console.log(`File size: ${fileBuffer.length} bytes`);
             await writeFile(tempFilePath, fileBuffer);
             console.log(`Successfully read file from local filesystem`);
           } catch (localError) {
             console.error('Failed to read file from local filesystem:', localError);
+            console.error(`File path attempted: ${localPath}`);
+            console.error(`Current working directory: ${process.cwd()}`);
+            
+            // List files in uploads directory for debugging
+            try {
+              const { readdir } = await import('fs/promises');
+              const uploadsDir = join(process.cwd(), 'public', 'uploads');
+              const files = await readdir(uploadsDir);
+              console.log(`Files in uploads directory: ${files.join(', ')}`);
+            } catch (dirError) {
+              console.error('Could not list uploads directory:', dirError);
+            }
+            
             throw new Error(`File not accessible: ${fileUrl}`);
           }
         } else {
@@ -393,6 +514,18 @@ export class HumbleFaxClient {
         console.log('API Error response:', error.response.data);
         console.log('API Error status:', error.response.status);
         console.log('API URL used:', `${this.apiUrl}/attachment/${tmpFaxId}`);
+        console.log('Response headers:', error.response.headers);
+        console.log('Full error details:', JSON.stringify(error.response.data, null, 2));
+        
+        // Check if it's a 404 and provide more specific error
+        if (error.response.status === 404) {
+          return {
+            success: false,
+            error: 'Attachment upload endpoint not found. The temporary fax may have expired or the endpoint may be incorrect.',
+            status: '404',
+            details: error.response.data
+          };
+        }
         
         return {
           success: false,
@@ -459,6 +592,63 @@ export class HumbleFaxClient {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Test API connectivity
+   * @returns The HumbleFax API response
+   */
+  async testConnection(): Promise<HumbleFaxResponse> {
+    try {
+      console.log(`Testing API connection to ${this.apiUrl}`);
+      
+      // Try a simple authenticated request
+      const response = await axios.get(`${this.apiUrl}/account`, {
+        auth: {
+          username: this.apiKey,
+          password: this.apiSecret
+        },
+        timeout: 10000 // 10 second timeout
+      });
+      
+      console.log('API connection test response:', response.data);
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      console.error('API connection test failed:', error);
+      
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNREFUSED') {
+          return {
+            success: false,
+            error: 'Connection refused - API may be unreachable from this environment'
+          };
+        }
+        
+        if (error.response) {
+          return {
+            success: false,
+            error: `API responded with status ${error.response.status}`,
+            status: error.response.status.toString()
+          };
+        }
+        
+        if (error.request) {
+          return {
+            success: false,
+            error: 'No response from API - possible network issue'
+          };
+        }
+      }
+      
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown connection error'
       };
     }
   }

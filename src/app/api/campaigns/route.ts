@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '../../../lib/prisma';
 import { executeWithRetry } from '../../../lib/db-helpers';
+import { parseLocalDate } from '../../../lib/utils';
 
 export async function GET() {
   try {
@@ -66,8 +67,8 @@ export async function POST(request: Request) {
       const campaignData = {
         name: data.name,
         description: data.description || null,
-        startDate: data.startDate ? new Date(data.startDate) : new Date(),
-        endDate: data.endDate ? new Date(data.endDate) : null,
+        startDate: data.startDate ? parseLocalDate(data.startDate.toString()) : new Date(),
+        endDate: data.endDate ? parseLocalDate(data.endDate.toString()) : null,
         status: data.status || 'DRAFT',
         type: data.type,
         content: data.content || null,

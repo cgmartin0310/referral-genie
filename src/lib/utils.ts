@@ -1,4 +1,18 @@
 /**
+ * Parse a date string as local date (not UTC)
+ */
+export function parseLocalDate(dateString: string): Date {
+  // If the date string is in YYYY-MM-DD format, parse it as local date
+  if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  
+  // Otherwise, parse normally
+  return new Date(dateString);
+}
+
+/**
  * Format a date string into a readable format
  */
 export function formatDate(dateString: string): string {
@@ -20,6 +34,10 @@ export function formatDateForInput(dateString: string | Date | null): string {
   
   const date = new Date(dateString);
   
-  // Generate YYYY-MM-DD format
-  return date.toISOString().split('T')[0];
+  // Get the date in local timezone
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
 } 

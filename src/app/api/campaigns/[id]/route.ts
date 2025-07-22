@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../../lib/prisma';
 import { executeWithRetry } from '../../../../lib/db-helpers';
+import { parseLocalDate } from '../../../../lib/utils';
 
 // Get a single campaign with its referral sources
 export async function GET(
@@ -81,8 +82,8 @@ export async function PUT(
       const campaignData = {
         name: data.name,
         description: data.description,
-        startDate: data.startDate ? new Date(data.startDate) : undefined,
-        endDate: data.endDate ? new Date(data.endDate) : data.endDate,
+        startDate: data.startDate ? parseLocalDate(data.startDate.toString()) : undefined,
+        endDate: data.endDate ? parseLocalDate(data.endDate.toString()) : data.endDate,
         status: data.status,
         type: data.type,
         content: data.content,

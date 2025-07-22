@@ -63,6 +63,14 @@ export async function POST(request: Request) {
     
     // Use transaction to create campaign and relationships
     const campaign = await prisma.$transaction(async (tx) => {
+      // Debug logging
+      console.log('Creating campaign with dates:', {
+        startDateInput: data.startDate,
+        endDateInput: data.endDate,
+        startDateParsed: data.startDate ? parseLocalDate(data.startDate.toString()) : null,
+        endDateParsed: data.endDate ? parseLocalDate(data.endDate.toString()) : null,
+      });
+      
       // Create the campaign
       const campaignData = {
         name: data.name,

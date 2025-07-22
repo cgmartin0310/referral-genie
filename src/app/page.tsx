@@ -52,10 +52,10 @@ export default function Dashboard() {
     <MainLayout>
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-        <p className="mt-2 text-sm text-gray-700">
+          <p className="mt-2 text-sm text-gray-700">
           Track and manage your referral sources, interactions, and campaigns
-        </p>
-      </div>
+          </p>
+        </div>
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 mb-8">
@@ -86,8 +86,8 @@ export default function Dashboard() {
                 View all
               </Link>
             </div>
+            </div>
           </div>
-        </div>
 
         {/* Interactions Stat */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
@@ -116,8 +116,8 @@ export default function Dashboard() {
                 View all
               </Link>
             </div>
+            </div>
           </div>
-        </div>
 
         {/* Campaigns Stat */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
@@ -192,10 +192,10 @@ export default function Dashboard() {
               >
                 Find Prospects
               </Link>
-            </div>
           </div>
         </div>
       </div>
+    </div>
     </MainLayout>
   );
 } 

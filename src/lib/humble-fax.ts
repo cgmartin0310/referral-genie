@@ -110,6 +110,13 @@ export class HumbleFaxClient {
       const uuid = "fax-" + Math.random().toString(36).substring(2, 7);
       
       // The API requires all these fields, so ensure they're all strings
+      // If user provided a display fax number, append it to company info
+      let companyInfo = String(params.coverSheet?.companyInfo || "");
+      if (params.coverSheet?.fromNumber) {
+        const displayFaxNumber = params.coverSheet.fromNumber;
+        companyInfo = companyInfo ? `${companyInfo} | Fax: ${displayFaxNumber}` : `Fax: ${displayFaxNumber}`;
+      }
+      
       const tmpFaxParams: CreateTmpFaxParams = {
         recipients: [this.formatPhoneNumber(params.to) || params.to],
         includeCoversheet,
@@ -117,8 +124,9 @@ export class HumbleFaxClient {
         toName: String(params.coverSheet?.toName || "Provider"),
         subject: String(params.coverSheet?.subject || "Referral Information"),
         message: String(params.coverSheet?.message || "Please see the attached referral information."),
-        fromNumber: this.formatPhoneNumber(params.coverSheet?.fromNumber) || "17045695946",
-        companyInfo: String(params.coverSheet?.companyInfo || ""),
+        // Always use the authorized HumbleFax number for sending
+        fromNumber: "19103974373",
+        companyInfo: companyInfo,
         pageSize: "Letter", // Must be one of: Letter, Legal, A4, B4
         resolution: "Fine",
         uuid: uuid // Using simple generated UUID to avoid length issues
@@ -163,13 +171,13 @@ export class HumbleFaxClient {
         // Force a faxId if none was returned (use the tmpFaxId as a fallback)
         const faxId = sendResult.faxId || tmpFaxId;
         console.log(`Successfully sent fax with ID: ${faxId}`);
-        
-        return {
-          success: true,
+      
+      return {
+        success: true,
           faxId: faxId,
           status: 'sent',
           data: sendResult.data
-        };
+      };
       }
       
       console.error('Failed to send temporary fax:', sendResult.error);

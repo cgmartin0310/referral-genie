@@ -118,7 +118,7 @@ export default function ReferralSourceEditor({ id }: { id: string }) {
         const errorDetails = error.response.data?.details || error.response.data?.error || 'Unknown error';
         toast.error(`Failed to delete referral source: ${errorDetails}`);
       } else {
-        toast.error('Failed to delete referral source');
+      toast.error('Failed to delete referral source');
       }
     } finally {
       setIsDeleting(false);

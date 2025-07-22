@@ -97,7 +97,8 @@ export async function POST(
         
         // Format fax numbers correctly - this is critical for the API
         const toFaxNumber = formatPhoneNumber(referralSource.faxNumber || undefined);
-        const fromFaxNumber = formatPhoneNumber(campaign.coverSheetFromNumber || undefined) || process.env.DEFAULT_FAX_NUMBER || '19103974373'; // Use default if not set
+        // Note: fromFaxNumber is for display on cover sheet only - HumbleFax will always use 19103974373
+        const fromFaxNumber = campaign.coverSheetFromNumber || process.env.DEFAULT_FAX_NUMBER || '19103974373';
         
         // Prepare fax metadata
         const metadata = {

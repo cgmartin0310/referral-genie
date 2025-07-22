@@ -44,7 +44,7 @@ export default function ViewCampaignPage() {
       const { data } = await axios.post(`/api/campaigns/${campaignId}/send`);
       setResults(data.results);
       toast.success('Campaign sent successfully!');
-      
+        
       // Refresh campaign data to show updated status
       const { data: updatedCampaign } = await axios.get(`/api/campaigns/${campaignId}`);
       setCampaign(updatedCampaign);
@@ -98,33 +98,33 @@ export default function ViewCampaignPage() {
           <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
             {campaign.name}
           </h2>
-          {campaign.description && (
+            {campaign.description && (
             <p className="mt-1 text-gray-500">{campaign.description}</p>
-          )}
-        </div>
+            )}
+          </div>
         <div className="mt-4 flex md:ml-4 md:mt-0">
-          <button
-            type="button"
+            <button
+              type="button"
             onClick={goBack}
             className="ml-3 inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-          >
+            >
             Back
-          </button>
-          <button
-            type="button"
-            onClick={sendCampaign}
+            </button>
+            <button
+              type="button"
+              onClick={sendCampaign}
             disabled={sending || campaign.status === 'ACTIVE'}
             className={`ml-3 inline-flex items-center rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 ${
               sending || campaign.status === 'ACTIVE'
                 ? 'bg-indigo-400 cursor-not-allowed'
                 : 'bg-indigo-600 hover:bg-indigo-500'
-            }`}
-          >
+              }`}
+            >
             {sending ? 'Sending...' : 'Send Campaign'}
-          </button>
+            </button>
+          </div>
         </div>
-      </div>
-      
+
       <div className="mt-6 grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 md:grid-cols-3">
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="text-sm font-medium text-gray-500">Campaign Type</h3>
@@ -134,29 +134,29 @@ export default function ViewCampaignPage() {
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="text-sm font-medium text-gray-500">Start Date</h3>
           <p className="mt-1 text-base font-semibold text-gray-900">{formatDate(campaign.startDate)}</p>
-        </div>
+          </div>
         
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="text-sm font-medium text-gray-500">Status</h3>
           <p className="mt-1">
             <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${
               campaign.status === 'DRAFT' ? 'bg-gray-100 text-gray-800' :
-              campaign.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
-              campaign.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800' :
+                    campaign.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+                    campaign.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800' :
               campaign.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {campaign.status}
-            </span>
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {campaign.status}
+                  </span>
           </p>
+          </div>
         </div>
-      </div>
-      
-      <div className="mt-8">
+
+        <div className="mt-8">
         <h3 className="text-lg font-medium text-gray-900">Referral Sources</h3>
         {campaign.referralSources.length === 0 ? (
           <p className="mt-2 text-gray-500">No referral sources added to this campaign.</p>
-        ) : (
+          ) : (
           <div className="mt-4 flow-root">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-300">
@@ -229,10 +229,10 @@ export default function ViewCampaignPage() {
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
+      </div>
       )}
     </MainLayout>
   );

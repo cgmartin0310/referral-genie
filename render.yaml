@@ -29,7 +29,7 @@ services:
       - key: GOOGLE_PLACES_API_KEY
         sync: false # You'll set this in Render dashboard
       - key: DEFAULT_FAX_NUMBER
-        sync: false # Optional: Your default FROM fax number
+        value: 19103974373 # Default display fax number for cover sheets
       - key: NEXTAUTH_SECRET
         generateValue: true # Generates a random secret
       - key: NEXTAUTH_URL

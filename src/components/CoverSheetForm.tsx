@@ -91,15 +91,17 @@ export default function CoverSheetForm({ campaignId, defaultValues, onSuccess }:
             
             <div>
               <label htmlFor="coverSheetFromNumber" className="block text-sm font-medium leading-6 text-gray-900">
-                From Fax Number
+                From Fax Number (for cover sheet display)
               </label>
               <div className="mt-2">
                 <input
                   id="coverSheetFromNumber"
                   type="text"
+                  placeholder="e.g., 910-375-3031"
                   className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
                   {...register('coverSheetFromNumber')}
                 />
+                <p className="mt-1 text-sm text-gray-500">This number will appear on the cover sheet. Faxes are sent via HumbleFax.</p>
               </div>
             </div>
             

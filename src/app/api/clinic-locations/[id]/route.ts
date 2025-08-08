@@ -4,11 +4,12 @@ import prisma from '@/lib/prisma';
 // GET single clinic location
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const clinicLocation = await prisma.clinicLocation.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         referralSources: {
           select: {
@@ -41,14 +42,15 @@ export async function GET(
 // PUT - Update clinic location
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const data = await request.json();
 
     // Check if location exists
     const existing = await prisma.clinicLocation.findUnique({
-      where: { id: params.id }
+      where: { id }
     });
 
     if (!existing) {
@@ -73,7 +75,7 @@ export async function PUT(
     }
 
     const clinicLocation = await prisma.clinicLocation.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(data.name !== undefined && { name: data.name }),
         ...(data.address !== undefined && { address: data.address }),
@@ -99,12 +101,13 @@ export async function PUT(
 // DELETE clinic location
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Check if location exists and has referral sources
     const existing = await prisma.clinicLocation.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         _count: {
           select: { referralSources: true }
@@ -131,7 +134,7 @@ export async function DELETE(
     }
 
     await prisma.clinicLocation.delete({
-      where: { id: params.id }
+      where: { id }
     });
 
     return NextResponse.json(

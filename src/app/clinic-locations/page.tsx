@@ -249,7 +249,7 @@ export default function ClinicLocationsPage() {
                     <button
                       onClick={() => handleDelete(location.id)}
                       className="text-red-600 hover:text-red-900"
-                      disabled={location._count?.referralSources && location._count.referralSources > 0}
+                      disabled={!!location._count?.referralSources && location._count.referralSources > 0}
                     >
                       <TrashIcon className={`h-5 w-5 ${
                         location._count?.referralSources && location._count.referralSources > 0

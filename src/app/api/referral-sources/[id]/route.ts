@@ -16,6 +16,10 @@ export async function GET(
         where: {
           id,
         },
+        include: {
+          clinicLocation: true,
+          category: true,
+        },
       })
     );
 
@@ -47,7 +51,7 @@ export async function PUT(
     city?: string | null;
     state?: string | null;
     zipCode?: string | null;
-    clinicLocation?: string | null;
+    clinicLocationId?: string | null;
     contactPerson?: string | null;
     contactTitle?: string | null;
     contactPhone?: string | null;
@@ -97,7 +101,7 @@ export async function PUT(
           ...(data.city !== undefined && { city: data.city }),
           ...(data.state !== undefined && { state: data.state }),
           ...(data.zipCode !== undefined && { zipCode: data.zipCode }),
-          ...(data.clinicLocation !== undefined && { clinicLocation: data.clinicLocation }),
+          ...(data.clinicLocationId !== undefined && { clinicLocationId: data.clinicLocationId }),
           ...(data.contactPerson !== undefined && { contactPerson: data.contactPerson }),
           ...(data.contactTitle !== undefined && { contactTitle: data.contactTitle }),
           ...(data.contactPhone !== undefined && { contactPhone: data.contactPhone }),
@@ -110,6 +114,10 @@ export async function PUT(
           ...(data.expectedMonthlyReferrals !== undefined && { expectedMonthlyReferrals: data.expectedMonthlyReferrals }),
           ...(data.numberOfProviders !== undefined && { numberOfProviders: data.numberOfProviders }),
           ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
+        },
+        include: {
+          clinicLocation: true,
+          category: true,
         },
       })
     );

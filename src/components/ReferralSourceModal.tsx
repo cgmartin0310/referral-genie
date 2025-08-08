@@ -1,11 +1,17 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useForm } from 'react-hook-form';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
+
+interface ClinicLocation {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
 
 interface ReferralSourceFormData {
   name: string;
@@ -13,7 +19,7 @@ interface ReferralSourceFormData {
   city: string;
   state: string;
   zipCode: string;
-  clinicLocation: string;
+  clinicLocationId: string;
   contactPerson: string;
   contactTitle: string;
   contactPhone: string;
@@ -26,14 +32,6 @@ interface ReferralSourceFormData {
   numberOfProviders: number | null;
 }
 
-const CLINIC_LOCATIONS = [
-  'Jacksonville',
-  'Wilmington',
-  'Beulaville',
-  'Goldsboro',
-  'Nashville'
-];
-
 interface ReferralSourceModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -42,6 +40,8 @@ interface ReferralSourceModalProps {
 
 export default function ReferralSourceModal({ isOpen, onClose, onSuccess }: ReferralSourceModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [clinicLocations, setClinicLocations] = useState<ClinicLocation[]>([]);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   
   const {
     register,
@@ -55,7 +55,7 @@ export default function ReferralSourceModal({ isOpen, onClose, onSuccess }: Refe
       city: '',
       state: '',
       zipCode: '',
-      clinicLocation: '',
+      clinicLocationId: '',
       contactPerson: '',
       contactTitle: '',
       contactPhone: '',
@@ -68,6 +68,27 @@ export default function ReferralSourceModal({ isOpen, onClose, onSuccess }: Refe
       numberOfProviders: null
     }
   });
+
+  // Fetch clinic locations when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchClinicLocations();
+    }
+  }, [isOpen]);
+
+  const fetchClinicLocations = async () => {
+    setIsLoadingLocations(true);
+    try {
+      const response = await axios.get('/api/clinic-locations');
+      // Only show active locations
+      setClinicLocations(response.data.filter((loc: ClinicLocation) => loc.isActive));
+    } catch (error) {
+      console.error('Error fetching clinic locations:', error);
+      toast.error('Failed to load clinic locations');
+    } finally {
+      setIsLoadingLocations(false);
+    }
+  };
 
   const onSubmit = async (data: ReferralSourceFormData) => {
     setIsSubmitting(true);
@@ -112,7 +133,7 @@ export default function ReferralSourceModal({ isOpen, onClose, onSuccess }: Refe
               leaveFrom="opacity-100 translate-y-0 sm:scale-100"
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
-              <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-3xl sm:p-6">
+              <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6">
                 <div className="absolute right-0 top-0 hidden pr-4 pt-4 sm:block">
                   <button
                     type="button"
@@ -123,259 +144,219 @@ export default function ReferralSourceModal({ isOpen, onClose, onSuccess }: Refe
                     <XMarkIcon className="h-6 w-6" aria-hidden="true" />
                   </button>
                 </div>
-                <div>
-                  <div className="mt-3 text-center sm:mt-0 sm:text-left">
+                <div className="sm:flex sm:items-start">
+                  <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left w-full">
                     <Dialog.Title as="h3" className="text-base font-semibold leading-6 text-gray-900">
                       Add New Referral Source
                     </Dialog.Title>
-                    
                     <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-6">
-                      <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-6">
-                        <div className="sm:col-span-3">
+                      <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+                        <div className="col-span-2">
                           <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                            Name *
+                            Name
                           </label>
-                          <div className="mt-1">
-                            <input
-                              type="text"
-                              id="name"
-                              {...register('name', { required: 'Name is required' })}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                            {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
-                          </div>
+                          <input
+                            type="text"
+                            {...register('name', { required: 'Name is required' })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
+                          {errors.name && (
+                            <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+                          )}
                         </div>
 
-                        <div className="sm:col-span-3">
-                          <label htmlFor="clinicLocation" className="block text-sm font-medium text-gray-700">
+                        <div>
+                          <label htmlFor="clinicLocationId" className="block text-sm font-medium text-gray-700">
                             Clinic Location
                           </label>
-                          <div className="mt-1">
+                          {isLoadingLocations ? (
+                            <div className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 px-3 py-2 text-sm">
+                              Loading locations...
+                            </div>
+                          ) : (
                             <select
-                              id="clinicLocation"
-                              {...register('clinicLocation')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              id="clinicLocationId"
+                              {...register('clinicLocationId')}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                             >
                               <option value="">Select a location</option>
-                              {CLINIC_LOCATIONS.map(location => (
-                                <option key={location} value={location}>{location}</option>
+                              {clinicLocations.map((location) => (
+                                <option key={location.id} value={location.id}>
+                                  {location.name}
+                                </option>
                               ))}
                             </select>
-                          </div>
+                          )}
                         </div>
 
-                        <div className="sm:col-span-6">
-                          <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-                            Address
-                          </label>
-                          <div className="mt-1">
-                            <input
-                              type="text"
-                              id="address"
-                              {...register('address')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <label htmlFor="city" className="block text-sm font-medium text-gray-700">
-                            City
-                          </label>
-                          <div className="mt-1">
-                            <input
-                              type="text"
-                              id="city"
-                              {...register('city')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <label htmlFor="state" className="block text-sm font-medium text-gray-700">
-                            State
-                          </label>
-                          <div className="mt-1">
-                            <input
-                              type="text"
-                              id="state"
-                              {...register('state')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700">
-                            ZIP / Postal
-                          </label>
-                          <div className="mt-1">
-                            <input
-                              type="text"
-                              id="zipCode"
-                              {...register('zipCode')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="sm:col-span-3">
+                        <div>
                           <label htmlFor="contactPerson" className="block text-sm font-medium text-gray-700">
                             Contact Person
                           </label>
-                          <div className="mt-1">
-                            <input
-                              type="text"
-                              id="contactPerson"
-                              {...register('contactPerson')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
+                          <input
+                            type="text"
+                            {...register('contactPerson')}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
                         </div>
 
-                        <div className="sm:col-span-3">
+                        <div>
                           <label htmlFor="contactTitle" className="block text-sm font-medium text-gray-700">
                             Contact Title
                           </label>
-                          <div className="mt-1">
-                            <input
-                              type="text"
-                              id="contactTitle"
-                              {...register('contactTitle')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
+                          <input
+                            type="text"
+                            {...register('contactTitle')}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
                         </div>
 
-                        <div className="sm:col-span-3">
+                        <div>
+                          <label htmlFor="contactPhone" className="block text-sm font-medium text-gray-700">
+                            Contact Phone
+                          </label>
+                          <input
+                            type="tel"
+                            {...register('contactPhone')}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor="contactEmail" className="block text-sm font-medium text-gray-700">
+                            Contact Email
+                          </label>
+                          <input
+                            type="email"
+                            {...register('contactEmail')}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
+                        </div>
+
+                        <div>
                           <label htmlFor="faxNumber" className="block text-sm font-medium text-gray-700">
                             Fax Number
                           </label>
-                          <div className="mt-1">
-                            <input
-                              type="text"
-                              id="faxNumber"
-                              {...register('faxNumber')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
+                          <input
+                            type="tel"
+                            {...register('faxNumber')}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
                         </div>
 
-                        <div className="sm:col-span-3">
+                        <div>
                           <label htmlFor="npiNumber" className="block text-sm font-medium text-gray-700">
                             NPI Number
                           </label>
-                          <div className="mt-1">
-                            <input
-                              type="text"
-                              id="npiNumber"
-                              {...register('npiNumber')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
+                          <input
+                            type="text"
+                            {...register('npiNumber')}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
                         </div>
 
-                        <div className="sm:col-span-3">
-                          <label htmlFor="contactPhone" className="block text-sm font-medium text-gray-700">
-                            Phone
+                        <div className="col-span-2">
+                          <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+                            Address
                           </label>
-                          <div className="mt-1">
-                            <input
-                              type="text"
-                              id="contactPhone"
-                              {...register('contactPhone')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
+                          <input
+                            type="text"
+                            {...register('address')}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
                         </div>
 
-                        <div className="sm:col-span-3">
-                          <label htmlFor="contactEmail" className="block text-sm font-medium text-gray-700">
-                            Email
+                        <div>
+                          <label htmlFor="city" className="block text-sm font-medium text-gray-700">
+                            City
                           </label>
-                          <div className="mt-1">
-                            <input
-                              type="email"
-                              id="contactEmail"
-                              {...register('contactEmail')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
+                          <input
+                            type="text"
+                            {...register('city')}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
                         </div>
 
-                        <div className="sm:col-span-3">
-                          <label htmlFor="expectedMonthlyReferrals" className="block text-sm font-medium text-gray-700">
-                            Expected Monthly Referrals
+                        <div>
+                          <label htmlFor="state" className="block text-sm font-medium text-gray-700">
+                            State
                           </label>
-                          <div className="mt-1">
-                            <input
-                              type="number"
-                              id="expectedMonthlyReferrals"
-                              min="0"
-                              {...register('expectedMonthlyReferrals', {
-                                valueAsNumber: true,
-                                setValueAs: v => v === '' ? null : parseInt(v, 10)
-                              })}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
+                          <input
+                            type="text"
+                            {...register('state')}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
                         </div>
 
-                        <div className="sm:col-span-3">
-                          <label htmlFor="numberOfProviders" className="block text-sm font-medium text-gray-700">
-                            Number of Providers
+                        <div>
+                          <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700">
+                            ZIP Code
                           </label>
-                          <div className="mt-1">
-                            <input
-                              type="number"
-                              id="numberOfProviders"
-                              min="0"
-                              {...register('numberOfProviders', {
-                                valueAsNumber: true,
-                                setValueAs: v => v === '' ? null : parseInt(v, 10)
-                              })}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
+                          <input
+                            type="text"
+                            {...register('zipCode')}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
                         </div>
 
-                        <div className="sm:col-span-3">
+                        <div>
                           <label htmlFor="website" className="block text-sm font-medium text-gray-700">
                             Website
                           </label>
-                          <div className="mt-1">
-                            <input
-                              type="text"
-                              id="website"
-                              {...register('website')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
+                          <input
+                            type="url"
+                            {...register('website')}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
                         </div>
 
-                        <div className="sm:col-span-6">
+                        <div>
+                          <label htmlFor="expectedMonthlyReferrals" className="block text-sm font-medium text-gray-700">
+                            Expected Monthly Referrals
+                          </label>
+                          <input
+                            type="number"
+                            {...register('expectedMonthlyReferrals', { 
+                              setValueAs: (value) => value === '' ? null : parseInt(value, 10)
+                            })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            placeholder="0"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor="numberOfProviders" className="block text-sm font-medium text-gray-700">
+                            Number of Providers
+                          </label>
+                          <input
+                            type="number"
+                            {...register('numberOfProviders', { 
+                              setValueAs: (value) => value === '' ? null : parseInt(value, 10)
+                            })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            placeholder="0"
+                          />
+                        </div>
+
+                        <div className="col-span-2">
                           <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
                             Notes
                           </label>
-                          <div className="mt-1">
-                            <textarea
-                              id="notes"
-                              rows={3}
-                              {...register('notes')}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                          </div>
+                          <textarea
+                            {...register('notes')}
+                            rows={3}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          />
                         </div>
                       </div>
 
-                      <div className="mt-5 sm:mt-6 sm:flex sm:flex-row-reverse">
+                      <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
                         <button
                           type="submit"
                           disabled={isSubmitting}
-                          className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:ml-3 sm:w-auto disabled:bg-indigo-300"
+                          className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 sm:ml-3 sm:w-auto disabled:opacity-50"
                         >
-                          {isSubmitting ? 'Saving...' : 'Save'}
+                          {isSubmitting ? 'Creating...' : 'Create'}
                         </button>
                         <button
                           type="button"
@@ -395,4 +376,4 @@ export default function ReferralSourceModal({ isOpen, onClose, onSuccess }: Refe
       </Dialog>
     </Transition.Root>
   );
-} 
+}

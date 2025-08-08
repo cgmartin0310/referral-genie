@@ -6,6 +6,10 @@ export async function GET() {
   try {
     const referralSources = await executeWithRetry(() => 
       prisma.referralSource.findMany({
+        include: {
+          clinicLocation: true,
+          category: true,
+        },
         orderBy: {
           createdAt: 'desc'
         }
@@ -29,7 +33,7 @@ export async function POST(request: Request) {
     city?: string | null;
     state?: string | null;
     zipCode?: string | null;
-    clinicLocation?: string | null;
+    clinicLocationId?: string | null;
     contactPerson?: string | null;
     contactTitle?: string | null;
     contactPhone?: string | null;
@@ -62,7 +66,7 @@ export async function POST(request: Request) {
           city: data.city || null,
           state: data.state || null,
           zipCode: data.zipCode || null,
-          clinicLocation: data.clinicLocation || null,
+          clinicLocationId: data.clinicLocationId || null,
           contactPerson: data.contactPerson || null,
           contactTitle: data.contactTitle || null,
           contactPhone: data.contactPhone || null,
@@ -75,7 +79,11 @@ export async function POST(request: Request) {
           expectedMonthlyReferrals: data.expectedMonthlyReferrals || null,
           numberOfProviders: data.numberOfProviders || null,
           categoryId: data.categoryId || null
-        } as any
+        } as any,
+        include: {
+          clinicLocation: true,
+          category: true,
+        }
       })
     );
     

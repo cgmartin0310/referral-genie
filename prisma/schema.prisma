@@ -13,6 +13,21 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model ClinicLocation {
+  id              String            @id @default(cuid())
+  name            String            @unique
+  address         String?
+  city            String?
+  state           String?
+  zipCode         String?
+  phoneNumber     String?
+  faxNumber       String?
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  referralSources ReferralSource[]
+}
+
 model ReferralSource {
   id               String            @id @default(cuid())
   name             String
@@ -20,7 +35,8 @@ model ReferralSource {
   city             String?
   state            String?
   zipCode          String?
-  clinicLocation   String?           // Jacksonville, Wilmington, Beulaville, Goldsboro, Nashville
+  clinicLocationId String?           // Foreign key to ClinicLocation
+  clinicLocation   ClinicLocation?   @relation(fields: [clinicLocationId], references: [id])
   contactPerson    String?
   contactTitle     String?
   contactPhone     String?

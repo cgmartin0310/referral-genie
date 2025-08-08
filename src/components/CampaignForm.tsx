@@ -13,7 +13,11 @@ interface ReferralSource {
   name: string;
   faxNumber: string | null;
   contactPerson: string | null;
-  clinicLocation: string | null;
+  clinicLocationId: string | null;
+  clinicLocation: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 interface CampaignFormProps {
@@ -79,8 +83,12 @@ export default function CampaignForm({
   const campaignType = watch('type');
   
   const uniqueClinicLocations = Array.from(
-    new Set(referralSources.map(source => source.clinicLocation).filter(Boolean))
-  );
+    new Map(
+      referralSources
+        .filter(source => source.clinicLocation)
+        .map(source => [source.clinicLocation!.id, source.clinicLocation!.name])
+    ).entries()
+  ).sort((a, b) => a[1].localeCompare(b[1]));
   
   // Fetch all referral sources
   useEffect(() => {
@@ -100,7 +108,7 @@ export default function CampaignForm({
   // Filtered referral sources based on search and clinic location
   const filteredReferralSources = referralSources.filter(source => {
     // Filter by clinic location if selected
-    if (filterClinicLocation && source.clinicLocation !== filterClinicLocation) {
+    if (filterClinicLocation && source.clinicLocation?.id !== filterClinicLocation) {
       return false;
     }
     
@@ -401,9 +409,9 @@ export default function CampaignForm({
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 >
                   <option value="">All Locations</option>
-                  {uniqueClinicLocations.map((location) => (
-                    <option key={location} value={location as string}>
-                      {location}
+                  {uniqueClinicLocations.map(([locationId, locationName]) => (
+                    <option key={locationId} value={locationId}>
+                      {locationName}
                     </option>
                   ))}
                 </select>
@@ -470,7 +478,7 @@ export default function CampaignForm({
                                 <span className="block">Fax: {source.faxNumber}</span>
                               )}
                               {source.clinicLocation && (
-                                <span className="block">Location: {source.clinicLocation}</span>
+                                <span className="block">Location: {source.clinicLocation.name}</span>
                               )}
                             </div>
                           </div>

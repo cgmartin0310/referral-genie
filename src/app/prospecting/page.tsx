@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
@@ -34,14 +34,20 @@ export default function ProspectingPage() {
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [searchMetadata, setSearchMetadata] = useState<SearchMetadata | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [clinicLocations, setClinicLocations] = useState<Array<{id: string, name: string}>>([]);
   
-  const CLINIC_LOCATIONS = [
-    'Jacksonville',
-    'Wilmington',
-    'Beulaville',
-    'Goldsboro',
-    'Nashville'
-  ];
+  // Fetch clinic locations on mount
+  useEffect(() => {
+    const fetchClinicLocations = async () => {
+      try {
+        const response = await axios.get('/api/clinic-locations');
+        setClinicLocations(response.data.filter((loc: any) => loc.isActive));
+      } catch (error) {
+        console.error('Error fetching clinic locations:', error);
+      }
+    };
+    fetchClinicLocations();
+  }, []);
   
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,15 +155,15 @@ export default function ProspectingPage() {
       console.log("Parsed address components:", { address, city, state, zipCode });
       
       // Detect clinic location from city
-      let clinicLocation = null;
+      let clinicLocationId = null;
       if (city) {
         // Try to match city to a clinic location
         const cityLower = city.toLowerCase();
-        const matchedLocation = CLINIC_LOCATIONS.find(
-          location => cityLower.includes(location.toLowerCase())
+        const matchedLocation = clinicLocations.find(
+          location => cityLower.includes(location.name.toLowerCase())
         );
         if (matchedLocation) {
-          clinicLocation = matchedLocation;
+          clinicLocationId = matchedLocation.id;
         }
       }
       
@@ -167,7 +173,7 @@ export default function ProspectingPage() {
         city: city,
         state: state,
         zipCode: zipCode,
-        clinicLocation: clinicLocation,
+        clinicLocationId: clinicLocationId,
         contactPhone: business.phone || null,
         contactEmail: null,
         website: business.website || null,

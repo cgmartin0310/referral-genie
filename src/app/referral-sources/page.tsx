@@ -15,7 +15,11 @@ interface ReferralSource {
   city: string | null;
   state: string | null;
   zipCode: string | null;
-  clinicLocation: string | null;
+  clinicLocationId: string | null;
+  clinicLocation: {
+    id: string;
+    name: string;
+  } | null;
   contactPerson: string | null;
   contactPhone: string | null;
   contactEmail: string | null;
@@ -53,13 +57,13 @@ export default function ReferralSourcesPage() {
   // Get unique clinic locations for filter
   const uniqueClinicLocations = useMemo(() => {
     if (!referralSources) return [];
-    const locations = new Set<string>();
+    const locations = new Map<string, string>();
     referralSources.forEach((source: ReferralSource) => {
       if (source.clinicLocation) {
-        locations.add(source.clinicLocation);
+        locations.set(source.clinicLocation.id, source.clinicLocation.name);
       }
     });
-    return Array.from(locations).sort();
+    return Array.from(locations.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [referralSources]);
 
   // Filter and sort referral sources
@@ -70,7 +74,7 @@ export default function ReferralSourcesPage() {
     let result = [...referralSources];
     if (clinicLocationFilter) {
       result = result.filter((source: ReferralSource) => 
-        source.clinicLocation === clinicLocationFilter
+        source.clinicLocation?.id === clinicLocationFilter
       );
     }
     
@@ -84,8 +88,8 @@ export default function ReferralSourcesPage() {
           valB = b.name || '';
           break;
         case 'clinicLocation':
-          valA = a.clinicLocation || '';
-          valB = b.clinicLocation || '';
+          valA = a.clinicLocation?.name || '';
+          valB = b.clinicLocation?.name || '';
           break;
         case 'address':
           valA = (a.address ? (a.city ? `${a.address}, ${a.city}` : a.address) : '') || '';
@@ -180,9 +184,9 @@ export default function ReferralSourcesPage() {
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           >
             <option value="">All Locations</option>
-            {uniqueClinicLocations.map((location) => (
-              <option key={location} value={location}>
-                {location}
+            {uniqueClinicLocations.map(([locationId, locationName]) => (
+              <option key={locationId} value={locationId}>
+                {locationName}
               </option>
             ))}
           </select>
@@ -269,7 +273,7 @@ export default function ReferralSourcesPage() {
                         {source.name}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {source.clinicLocation || 'Not specified'}
+                        {source.clinicLocation?.name || 'Not specified'}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                         {source.address ? 

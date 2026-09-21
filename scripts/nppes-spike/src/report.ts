@@ -41,7 +41,8 @@ ${line("Unique NPIs before taxonomy filter", report.uniqueNpiBeforeTaxonomyFilte
 ${line("NPIs seen more than once", report.duplicateNpiCount)}
 ${line("Extra duplicate hits", report.extraDuplicateHits)}
 ${line("Unique NPIs dropped (no allow-listed taxonomy)", report.droppedNotInAllowList)}
-${line("Unique NPIs kept", report.keptCount)}
+${line("Unique NPIs excluded (allow-listed code was not primary)", report.excludedSecondaryOnly)}
+${line("Unique NPIs kept (primary taxonomy on the allow-list)", report.keptCount)}
 ${line("Truncated API queries", report.truncatedQueryCount)}
 
 ### Enumeration type

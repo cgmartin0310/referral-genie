@@ -24,7 +24,8 @@ export interface RawHit {
   deactivationDate: string | null;
   reactivationDate: string | null;
   taxonomies: TaxonomyHit[];
-  location: AddressParts | null;
+  /** Practice-location addresses. The first is the primary location from the source record. */
+  locations: AddressParts[];
   mailing: AddressParts | null;
 }
 
@@ -90,6 +91,8 @@ export interface SpikeReport {
   duplicateNpiCount: number;
   extraDuplicateHits: number;
   droppedNotInAllowList: number;
+  /** Had an allow-listed code, but not as the primary taxonomy. Excluded from kept counts. */
+  excludedSecondaryOnly: number;
   keptCount: number;
   byEnumeration: Record<string, number>;
   byPrimaryTaxonomy: { code: string; description: string; count: number }[];

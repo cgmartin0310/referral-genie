@@ -18,11 +18,11 @@ Official CMS sources, in the order you should use them:
 | Monthly dissemination file, V.2 | https://download.cms.gov/nppes/NPI_Files.html | Complete recount when an API query hits the 1,200-row cap |
 | File indexed on 2026-09-21 | https://download.cms.gov/nppes/NPPES_Data_Dissemination_September_2026_V2.zip | About 1,106 MB zipped. Too large to vendor into this repo |
 
-The API returns at most 200 rows per request and allows `skip` up to 1,000, so one taxonomy + ZIP search returns at most 1,200 NPIs. The script sets `address_purpose=LOCATION` and `state`, then filters to the taxonomy allow-list locally. The API's `taxonomy_description` match is loose: `General Practice` also returns dentists, and `Internal Medicine` returns hospitalists and subspecialists. Those rows are dropped unless their taxonomy code is on the allow-list.
+The API returns at most 200 rows per request and allows `skip` up to 1,000, so one taxonomy + ZIP search returns at most 1,200 NPIs. The script sets `address_purpose=LOCATION` and `state`, then keeps a row only when its **primary** taxonomy code is on the allow-list. The API's `taxonomy_description` match is loose: `General Practice` also returns dentists, and `Internal Medicine` returns hospitalists, cardiologists, and other subspecialists. A row whose only allow-listed code is a non-primary taxonomy is counted as excluded, not kept.
 
 The weekly incremental zip on the same download page is only a delta. It is not a county census. Do not point `--file` at it and treat the result as complete.
 
-There is no county parameter. The script queries a documented ZIP list and then flags ZIPs that sit on the county line. PO Box and unique ZIPs are not queried.
+There is no county parameter. The script queries a documented ZIP list and then flags ZIPs that sit on the county line. PO Box ZIPs are not queried. The unique ZIP 27157 is queried because it is the Atrium Health Wake Forest Baptist campus, not a PO Box.
 
 ## How to run
 
@@ -130,6 +130,7 @@ Queried as practice-location ZIP + `state=NC`. `boundary` ZIPs are not fully ins
 | 27105 | Winston-Salem | core |
 | 27106 | Winston-Salem | core |
 | 27109 | Winston-Salem | core |
+| 27157 | Winston-Salem | core (unique ZIP for Atrium Health Wake Forest Baptist) |
 | 27127 | Winston-Salem | boundary (~81% of ZCTA land area) |
 | 27284 | Kernersville | boundary (~83%; rest Guilford) |
 | 27012 | Clemmons | boundary (~62%; rest mostly Davie) |
@@ -137,44 +138,57 @@ Queried as practice-location ZIP + `state=NC`. `boundary` ZIPs are not fully ins
 
 ## Address metrics
 
-On unique kept NPIs:
+On unique kept NPIs (primary taxonomy on the allow-list):
 
 - Missing address: no practice-location address, or a blank street line. A mailing address is not treated as the practice.
 - Missing phone: practice-location phone has fewer than 10 digits.
 - Unparseable city/state/ZIP: city has no letters, state is not two letters, or ZIP is not 5 or 9 digits.
 - Duplicate NPI: the same NPI returned by more than one ZIP or taxonomy query.
-- Also reported: PO Box, ZIP outside the list above, boundary ZIP, deactivated NPI, matched only via a non-primary taxonomy, and a **places-match ready** count (street, phone, parseable city/state/ZIP inside the county list, not a PO Box, not deactivated). Boundary ZIPs can still be places-match ready.
+- Also reported: PO Box, ZIP outside the list above, boundary ZIP, deactivated NPI, and a **places-match ready** count (street, phone, parseable city/state/ZIP inside the county list, not a PO Box, not deactivated). Boundary ZIPs can still be places-match ready.
+
+The Read API path cannot see providers who have no practice-location ZIP in the query list. A zero for "missing address" on an API run means the returned rows had a location, not that the full registry is clean. Use `--file` on the monthly CSV to measure blank addresses.
 
 ## Results note
 
-Fill this in after `npm run spike:live` (or after a `--file` run against the monthly CSV). Leave the fixture run out of this table; `npm test` locks those numbers.
+Live Read API run on 2026-09-21. `npm test` still locks the fixture numbers; this table is the live pull only.
 
 | Field | Value |
 |-------|-------|
-| Run date | |
-| Source (`api` or `file`) | |
-| County | Forsyth County, NC |
-| Raw hits | |
-| Unique NPIs before taxonomy filter | |
-| Duplicate NPIs (seen more than once) | |
-| Dropped (no allow-listed taxonomy) | |
-| Unique NPIs kept | |
-| NPI-1 / NPI-2 | |
-| Missing address | |
-| Missing phone | |
-| Unparseable city, state, or ZIP | |
-| PO Box | |
-| ZIP outside county list | |
-| Boundary ZIP | |
-| Deactivated | |
-| Matched on secondary taxonomy only | |
-| Places-match ready | |
-| Truncated API queries | |
-| Top primary taxonomies | |
+| Run date | 2026-09-21T19:13:02Z |
+| Source | `api` — `https://npiregistry.cms.hhs.gov/api/?version=2.1` |
+| County | Forsyth County, NC (FIPS 37067), 18 practice ZIPs including 27157 |
+| Raw hits | 4,764 |
+| Unique NPIs before taxonomy filter | 4,138 |
+| Duplicate NPIs (seen more than once) | 524 (626 extra hits) |
+| Dropped (no allow-listed taxonomy) | 405 |
+| Excluded (allow-listed code was not primary) | 534 |
+| Unique NPIs kept (primary taxonomy on the allow-list) | 3,199 |
+| NPI-1 / NPI-2 | 2,913 / 286 |
+| Missing address | 0 |
+| Missing phone | 0 |
+| Unparseable city, state, or ZIP | 0 |
+| PO Box | 0 |
+| ZIP outside county list | 0 |
+| Boundary ZIP | 529 (16.5%) |
+| Deactivated | 0 |
+| Matched on secondary taxonomy only | 0 kept; 534 excluded |
+| Places-match ready | 3,199 (100% of kept) |
+| Truncated API queries | 0 (busiest query was 3 pages; cap is 6) |
+| Top primary taxonomies | PA 899 (`363A00000X`); NP 659 (`363L00000X`); Family Medicine 381 (`207Q00000X`); Internal Medicine 337 (`207R00000X`); NP Family 250 (`363LF0000X`); Neurology 141 (`2084N0400X`); PA Medical 120 (`363AM0700X`); Orthopaedic Surgery 84 (`207X00000X`) |
+
+Allow-list groups among the 3,199: physician assistant 1,055; nurse practitioner 986; family medicine 408; internal medicine 348; neurology 149; orthopaedics 106; PM&R 55; rheumatology 38; pediatrics 17; general practice 17; early intervention 15; school / LEA 5.
+
+Primary pediatrician codes inside that pediatrics group: general pediatrics 6 (`208000000X`), developmental-behavioral 9 (`2080P0006X`), adolescent medicine 2 (`2080A0000X`). Pediatric NPs (`363LP0200X`, 26) are in the nurse-practitioner group. Pediatric subspecialties that are not on the allow-list (for example pediatric emergency medicine) are not counted.
 
 ### What this means for ingest
 
-Do not bulk-load these rows into `ReferralSource` until a Places match is measured on the places-match-ready subset (ingest ticket). Rows with a missing street, a PO Box, or an unparseable ZIP are a poor match key. If any API query is truncated, rerun with the monthly V.2 CSV before treating the count as a census.
+Do not bulk-load these rows into `ReferralSource`. A Places match rate is still unknown, and this pull is not a census of dirty addresses.
+
+- Every API query asked for `address_purpose=LOCATION` plus a ZIP, so providers with a blank practice address never showed up. Missing street, missing phone, bad ZIP, and PO Box are all zero **because of that filter**. The monthly V.2 CSV is the run that can measure that dirtiness.
+- 534 NPIs had an allow-listed taxonomy only as a non-primary code (the Internal Medicine search returns hospitalists and cardiologists). They are excluded. Loading "any taxonomy matches" would pollute the graph.
+- 529 kept rows (16.5%) use a boundary ZIP (Clemmons, Kernersville, 27107, 27127). A later Places match will mix in Davie and Guilford unless those rows are flagged.
+- No query hit the 1,200-row API cap, so this count is not truncated. It is still ZIP-based, not a county polygon.
+- PA and NP rows dominate (about 2,000 of 3,199). That is a product decision for the ingest ticket, not a reason to insert them now.
 
 ## Expected outputs
 

@@ -96,6 +96,7 @@ export function buildReport(input: {
     duplicateNpiCount: normalized.duplicateNpiCount,
     extraDuplicateHits: normalized.extraDuplicateHits,
     droppedNotInAllowList: normalized.droppedNotInAllowList,
+    excludedSecondaryOnly: normalized.excludedSecondaryOnly,
     keptCount: kept,
     byEnumeration,
     byPrimaryTaxonomy: [...taxonomyCounts.entries()]

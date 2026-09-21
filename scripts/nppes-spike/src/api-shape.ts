@@ -84,7 +84,7 @@ export function hitFromApiResult(result: ApiResult): RawHit {
     deactivationDate: null,
     reactivationDate: null,
     taxonomies,
-    location: locationCandidates[0] ?? null,
+    locations: locationCandidates,
     mailing: mailingCandidates[0] ?? null,
   };
 }

@@ -79,7 +79,7 @@ export async function loadDisseminationHits(filePath: string): Promise<RawHit[]>
       deactivationDate: cell(row, "NPI Deactivation Date") || null,
       reactivationDate: cell(row, "NPI Reactivation Date") || null,
       taxonomies: taxonomiesFrom(row),
-      location: addressFrom(row),
+      locations: [addressFrom(row)].filter((row): row is AddressParts => row !== null),
       mailing: null,
     });
   }

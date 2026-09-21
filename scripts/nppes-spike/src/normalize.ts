@@ -32,7 +32,7 @@ function isDeactivated(hit: RawHit): boolean {
 }
 
 function preferCountyLocation(hits: RawHit[], county: CountyMarket): AddressParts | null {
-  const locations = hits.map((hit) => hit.location).filter((row): row is AddressParts => row !== null);
+  const locations = hits.flatMap((hit) => hit.locations);
   const inCounty = locations.find((row) => {
     const parsed = parsePostal(row.postalCode);
     return parsed.valid && zipRole(county, parsed.zip5) !== null;
@@ -104,6 +104,7 @@ export interface NormalizeStats {
   duplicateNpiCount: number;
   extraDuplicateHits: number;
   droppedNotInAllowList: number;
+  excludedSecondaryOnly: number;
 }
 
 export function normalizeHits(hits: RawHit[], county: CountyMarket): NormalizeStats {
@@ -127,6 +128,7 @@ export function normalizeHits(hits: RawHit[], county: CountyMarket): NormalizeSt
 
   const providers: NormalizedProvider[] = [];
   let droppedNotInAllowList = 0;
+  let excludedSecondaryOnly = 0;
 
   for (const [npi, group] of groups) {
     const taxonomies = new Map<string, { desc: string | null; primary: boolean }>();
@@ -152,8 +154,11 @@ export function normalizeHits(hits: RawHit[], county: CountyMarket): NormalizeSt
     const primaryCode = primaryEntry?.[0] ?? null;
     const primaryDesc = primaryEntry?.[1].desc ?? null;
     const matchedOnSecondaryOnly = primaryCode === null || !allowed.has(primaryCode);
-    const groupCode = matchedOnSecondaryOnly ? matched[0] : primaryCode!;
-    const matchedGroup = taxonomyByCode(groupCode)?.group ?? null;
+    if (matchedOnSecondaryOnly) {
+      excludedSecondaryOnly += 1;
+      continue;
+    }
+    const matchedGroup = taxonomyByCode(primaryCode ?? "")?.group ?? null;
     const location = preferCountyLocation(group, county);
     const deactivated = group.some(isDeactivated);
     const name = group.find((hit) => hit.name)?.name ?? "";
@@ -190,6 +195,7 @@ export function normalizeHits(hits: RawHit[], county: CountyMarket): NormalizeSt
     duplicateNpiCount,
     extraDuplicateHits,
     droppedNotInAllowList,
+    excludedSecondaryOnly,
   };
 }
 

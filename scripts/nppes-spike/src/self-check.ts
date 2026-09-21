@@ -29,11 +29,13 @@ async function checkFixture(): Promise<void> {
   assert.equal(report.duplicateNpiCount, 1);
   assert.equal(report.extraDuplicateHits, 1);
   assert.equal(report.droppedNotInAllowList, 1);
-  assert.equal(report.keptCount, 16);
+  assert.equal(report.excludedSecondaryOnly, 1);
+  assert.equal(report.keptCount, 15);
   assert.equal(providers.some((row) => row.npi === "9000000011"), false);
-  assert.equal(report.byEnumeration["NPI-1"], 14);
+  assert.equal(providers.some((row) => row.npi === "9000000014"), false);
+  assert.equal(report.byEnumeration["NPI-1"], 13);
   assert.equal(report.byEnumeration["NPI-2"], 2);
-  assert.equal(report.byGroup.pcp_family_medicine, 10);
+  assert.equal(report.byGroup.pcp_family_medicine, 9);
   assert.equal(report.byGroup.pediatrics, 1);
   assert.equal(report.byGroup.nurse_practitioner, 1);
   assert.equal(report.byGroup.orthopaedics, 1);
@@ -47,8 +49,8 @@ async function checkFixture(): Promise<void> {
   assert.equal(report.addressQuality.zipOutsideCounty, 1);
   assert.equal(report.addressQuality.boundaryZip, 2);
   assert.equal(report.addressQuality.deactivated, 1);
-  assert.equal(report.addressQuality.matchedOnSecondaryOnly, 1);
-  assert.equal(report.addressQuality.placesMatchReady, 7);
+  assert.equal(report.addressQuality.matchedOnSecondaryOnly, 0);
+  assert.equal(report.addressQuality.placesMatchReady, 6);
 
   assert.deepEqual(flagsOf(providers, "9000000001"), []);
   assert.ok(flagsOf(providers, "9000000002").includes("boundary_zip"));
@@ -63,12 +65,11 @@ async function checkFixture(): Promise<void> {
   assert.ok(flagsOf(providers, "9000000012").includes("boundary_zip"));
   assert.ok(!flagsOf(providers, "9000000012").includes("po_box"));
   assert.ok(flagsOf(providers, "9000000013").includes("missing_practice_location"));
-  assert.ok(flagsOf(providers, "9000000014").includes("matched_on_secondary_only"));
   assert.equal(providers.find((row) => row.npi === "9000000012")?.address1, "12 CLINIC DR");
   assert.equal(providers.find((row) => row.npi === "9000000002")?.name, "ARDMORE FAMILY PRACTICE");
 
   const summary = JSON.parse(await readFile(path.join(outDir, "summary.json"), "utf8")) as { keptCount: number };
-  assert.equal(summary.keptCount, 16);
+  assert.equal(summary.keptCount, 15);
   const sample = await readFile(path.join(outDir, "sample.csv"), "utf8");
   assert.ok(sample.startsWith("npi,enumeration_type,"));
   assert.ok(sample.includes("9000000005"));

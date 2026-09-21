@@ -4,9 +4,8 @@
  * ZIP codes are not counties. `core` means the Census 2020 ZCTA is entirely
  * or almost entirely inside Forsyth. `boundary` means a large share of the
  * ZCTA sits in a neighboring county, so a practice ZIP in that list can be
- * outside the county. PO Box and unique ZIPs are not queried: a practice
- * location should not be a PO Box, and querying them mostly hits mailing
- * addresses.
+ * outside the county. PO Box ZIPs are not queried. The unique ZIP 27157 is
+ * included because it is the Atrium Health Wake Forest Baptist campus.
  *
  * Land-share notes are from the Census 2020 ZCTA / county relationship
  * (FIPS 37067). 27107 is included even though about half its land area is
@@ -47,6 +46,12 @@ export const FORSYTH_NC: CountyMarket = {
     { zip: "27105", city: "Winston-Salem", role: "core", note: "ZCTA entirely in Forsyth" },
     { zip: "27106", city: "Winston-Salem", role: "core", note: "ZCTA entirely in Forsyth" },
     { zip: "27109", city: "Winston-Salem", role: "core", note: "ZCTA entirely in Forsyth" },
+    {
+      zip: "27157",
+      city: "Winston-Salem",
+      role: "core",
+      note: "Unique ZIP for Atrium Health Wake Forest Baptist. Not a PO Box; holds a large practice cluster",
+    },
     { zip: "27127", city: "Winston-Salem", role: "boundary", note: "About 81% of ZCTA land area in Forsyth" },
     { zip: "27284", city: "Kernersville", role: "boundary", note: "About 83% of ZCTA land area in Forsyth; rest is Guilford" },
     { zip: "27012", city: "Clemmons", role: "boundary", note: "About 62% of ZCTA land area in Forsyth; rest is mostly Davie" },

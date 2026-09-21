@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../../../lib/prisma';
 import { executeWithRetry } from '../../../../../lib/db-helpers';
+import { DEFAULT_ORGANIZATION_ID } from '../../../../../lib/org';
 
 // Update cover sheet settings for a campaign
 export async function PATCH(
@@ -34,6 +35,14 @@ export async function PATCH(
           { status: 400 }
         );
       }
+    }
+
+    const existing = await prisma.campaign.findFirst({
+      where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
+      select: { id: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
     }
 
     // Update campaign with cover sheet settings

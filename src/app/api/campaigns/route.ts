@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server';
 import prisma from '../../../lib/prisma';
 import { executeWithRetry } from '../../../lib/db-helpers';
 import { parseLocalDate } from '../../../lib/utils';
+import { DEFAULT_ORGANIZATION_ID } from '../../../lib/org';
 
 export async function GET() {
   try {
     const campaigns = await executeWithRetry(() => 
       prisma.campaign.findMany({
+        where: { organizationId: DEFAULT_ORGANIZATION_ID },
         orderBy: {
           createdAt: 'desc'
         },
@@ -73,6 +75,7 @@ export async function POST(request: Request) {
       
       // Create the campaign
       const campaignData = {
+        organizationId: DEFAULT_ORGANIZATION_ID,
         name: data.name,
         description: data.description || null,
         startDate: data.startDate ? parseLocalDate(data.startDate.toString()) : new Date(),
@@ -96,13 +99,20 @@ export async function POST(request: Request) {
       
       // If referral sources were provided, create the connections
       if (data.referralSourceIds && data.referralSourceIds.length > 0) {
-        // Create connections to referral sources
+        const allowed = await tx.referralSource.findMany({
+          where: {
+            organizationId: DEFAULT_ORGANIZATION_ID,
+            id: { in: data.referralSourceIds },
+          },
+          select: { id: true },
+        });
         await Promise.all(
-          data.referralSourceIds.map(referralSourceId =>
+          allowed.map((source) =>
             tx.campaignToReferralSource.create({
               data: {
+                organizationId: DEFAULT_ORGANIZATION_ID,
                 campaignId: newCampaign.id,
-                referralSourceId: referralSourceId,
+                referralSourceId: source.id,
                 status: 'PENDING'
               }
             })

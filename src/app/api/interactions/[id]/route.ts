@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../../lib/prisma';
 import { executeWithRetry } from '../../../../lib/db-helpers';
+import { DEFAULT_ORGANIZATION_ID } from '../../../../lib/org';
 
 // Get a single interaction
 export async function GET(
@@ -11,9 +12,10 @@ export async function GET(
     const { id } = await params;
     
     const interaction = await executeWithRetry(() =>
-      prisma.interaction.findUnique({
+      prisma.interaction.findFirst({
         where: {
           id,
+          organizationId: DEFAULT_ORGANIZATION_ID,
         },
         include: {
           referralSource: {
@@ -54,9 +56,10 @@ export async function PUT(
 
     // Check if interaction exists
     const exists = await executeWithRetry(() =>
-      prisma.interaction.findUnique({
+      prisma.interaction.findFirst({
         where: {
           id,
+          organizationId: DEFAULT_ORGANIZATION_ID,
         },
       })
     );
@@ -112,9 +115,10 @@ export async function DELETE(
     
     // Check if interaction exists
     const exists = await executeWithRetry(() =>
-      prisma.interaction.findUnique({
+      prisma.interaction.findFirst({
         where: {
           id,
+          organizationId: DEFAULT_ORGANIZATION_ID,
         },
       })
     );

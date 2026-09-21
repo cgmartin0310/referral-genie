@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../lib/prisma';
 import { executeWithRetry } from '../../../lib/db-helpers';
+import { DEFAULT_ORGANIZATION_ID } from '../../../lib/org';
 
 // GET all interactions
 export async function GET(request: NextRequest) {
@@ -10,7 +11,9 @@ export async function GET(request: NextRequest) {
     const referralSourceId = searchParams.get('referralSourceId');
 
     // Build the where clause based on query parameters
-    const where: any = {};
+    const where: { organizationId: string; referralSourceId?: string } = {
+      organizationId: DEFAULT_ORGANIZATION_ID,
+    };
     if (referralSourceId) {
       where.referralSourceId = referralSourceId;
     }
@@ -70,10 +73,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const source = await prisma.referralSource.findFirst({
+      where: { id: data.referralSourceId, organizationId: DEFAULT_ORGANIZATION_ID },
+      select: { id: true },
+    });
+    if (!source) {
+      return NextResponse.json({ error: 'Referral source not found' }, { status: 404 });
+    }
+
     // Create the interaction
     const interaction = await executeWithRetry(() =>
       prisma.interaction.create({
         data: {
+          organizationId: DEFAULT_ORGANIZATION_ID,
           referralSourceId: data.referralSourceId,
           type: data.type,
           date: new Date(data.date),

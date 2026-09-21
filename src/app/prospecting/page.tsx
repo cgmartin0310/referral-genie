@@ -223,7 +223,13 @@ export default function ProspectingPage() {
   return (
     <MainLayout>
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900 mb-6">Business Prospecting</h1>
+        <h1 className="text-2xl font-semibold text-gray-900 mb-2">Find non-NPI partners</h1>
+        <p className="mb-6 text-sm text-gray-600">
+          Secondary search. Keyword Nearby Search is not how the county source list is built.
+          Use <a href="/county-seed" className="text-indigo-600 hover:text-indigo-500">County seed</a> for
+          pediatricians and primary care physicians. Use this page only for partners that do not
+          have an NPI, such as schools.
+        </p>
         
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-8">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Search Google Business Listings</h2>
@@ -258,7 +264,7 @@ export default function ProspectingPage() {
                     name="businessType"
                     id="businessType"
                     className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                    placeholder="e.g., dentist, physical therapy, veterinarian, etc."
+                    placeholder="e.g. school, early intervention"
                     value={businessType}
                     onChange={(e) => setBusinessType(e.target.value)}
                     required

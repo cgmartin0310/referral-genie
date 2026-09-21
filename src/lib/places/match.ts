@@ -1,0 +1,217 @@
+import { digitsOnly } from '../nppes/normalize';
+import { evaluatePlaceMatch, type PlaceCandidate, type PracticeQuery } from './score';
+
+export class PlacesConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PlacesConfigError';
+  }
+}
+
+export class PlacesQuotaError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PlacesQuotaError';
+  }
+}
+
+export interface PlaceDetails {
+  phone: string | null;
+  website: string | null;
+  rating: number | null;
+  reviewCount: number | null;
+  businessStatus: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  name: string;
+  formattedAddress: string;
+}
+
+export interface PlaceMatch {
+  placeId: string;
+  confidence: number;
+  phone: string | null;
+  website: string | null;
+  rating: number | null;
+  reviewCount: number | null;
+  businessStatus: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  matchedBy: 'phone' | 'address';
+}
+
+export interface PlaceClient {
+  findPlace: (text: string, inputtype: 'phonenumber' | 'textquery') => Promise<PlaceCandidate[]>;
+  placeDetails: (placeId: string) => Promise<PlaceDetails | null>;
+}
+
+function nationalPhone(phone: string): string | null {
+  const digits = digitsOnly(phone);
+  if (digits.length < 10) return null;
+  return `+1${digits.slice(-10)}`;
+}
+
+function better(
+  current: { candidate: PlaceCandidate; evaluation: { accept: boolean; confidence: number }; matchedBy: 'phone' | 'address' } | null,
+  next: { candidate: PlaceCandidate; evaluation: { accept: boolean; confidence: number }; matchedBy: 'phone' | 'address' },
+) {
+  if (!next.evaluation.accept) return current;
+  if (!current || next.evaluation.confidence > current.evaluation.confidence) return next;
+  return current;
+}
+
+export async function matchPractice(input: PracticeQuery, client: PlaceClient): Promise<PlaceMatch | null> {
+  let winner: {
+    candidate: PlaceCandidate;
+    evaluation: { accept: boolean; confidence: number };
+    matchedBy: 'phone' | 'address';
+  } | null = null;
+
+  const phone = nationalPhone(input.phone);
+  if (phone) {
+    const candidates = await client.findPlace(phone, 'phonenumber');
+    for (const candidate of candidates) {
+      winner = better(winner, {
+        candidate,
+        evaluation: evaluatePlaceMatch(input, candidate, { phoneQuery: true }),
+        matchedBy: 'phone',
+      });
+    }
+  }
+
+  if (!winner) {
+    const text = [input.name, input.street, input.city, input.state, input.zip].filter(Boolean).join(' ');
+    const candidates = await client.findPlace(text, 'textquery');
+    for (const candidate of candidates) {
+      winner = better(winner, {
+        candidate,
+        evaluation: evaluatePlaceMatch(input, candidate, { phoneQuery: false }),
+        matchedBy: 'address',
+      });
+    }
+  }
+
+  if (!winner) return null;
+
+  const details = await client.placeDetails(winner.candidate.placeId);
+  let confidence = winner.evaluation.confidence;
+  if (details?.phone && winner.matchedBy === 'address') {
+    const withPhone = evaluatePlaceMatch(
+      input,
+      { ...winner.candidate, phone: details.phone },
+      { phoneQuery: false },
+    );
+    if (withPhone.accept && withPhone.confidence > confidence) confidence = withPhone.confidence;
+  }
+
+  return {
+    placeId: winner.candidate.placeId,
+    confidence,
+    phone: details?.phone ?? null,
+    website: details?.website ?? null,
+    rating: details?.rating ?? null,
+    reviewCount: details?.reviewCount ?? null,
+    businessStatus: details?.businessStatus ?? winner.candidate.businessStatus ?? null,
+    latitude: details?.latitude ?? winner.candidate.lat ?? null,
+    longitude: details?.longitude ?? winner.candidate.lng ?? null,
+    matchedBy: winner.matchedBy,
+  };
+}
+
+const FIND_URL = 'https://maps.googleapis.com/maps/api/place/findplacefromtext/json';
+const DETAILS_URL = 'https://maps.googleapis.com/maps/api/place/details/json';
+
+interface FindResponse {
+  status?: string;
+  error_message?: string;
+  candidates?: {
+    place_id?: string;
+    name?: string;
+    formatted_address?: string;
+    business_status?: string;
+    geometry?: { location?: { lat?: number; lng?: number } };
+  }[];
+}
+
+interface DetailsResponse {
+  status?: string;
+  error_message?: string;
+  result?: {
+    name?: string;
+    formatted_address?: string;
+    formatted_phone_number?: string;
+    international_phone_number?: string;
+    website?: string;
+    rating?: number;
+    user_ratings_total?: number;
+    business_status?: string;
+    geometry?: { location?: { lat?: number; lng?: number } };
+  };
+}
+
+function throwForStatus(status: string | undefined, errorMessage: string | undefined, fallback: string): void {
+  if (status === 'REQUEST_DENIED' || status === 'INVALID_REQUEST') {
+    throw new PlacesConfigError(errorMessage || fallback);
+  }
+  if (status === 'OVER_QUERY_LIMIT') {
+    throw new PlacesQuotaError(errorMessage || 'Google Places quota exceeded');
+  }
+}
+
+export function googlePlacesClient(apiKey: string): PlaceClient {
+  return {
+    async findPlace(text, inputtype) {
+      const url = new URL(FIND_URL);
+      url.searchParams.set('input', text);
+      url.searchParams.set('inputtype', inputtype);
+      url.searchParams.set('fields', 'place_id,name,formatted_address,geometry,business_status');
+      url.searchParams.set('key', apiKey);
+      const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      if (!response.ok) throw new Error(`Places find HTTP ${response.status}`);
+      const body = (await response.json()) as FindResponse;
+      if (body.status === 'ZERO_RESULTS') return [];
+      if (body.status !== 'OK') {
+        throwForStatus(body.status, body.error_message, 'Google Places find was denied');
+        throw new Error(`Places find failed: ${body.status ?? 'unknown'}`);
+      }
+      return (body.candidates ?? [])
+        .filter((row) => row.place_id)
+        .map((row) => ({
+          placeId: row.place_id as string,
+          name: row.name ?? '',
+          formattedAddress: row.formatted_address ?? '',
+          businessStatus: row.business_status ?? null,
+          lat: row.geometry?.location?.lat ?? null,
+          lng: row.geometry?.location?.lng ?? null,
+        }));
+    },
+    async placeDetails(placeId) {
+      const url = new URL(DETAILS_URL);
+      url.searchParams.set('place_id', placeId);
+      url.searchParams.set(
+        'fields',
+        'name,formatted_address,formatted_phone_number,international_phone_number,website,rating,user_ratings_total,business_status,geometry',
+      );
+      url.searchParams.set('key', apiKey);
+      const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      if (!response.ok) throw new Error(`Places details HTTP ${response.status}`);
+      const body = (await response.json()) as DetailsResponse;
+      if (body.status !== 'OK' || !body.result) {
+        throwForStatus(body.status, body.error_message, 'Google Places details was denied');
+        return null;
+      }
+      const result = body.result;
+      return {
+        phone: result.formatted_phone_number ?? result.international_phone_number ?? null,
+        website: result.website ?? null,
+        rating: typeof result.rating === 'number' ? result.rating : null,
+        reviewCount: typeof result.user_ratings_total === 'number' ? result.user_ratings_total : null,
+        businessStatus: result.business_status ?? null,
+        latitude: result.geometry?.location?.lat ?? null,
+        longitude: result.geometry?.location?.lng ?? null,
+        name: result.name ?? '',
+        formattedAddress: result.formatted_address ?? '',
+      };
+    },
+  };
+}

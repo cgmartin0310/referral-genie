@@ -34,6 +34,11 @@ After deployment, go to your web service settings and add these environment vari
 1. `HUMBLE_FAX_API_KEY` - Your HumbleFax API key
 2. `HUMBLE_FAX_API_SECRET` - Your HumbleFax API secret
 3. `HUMBLE_FAX_WEBHOOK_URL` - Set this to `https://your-app-name.onrender.com/api/campaigns/fax-webhook` (replace `your-app-name` with your actual Render app name)
+4. `AUTH_USERNAME` and `AUTH_PASSWORD` - Required. The app no longer has a built-in login. Requests fail closed until both are set.
+5. `GOOGLE_PLACES_API_KEY` - Required for county Places matching and the non-NPI search page.
+6. `NEXTAUTH_URL` - The public Render URL, for example `https://your-app-name.onrender.com`
+
+County seed for the Kinston pilot is documented in `docs/kinston-pilot.md`.
 
 ### 4. File Uploads Configuration
 

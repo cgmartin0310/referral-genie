@@ -35,6 +35,6 @@ services:
       - key: NEXTAUTH_URL
         sync: false # Set to https://your-app-name.onrender.com
       - key: AUTH_USERNAME
-        sync: false # Set your login username (default: admin)
+        sync: false # Required. Login is rejected when this is unset.
       - key: AUTH_PASSWORD
-        sync: false # Set your login password (default: referralgenie2024) 
+        sync: false # Required. Login is rejected when this is unset. 

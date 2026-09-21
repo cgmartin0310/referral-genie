@@ -1,0 +1,302 @@
+[
+  {
+    "number": "9000000001",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "JANE", "last_name": "DOE", "status": "A", "credential": "MD" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "100 MAIN ST",
+        "address_2": "STE 2",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "271031234",
+        "telephone_number": "336-555-0101"
+      }
+    ],
+    "taxonomies": [{ "code": "207Q00000X", "desc": "Family Medicine", "primary": true }]
+  },
+  {
+    "number": "9000000001",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "JANE", "last_name": "DOE", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "100 MAIN ST",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27103",
+        "telephone_number": "336-555-0101"
+      }
+    ],
+    "taxonomies": [{ "code": "207Q00000X", "desc": "Family Medicine", "primary": true }]
+  },
+  {
+    "number": "9000000002",
+    "enumeration_type": "NPI-2",
+    "basic": { "organization_name": "ARDMORE FAMILY PRACTICE", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "200 OAK ST",
+        "city": "CLEMMONS",
+        "state": "NC",
+        "postal_code": "27012",
+        "telephone_number": "336-555-0102"
+      }
+    ],
+    "taxonomies": [{ "code": "207Q00000X", "desc": "Family Medicine", "primary": true }]
+  },
+  {
+    "number": "9000000003",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "NO", "last_name": "STREET", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27101",
+        "telephone_number": "336-555-0103"
+      }
+    ],
+    "taxonomies": [{ "code": "207Q00000X", "desc": "Family Medicine", "primary": true }]
+  },
+  {
+    "number": "9000000004",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "NO", "last_name": "PHONE", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "4 ELM ST",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27104",
+        "telephone_number": ""
+      }
+    ],
+    "taxonomies": [{ "code": "207Q00000X", "desc": "Family Medicine", "primary": true }]
+  },
+  {
+    "number": "9000000005",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "POST", "last_name": "BOX", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "PO BOX 12",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27101",
+        "telephone_number": "336-555-0105"
+      }
+    ],
+    "taxonomies": [{ "code": "207Q00000X", "desc": "Family Medicine", "primary": true }]
+  },
+  {
+    "number": "9000000006",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "BAD", "last_name": "ZIP", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "6 NORTH ST",
+        "city": "WINSTON SALEM",
+        "state": "North Carolina",
+        "postal_code": "2710",
+        "telephone_number": "336-555-0106"
+      }
+    ],
+    "taxonomies": [{ "code": "207Q00000X", "desc": "Family Medicine", "primary": true }]
+  },
+  {
+    "number": "9000000007",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "NO", "last_name": "CITY", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "7 SOUTH ST",
+        "city": "",
+        "state": "NC",
+        "postal_code": "27105",
+        "telephone_number": "336-555-0107"
+      }
+    ],
+    "taxonomies": [{ "code": "207Q00000X", "desc": "Family Medicine", "primary": true }]
+  },
+  {
+    "number": "9000000008",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "OUT", "last_name": "COUNTY", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "8 ELM ST",
+        "city": "GREENSBORO",
+        "state": "NC",
+        "postal_code": "27401",
+        "telephone_number": "336-555-0108"
+      }
+    ],
+    "taxonomies": [{ "code": "207Q00000X", "desc": "Family Medicine", "primary": true }]
+  },
+  {
+    "number": "9000000009",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "DE", "last_name": "ACTIVATED", "status": "D" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "9 PINE ST",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27106",
+        "telephone_number": "336-555-0109"
+      }
+    ],
+    "taxonomies": [{ "code": "207Q00000X", "desc": "Family Medicine", "primary": true }]
+  },
+  {
+    "number": "9000000010",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "PEDS", "last_name": "DOC", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "10 KIDS WAY",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27103-1000",
+        "telephone_number": "3365550110"
+      }
+    ],
+    "taxonomies": [{ "code": "208000000X", "desc": "Pediatrics", "primary": true }]
+  },
+  {
+    "number": "9000000011",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "TOOTH", "last_name": "MOLAR", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "11 DENTAL WAY",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27103",
+        "telephone_number": "336-555-0111"
+      }
+    ],
+    "taxonomies": [{ "code": "122300000X", "desc": "Dentist", "primary": true }]
+  },
+  {
+    "number": "9000000012",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "NURSE", "last_name": "PRACT", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "MAILING",
+        "address_1": "PO BOX 99",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27107",
+        "telephone_number": "336-555-0000"
+      },
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "12 CLINIC DR",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27107",
+        "telephone_number": "336-555-0112"
+      }
+    ],
+    "taxonomies": [{ "code": "363L00000X", "desc": "Nurse Practitioner", "primary": true }]
+  },
+  {
+    "number": "9000000013",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "ORTHO", "last_name": "MAIL", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "MAILING",
+        "address_1": "13 BOX STREET",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27103",
+        "telephone_number": "336-555-0113"
+      }
+    ],
+    "taxonomies": [{ "code": "207X00000X", "desc": "Orthopaedic Surgery", "primary": true }]
+  },
+  {
+    "number": "9000000014",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "SECOND", "last_name": "ONLY", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "14 SECOND ST",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27106",
+        "telephone_number": "336-555-0114"
+      }
+    ],
+    "taxonomies": [
+      { "code": "122300000X", "desc": "Dentist", "primary": true },
+      { "code": "207Q00000X", "desc": "Family Medicine", "primary": false }
+    ]
+  },
+  {
+    "number": "9000000015",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "PAT", "last_name": "ASSIST", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "15 LEWISVILLE RD",
+        "city": "LEWISVILLE",
+        "state": "NC",
+        "postal_code": "27023",
+        "telephone_number": "(336) 555-0115"
+      }
+    ],
+    "taxonomies": [{ "code": "363A00000X", "desc": "Physician Assistant", "primary": true }]
+  },
+  {
+    "number": "9000000016",
+    "enumeration_type": "NPI-1",
+    "basic": { "first_name": "NEURO", "last_name": "LOGIST", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "16 BRAIN AVE",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27105",
+        "telephone_number": "336-555-0116"
+      }
+    ],
+    "taxonomies": [{ "code": "2084N0400X", "desc": "Psychiatry & Neurology, Neurology", "primary": true }]
+  },
+  {
+    "number": "9000000017",
+    "enumeration_type": "NPI-2",
+    "basic": { "organization_name": "FORSYTH EARLY INTERVENTION", "status": "A" },
+    "addresses": [
+      {
+        "address_purpose": "LOCATION",
+        "address_1": "17 START ST",
+        "city": "WINSTON SALEM",
+        "state": "NC",
+        "postal_code": "27101",
+        "telephone_number": ""
+      }
+    ],
+    "taxonomies": [{ "code": "252Y00000X", "desc": "Early Intervention Provider Agency", "primary": true }]
+  }
+]

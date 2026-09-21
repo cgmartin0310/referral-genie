@@ -36,6 +36,29 @@ interface ReferralSource {
   createdAt: string;
   updatedAt: string;
   categoryId: string | null;
+  category: { id: string; name: string } | null;
+  taxonomyCodes: string[];
+  primaryTaxonomyCode: string | null;
+  enumerationType: string | null;
+  countyName: string | null;
+  countyFips: string | null;
+  placeId: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  reviewCount: number | null;
+  businessStatus: string | null;
+  sourceType: string | null;
+  placesMatchStatus: string | null;
+  likelyDuplicate: boolean;
+  duplicateClusterKey: string | null;
+  addressFlags: string[];
+  provenance: {
+    origin?: string;
+    confidence?: number | null;
+    overriddenBy?: string | null;
+    overriddenAt?: string | null;
+    overriddenFields?: string[];
+  } | null;
 }
 
 export default function ReferralSourceDetailPage() {
@@ -139,6 +162,7 @@ export default function ReferralSourceDetailPage() {
       {/* Content */}
       <div className="mt-6">
         {activeTab === 'details' ? (
+          <div className="space-y-8">
           <div className="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
             {/* Contact Info */}
             <div className="bg-white shadow overflow-hidden sm:rounded-lg">
@@ -276,6 +300,93 @@ export default function ReferralSourceDetailPage() {
                 </dl>
               </div>
             </div>
+          </div>
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:px-6">
+              <h3 className="text-base font-semibold leading-6 text-gray-900">Source graph</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                NPPES identity and Google Places enrichment. A later county refresh keeps fields you edit.
+              </p>
+            </div>
+            <div className="border-t border-gray-200 px-4 py-5 sm:p-0">
+              <dl className="sm:divide-y sm:divide-gray-200">
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Source type</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                    {referralSource?.category?.name || referralSource?.sourceType || 'Not specified'}
+                  </dd>
+                </div>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Primary taxonomy</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                    {referralSource?.primaryTaxonomyCode || 'Not specified'}
+                    {referralSource?.taxonomyCodes?.length ? ` (${referralSource.taxonomyCodes.join(', ')})` : ''}
+                  </dd>
+                </div>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Enumeration</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                    {referralSource?.enumerationType || 'Not specified'}
+                  </dd>
+                </div>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">County</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                    {referralSource?.countyName
+                      ? `${referralSource.countyName}${referralSource.countyFips ? ` · FIPS ${referralSource.countyFips}` : ''}`
+                      : 'Not specified'}
+                  </dd>
+                </div>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Places</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                    {referralSource?.placesMatchStatus || 'Not enriched'}
+                    {referralSource?.placeId ? ` · ${referralSource.placeId}` : ''}
+                    {referralSource?.businessStatus ? ` · ${referralSource.businessStatus}` : ''}
+                  </dd>
+                </div>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Rating and reviews</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                    {referralSource?.rating != null ? referralSource.rating : 'Not specified'}
+                    {referralSource?.reviewCount != null ? ` (${referralSource.reviewCount} reviews)` : ''}
+                  </dd>
+                </div>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Lat / lng</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                    {referralSource?.latitude != null && referralSource?.longitude != null
+                      ? `${referralSource.latitude}, ${referralSource.longitude}`
+                      : 'Not specified'}
+                  </dd>
+                </div>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Provenance</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                    {referralSource?.provenance?.origin || 'Not recorded'}
+                    {referralSource?.provenance?.confidence != null
+                      ? ` · confidence ${referralSource.provenance.confidence}`
+                      : ''}
+                    {referralSource?.provenance?.overriddenBy
+                      ? ` · edited by ${referralSource.provenance.overriddenBy}`
+                      : ''}
+                    {referralSource?.provenance?.overriddenFields?.length
+                      ? ` · kept fields: ${referralSource.provenance.overriddenFields.join(', ')}`
+                      : ''}
+                  </dd>
+                </div>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Duplicate</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                    {referralSource?.likelyDuplicate
+                      ? `Possible duplicate (${referralSource.duplicateClusterKey || 'shared phone, place, or address'})`
+                      : 'No shared phone, place, or address in this county'}
+                    {referralSource?.addressFlags?.length ? ` · flags: ${referralSource.addressFlags.join(', ')}` : ''}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
           </div>
         ) : (
           <InteractionList

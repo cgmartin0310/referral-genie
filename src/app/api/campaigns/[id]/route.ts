@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../../lib/prisma';
 import { executeWithRetry } from '../../../../lib/db-helpers';
 import { parseLocalDate } from '../../../../lib/utils';
+import { DEFAULT_ORGANIZATION_ID } from '../../../../lib/org';
 
 // Get a single campaign with its referral sources
 export async function GET(
@@ -12,8 +13,8 @@ export async function GET(
     const { id } = await params;
     
     const campaign = await executeWithRetry(() =>
-      prisma.campaign.findUnique({
-        where: { id },
+      prisma.campaign.findFirst({
+        where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
         include: {
           referralSources: {
             include: {
@@ -64,8 +65,8 @@ export async function PUT(
 
     // Check if campaign exists
     const exists = await executeWithRetry(() =>
-      prisma.campaign.findUnique({
-        where: { id },
+      prisma.campaign.findFirst({
+        where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
       })
     );
 
@@ -126,12 +127,17 @@ export async function PUT(
         }
         
         // Add new connections
-        const idsToAdd = newIds.filter(id => !currentIds.includes(id));
-        for (const referralSourceId of idsToAdd) {
+        const idsToAdd = newIds.filter(sourceId => !currentIds.includes(sourceId));
+        const allowed = idsToAdd.length === 0 ? [] : await tx.referralSource.findMany({
+          where: { organizationId: DEFAULT_ORGANIZATION_ID, id: { in: idsToAdd } },
+          select: { id: true },
+        });
+        for (const source of allowed) {
           await tx.campaignToReferralSource.create({
             data: {
+              organizationId: DEFAULT_ORGANIZATION_ID,
               campaignId: id,
-              referralSourceId,
+              referralSourceId: source.id,
               status: 'PENDING',
             },
           });
@@ -167,8 +173,8 @@ export async function DELETE(
     
     // Check if campaign exists
     const exists = await executeWithRetry(() =>
-      prisma.campaign.findUnique({
-        where: { id },
+      prisma.campaign.findFirst({
+        where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
       })
     );
 

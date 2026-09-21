@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 
 // GET single clinic location
 export async function GET(
@@ -8,8 +9,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const clinicLocation = await prisma.clinicLocation.findUnique({
-      where: { id },
+    const clinicLocation = await prisma.clinicLocation.findFirst({
+      where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
       include: {
         referralSources: {
           select: {
@@ -49,8 +50,8 @@ export async function PUT(
     const data = await request.json();
 
     // Check if location exists
-    const existing = await prisma.clinicLocation.findUnique({
-      where: { id }
+    const existing = await prisma.clinicLocation.findFirst({
+      where: { id, organizationId: DEFAULT_ORGANIZATION_ID }
     });
 
     if (!existing) {
@@ -62,8 +63,8 @@ export async function PUT(
 
     // If name is being changed, check for duplicates
     if (data.name && data.name !== existing.name) {
-      const duplicate = await prisma.clinicLocation.findUnique({
-        where: { name: data.name }
+      const duplicate = await prisma.clinicLocation.findFirst({
+        where: { name: data.name, organizationId: DEFAULT_ORGANIZATION_ID }
       });
 
       if (duplicate) {
@@ -106,8 +107,8 @@ export async function DELETE(
   try {
     const { id } = await params;
     // Check if location exists and has referral sources
-    const existing = await prisma.clinicLocation.findUnique({
-      where: { id },
+    const existing = await prisma.clinicLocation.findFirst({
+      where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
       include: {
         _count: {
           select: { referralSources: true }

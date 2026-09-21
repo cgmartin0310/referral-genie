@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import prisma from '../../../lib/prisma';
 import { executeWithRetry } from '../../../lib/db-helpers';
+import { DEFAULT_ORGANIZATION_ID } from '../../../lib/org';
+import { emptyProvenance } from '../../../lib/provenance';
 
 export async function GET() {
   try {
     const referralSources = await executeWithRetry(() => 
       prisma.referralSource.findMany({
+        where: { organizationId: DEFAULT_ORGANIZATION_ID },
         include: {
           clinicLocation: true,
           category: true,
@@ -61,6 +65,7 @@ export async function POST(request: Request) {
     const referralSource = await executeWithRetry(() => 
       prisma.referralSource.create({
         data: {
+          organizationId: DEFAULT_ORGANIZATION_ID,
           name: data.name,
           address: data.address || null,
           city: data.city || null,
@@ -78,8 +83,9 @@ export async function POST(request: Request) {
           rating: data.rating || null,
           expectedMonthlyReferrals: data.expectedMonthlyReferrals || null,
           numberOfProviders: data.numberOfProviders || null,
-          categoryId: data.categoryId || null
-        } as any,
+          categoryId: data.categoryId || null,
+          provenance: emptyProvenance('user') as unknown as Prisma.InputJsonValue,
+        },
         include: {
           clinicLocation: true,
           category: true,

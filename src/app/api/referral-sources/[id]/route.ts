@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { Prisma } from '@prisma/client';
 import prisma from '../../../../lib/prisma';
 import { executeWithRetry } from '../../../../lib/db-helpers';
+import { authOptions } from '../../../../lib/auth';
+import { DEFAULT_ORGANIZATION_ID } from '../../../../lib/org';
+import { changedOverridableFields, userEditProvenance } from '../../../../lib/provenance';
 
 // Get a single referral source
 export async function GET(
@@ -12,9 +17,10 @@ export async function GET(
     const { id } = await params;
     
     const referralSource = await executeWithRetry(() =>
-      prisma.referralSource.findUnique({
+      prisma.referralSource.findFirst({
         where: {
           id,
+          organizationId: DEFAULT_ORGANIZATION_ID,
         },
         include: {
           clinicLocation: true,
@@ -74,9 +80,10 @@ export async function PUT(
 
     // Check if referral source exists
     const exists = await executeWithRetry(() =>
-      prisma.referralSource.findUnique({
+      prisma.referralSource.findFirst({
         where: {
           id,
+          organizationId: DEFAULT_ORGANIZATION_ID,
         },
       })
     );
@@ -88,6 +95,33 @@ export async function PUT(
       );
     }
 
+    const session = await getServerSession(authOptions);
+    const actor = session?.user?.name || 'authenticated-user';
+    const patch = {
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.address !== undefined && { address: data.address }),
+      ...(data.city !== undefined && { city: data.city }),
+      ...(data.state !== undefined && { state: data.state }),
+      ...(data.zipCode !== undefined && { zipCode: data.zipCode }),
+      ...(data.clinicLocationId !== undefined && { clinicLocationId: data.clinicLocationId }),
+      ...(data.contactPerson !== undefined && { contactPerson: data.contactPerson }),
+      ...(data.contactTitle !== undefined && { contactTitle: data.contactTitle }),
+      ...(data.contactPhone !== undefined && { contactPhone: data.contactPhone }),
+      ...(data.contactEmail !== undefined && { contactEmail: data.contactEmail }),
+      ...(data.faxNumber !== undefined && { faxNumber: data.faxNumber }),
+      ...(data.npiNumber !== undefined && { npiNumber: data.npiNumber }),
+      ...(data.website !== undefined && { website: data.website }),
+      ...(data.notes !== undefined && { notes: data.notes }),
+      ...(data.rating !== undefined && { rating: data.rating }),
+      ...(data.expectedMonthlyReferrals !== undefined && { expectedMonthlyReferrals: data.expectedMonthlyReferrals }),
+      ...(data.numberOfProviders !== undefined && { numberOfProviders: data.numberOfProviders }),
+      ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
+    };
+    const edited = changedOverridableFields(exists, patch);
+    const provenance = edited.length > 0
+      ? userEditProvenance(exists.provenance, edited, actor, new Date().toISOString())
+      : null;
+
     // Update the referral source
     const referralSource = await executeWithRetry(() =>
       prisma.referralSource.update({
@@ -95,25 +129,8 @@ export async function PUT(
           id,
         },
         data: {
-          // Only include fields if they are defined in the input
-          ...(data.name !== undefined && { name: data.name }),
-          ...(data.address !== undefined && { address: data.address }),
-          ...(data.city !== undefined && { city: data.city }),
-          ...(data.state !== undefined && { state: data.state }),
-          ...(data.zipCode !== undefined && { zipCode: data.zipCode }),
-          ...(data.clinicLocationId !== undefined && { clinicLocationId: data.clinicLocationId }),
-          ...(data.contactPerson !== undefined && { contactPerson: data.contactPerson }),
-          ...(data.contactTitle !== undefined && { contactTitle: data.contactTitle }),
-          ...(data.contactPhone !== undefined && { contactPhone: data.contactPhone }),
-          ...(data.contactEmail !== undefined && { contactEmail: data.contactEmail }),
-          ...(data.faxNumber !== undefined && { faxNumber: data.faxNumber }),
-          ...(data.npiNumber !== undefined && { npiNumber: data.npiNumber }),
-          ...(data.website !== undefined && { website: data.website }),
-          ...(data.notes !== undefined && { notes: data.notes }),
-          ...(data.rating !== undefined && { rating: data.rating }),
-          ...(data.expectedMonthlyReferrals !== undefined && { expectedMonthlyReferrals: data.expectedMonthlyReferrals }),
-          ...(data.numberOfProviders !== undefined && { numberOfProviders: data.numberOfProviders }),
-          ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
+          ...patch,
+          ...(provenance ? { provenance: provenance as unknown as Prisma.InputJsonValue } : {}),
         },
         include: {
           clinicLocation: true,
@@ -149,9 +166,10 @@ export async function DELETE(
     
     // Check if referral source exists
     const exists = await executeWithRetry(() =>
-      prisma.referralSource.findUnique({
+      prisma.referralSource.findFirst({
         where: {
           id,
+          organizationId: DEFAULT_ORGANIZATION_ID,
         },
       })
     );

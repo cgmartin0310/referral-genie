@@ -11,7 +11,8 @@ import {
   ChartBarIcon,
   MagnifyingGlassIcon,
   ArrowRightOnRectangleIcon,
-  MapPinIcon 
+  MapPinIcon,
+  MapIcon,
 } from '@heroicons/react/24/outline';
 
 function classNames(...classes: string[]) {
@@ -21,11 +22,12 @@ function classNames(...classes: string[]) {
 export const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Referral Sources', href: '/referral-sources', icon: UserGroupIcon },
+  { name: 'County seed', href: '/county-seed', icon: MapIcon },
   { name: 'Clinic Locations', href: '/clinic-locations', icon: MapPinIcon },
   { name: 'Interactions', href: '/interactions', icon: CalendarIcon },
   { name: 'Campaigns', href: '/campaigns', icon: MegaphoneIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
-  { name: 'Prospecting', href: '/prospecting', icon: MagnifyingGlassIcon },
+  { name: 'Non-NPI search', href: '/prospecting', icon: MagnifyingGlassIcon },
 ];
 
 export default function Navigation() {

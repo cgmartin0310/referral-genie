@@ -28,7 +28,15 @@ interface ReferralSource {
   website: string | null;
   expectedMonthlyReferrals: number | null;
   numberOfProviders: number | null;
+  sourceType: string | null;
+  countyName: string | null;
+  placesMatchStatus: string | null;
+  likelyDuplicate: boolean;
+  reviewCount: number | null;
+  businessStatus: string | null;
+  rating: number | null;
   createdAt: string;
+  category: { id: string; name: string } | null;
 }
 
 type SortField = 'name' | 'clinicLocation' | 'address' | 'expectedMonthlyReferrals' | 'numberOfProviders';
@@ -37,6 +45,7 @@ type SortDirection = 'asc' | 'desc';
 export default function ReferralSourcesPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [clinicLocationFilter, setClinicLocationFilter] = useState<string>('');
+  const [countyFilter, setCountyFilter] = useState<string>('');
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
@@ -66,6 +75,15 @@ export default function ReferralSourcesPage() {
     return Array.from(locations.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [referralSources]);
 
+  const countyNames = useMemo(() => {
+    if (!referralSources) return [];
+    const names = new Set<string>();
+    referralSources.forEach((source: ReferralSource) => {
+      if (source.countyName) names.add(source.countyName);
+    });
+    return Array.from(names).sort();
+  }, [referralSources]);
+
   // Filter and sort referral sources
   const filteredAndSortedReferralSources = useMemo(() => {
     if (!referralSources) return [];
@@ -76,6 +94,9 @@ export default function ReferralSourcesPage() {
       result = result.filter((source: ReferralSource) => 
         source.clinicLocation?.id === clinicLocationFilter
       );
+    }
+    if (countyFilter) {
+      result = result.filter((source: ReferralSource) => source.countyName === countyFilter);
     }
     
     // Then sort by the selected field
@@ -116,7 +137,7 @@ export default function ReferralSourcesPage() {
     });
     
     return result;
-  }, [referralSources, clinicLocationFilter, sortField, sortDirection]);
+  }, [referralSources, clinicLocationFilter, countyFilter, sortField, sortDirection]);
   
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -157,7 +178,8 @@ export default function ReferralSourcesPage() {
             Referral Sources
           </h1>
           <p className="mt-2 text-sm text-gray-700">
-            A list of all your referral sources for marketing and tracking.
+            Pediatricians and primary care physicians from a county seed show up here with NPI,
+            source type, and Places match status. Add a source by hand for anyone else.
           </p>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
@@ -191,6 +213,24 @@ export default function ReferralSourcesPage() {
             ))}
           </select>
         </div>
+        <div className="sm:w-64">
+          <label htmlFor="countyFilter" className="block text-sm font-medium text-gray-700">
+            Filter by county
+          </label>
+          <select
+            id="countyFilter"
+            value={countyFilter}
+            onChange={(e) => setCountyFilter(e.target.value)}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          >
+            <option value="">All counties</option>
+            {countyNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="mt-8 flow-root">
@@ -200,7 +240,7 @@ export default function ReferralSourcesPage() {
               <div className="text-center py-4">Loading...</div>
             ) : filteredAndSortedReferralSources?.length === 0 ? (
               <div className="text-center py-4 text-gray-500">
-                No referral sources found. Add some to get started.
+                No referral sources found. Seed Lenoir County or add one by hand.
               </div>
             ) : (
               <table className="min-w-full divide-y divide-gray-300">
@@ -237,6 +277,15 @@ export default function ReferralSourcesPage() {
                       </span>
                     </th>
                     <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                      Source type
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                      County
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                      Places
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                       <span className="group inline-flex">
                         Fax
                       </span>
@@ -270,7 +319,15 @@ export default function ReferralSourcesPage() {
                   {filteredAndSortedReferralSources?.map((source: ReferralSource) => (
                     <tr key={source.id}>
                       <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-0">
-                        {source.name}
+                        <a href={`/referral-sources/${source.id}`} className="text-indigo-600 hover:text-indigo-900">
+                          {source.name}
+                        </a>
+                        {source.npiNumber && (
+                          <div className="text-xs font-normal text-gray-500">NPI {source.npiNumber}</div>
+                        )}
+                        {source.likelyDuplicate && (
+                          <div className="text-xs font-normal text-amber-700">Possible duplicate</div>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                         {source.clinicLocation?.name || 'Not specified'}
@@ -279,6 +336,24 @@ export default function ReferralSourcesPage() {
                         {source.address ? 
                           (source.city ? `${source.address}, ${source.city}` : source.address) 
                           : 'Not specified'}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {source.category?.name || source.sourceType || '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {source.countyName || '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {source.placesMatchStatus === 'matched'
+                          ? `Matched${source.rating != null ? ` ${source.rating}` : ''}${source.reviewCount != null ? ` (${source.reviewCount})` : ''}`
+                          : source.placesMatchStatus === 'unmatched'
+                            ? 'Unmatched'
+                            : source.placesMatchStatus === 'quarantined'
+                              ? 'Quarantined'
+                              : source.placesMatchStatus === 'pending'
+                                ? 'Pending'
+                                : '—'}
+                        {source.businessStatus ? ` · ${source.businessStatus}` : ''}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                         {source.faxNumber || 'Not specified'}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../../../lib/prisma';
 import { executeWithRetry } from '../../../../../lib/db-helpers';
 import { HumbleFaxClient } from '../../../../../lib/humble-fax';
+import { DEFAULT_ORGANIZATION_ID } from '../../../../../lib/org';
 
 // Setup the HumbleFax client
 const humbleFaxClient = new HumbleFaxClient();
@@ -16,8 +17,8 @@ export async function POST(
     
     // Get the campaign with referral sources
     const campaign = await executeWithRetry(() =>
-      prisma.campaign.findUnique({
-        where: { id },
+      prisma.campaign.findFirst({
+        where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
         include: {
           referralSources: {
             include: {

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 
 // GET all clinic locations
 export async function GET() {
   try {
     const clinicLocations = await prisma.clinicLocation.findMany({
+      where: { organizationId: DEFAULT_ORGANIZATION_ID },
       orderBy: {
         name: 'asc',
       },
@@ -39,8 +41,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if name already exists
-    const existing = await prisma.clinicLocation.findUnique({
-      where: { name: data.name }
+    const existing = await prisma.clinicLocation.findFirst({
+      where: { name: data.name, organizationId: DEFAULT_ORGANIZATION_ID }
     });
 
     if (existing) {
@@ -52,6 +54,7 @@ export async function POST(request: NextRequest) {
 
     const clinicLocation = await prisma.clinicLocation.create({
       data: {
+        organizationId: DEFAULT_ORGANIZATION_ID,
         name: data.name,
         address: data.address || null,
         city: data.city || null,

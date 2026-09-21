@@ -395,6 +395,9 @@ export default function ReferralSourceEditor({ id }: { id: string }) {
               </div>
             </div>
             
+            <p className="px-4 text-sm text-gray-500 sm:px-8">
+              Edits to name, address, phone, website, and rating are kept the next time this county is seeded.
+            </p>
             <div className="flex items-center justify-between gap-x-6 border-t border-gray-900/10 px-4 py-4 sm:px-8">
               <button
                 type="button"

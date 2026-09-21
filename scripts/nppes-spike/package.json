@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Measure NPPES row counts and address dirtiness for one therapy county. Does not call Google Places or write Prisma.",
+  "description": "Measure NPPES row counts and address dirtiness for pediatricians and primary care physicians in one county. Does not call Google Places or write Prisma.",
   "scripts": {
     "spike": "tsx src/cli.ts",
     "spike:fixture": "tsx src/cli.ts --fixture",

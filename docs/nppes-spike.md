@@ -1,6 +1,6 @@
-# NPPES spike — one county, therapy taxonomies
+# NPPES spike — one county, pediatricians and primary care
 
-Measure how many referring providers NPPES has in one outpatient-therapy market, and how many of those practice addresses are usable later for a Google Places match. This spike stops there.
+ICP: outpatient OT/PT/ST referral sources are **pediatricians and primary care physicians only**. This spike counts those NPIs in one county and measures how many of the returned practice addresses are usable later for a Google Places match. It stops there.
 
 - It does not call Google Places.
 - It does not connect to Prisma and does not upsert `ReferralSource`.
@@ -18,7 +18,7 @@ Official CMS sources, in the order you should use them:
 | Monthly dissemination file, V.2 | https://download.cms.gov/nppes/NPI_Files.html | Complete recount when an API query hits the 1,200-row cap |
 | File indexed on 2026-09-21 | https://download.cms.gov/nppes/NPPES_Data_Dissemination_September_2026_V2.zip | About 1,106 MB zipped. Too large to vendor into this repo |
 
-The API returns at most 200 rows per request and allows `skip` up to 1,000, so one taxonomy + ZIP search returns at most 1,200 NPIs. The script sets `address_purpose=LOCATION` and `state`, then keeps a row only when its **primary** taxonomy code is on the allow-list. The API's `taxonomy_description` match is loose: `General Practice` also returns dentists, and `Internal Medicine` returns hospitalists, cardiologists, and other subspecialists. A row whose only allow-listed code is a non-primary taxonomy is counted as excluded, not kept.
+The API returns at most 200 rows per request and allows `skip` up to 1,000, so one taxonomy + ZIP search returns at most 1,200 NPIs. The script sets `address_purpose=LOCATION` and `state`, then keeps a row only when its **primary** taxonomy code is on the allow-list below. The API's `taxonomy_description` match is loose: `General Practice` also returns dentists, and `Internal Medicine` returns hospitalists, cardiologists, and other subspecialists. A row whose only allow-listed code is a non-primary taxonomy is counted as excluded, not kept. Orthopaedics, neurology, physician assistants, and nurse practitioners are not searched and not kept.
 
 The weekly incremental zip on the same download page is only a delta. It is not a county census. Do not point `--file` at it and treat the result as complete.
 
@@ -69,47 +69,23 @@ Offline stand-in for that path: `fixtures/dissemination-sample.csv` (used by `np
 
 ## Taxonomy allow-list
 
-Codes live in `scripts/nppes-spike/src/taxonomies.ts`. They are referring clinicians and two org types that send patients to outpatient PT/OT/ST. Physical therapist, occupational therapist, and speech-language pathologist codes are omitted on purpose.
+Codes live in `scripts/nppes-spike/src/taxonomies.ts`. Every code below is a pediatrician or a primary care physician. Display names are the NUCC descriptions the NPPES API returns.
 
-| Code | Description | Group |
-|------|-------------|-------|
+| Code | Display name | Group |
+|------|--------------|-------|
 | 207Q00000X | Family Medicine | pcp_family_medicine |
 | 207QA0505X | Family Medicine, Adult Medicine | pcp_family_medicine |
 | 207QG0300X | Family Medicine, Geriatric Medicine | pcp_family_medicine |
-| 207QS0010X | Family Medicine, Sports Medicine | pcp_family_medicine |
 | 207R00000X | Internal Medicine | pcp_internal_medicine |
 | 207RG0300X | Internal Medicine, Geriatric Medicine | pcp_internal_medicine |
-| 207RS0010X | Internal Medicine, Sports Medicine | pcp_internal_medicine |
 | 208D00000X | General Practice | pcp_general_practice |
 | 208000000X | Pediatrics | pediatrics |
 | 2080A0000X | Pediatrics, Adolescent Medicine | pediatrics |
 | 2080P0006X | Pediatrics, Developmental - Behavioral Pediatrics | pediatrics |
-| 207X00000X | Orthopaedic Surgery | orthopaedics |
-| 207XP3100X | Orthopaedic Surgery, Pediatric Orthopaedic Surgery | orthopaedics |
-| 207XS0117X | Orthopaedic Surgery, Orthopaedic Surgery of the Spine | orthopaedics |
-| 207XX0005X | Orthopaedic Surgery, Sports Medicine | orthopaedics |
-| 207XX0801X | Orthopaedic Surgery, Orthopaedic Trauma | orthopaedics |
-| 2084N0400X | Psychiatry & Neurology, Neurology | neurology |
-| 2084N0402X | Psychiatry & Neurology, Neurology with Special Qualifications in Child Neurology | neurology |
-| 2084P0005X | Psychiatry & Neurology, Neurodevelopmental Disabilities | neurology |
-| 208100000X | Physical Medicine & Rehabilitation | pmr |
-| 2081P0010X | Physical Medicine & Rehabilitation, Pediatric Rehabilitation Medicine | pmr |
-| 2081P2900X | Physical Medicine & Rehabilitation, Pain Medicine | pmr |
-| 2081S0010X | Physical Medicine & Rehabilitation, Sports Medicine | pmr |
-| 207RR0500X | Internal Medicine, Rheumatology | rheumatology |
-| 363A00000X | Physician Assistant | physician_assistant |
-| 363AM0700X | Physician Assistant, Medical | physician_assistant |
-| 363AS0400X | Physician Assistant, Surgical | physician_assistant |
-| 363L00000X | Nurse Practitioner | nurse_practitioner |
-| 363LA2200X | Nurse Practitioner, Adult Health | nurse_practitioner |
-| 363LF0000X | Nurse Practitioner, Family | nurse_practitioner |
-| 363LG0600X | Nurse Practitioner, Gerontology | nurse_practitioner |
-| 363LP0200X | Nurse Practitioner, Pediatrics | nurse_practitioner |
-| 363LP2300X | Nurse Practitioner, Primary Care | nurse_practitioner |
-| 252Y00000X | Early Intervention Provider Agency | early_intervention |
-| 251300000X | Local Education Agency (LEA) | school |
 
-API search strings (candidates only; the table above is the filter): Family Medicine, Internal Medicine, General Practice, Pediatrics, Orthopaedic Surgery, Neurology, Physical Medicine & Rehabilitation, Rheumatology, Physician Assistant, Nurse Practitioner, Early Intervention, Local Education Agency.
+Not on the list: orthopaedics, neurology, physical medicine and rehabilitation, rheumatology, sports-medicine specializations, physician assistants, nurse practitioners, early-intervention agencies, schools, and the therapy professions themselves (PT/OT/SLP). Pediatric subspecialties other than adolescent medicine and developmental-behavioral pediatrics (for example pediatric emergency medicine) are not included.
+
+API search strings (candidates only; the table above is the filter): Family Medicine, Internal Medicine, General Practice, Pediatrics.
 
 ## Forsyth County ZIP list
 
@@ -150,45 +126,58 @@ The Read API path cannot see providers who have no practice-location ZIP in the 
 
 ## Results note
 
-Live Read API run on 2026-09-21. `npm test` still locks the fixture numbers; this table is the live pull only.
+Live Read API run on 2026-09-21 after narrowing the allow-list to pediatricians and primary care physicians. `npm test` still locks the fixture numbers; this table is the live pull only.
 
 | Field | Value |
 |-------|-------|
-| Run date | 2026-09-21T19:13:02Z |
+| Run date | 2026-09-21T20:16:35Z |
 | Source | `api` — `https://npiregistry.cms.hhs.gov/api/?version=2.1` |
 | County | Forsyth County, NC (FIPS 37067), 18 practice ZIPs including 27157 |
-| Raw hits | 4,764 |
-| Unique NPIs before taxonomy filter | 4,138 |
-| Duplicate NPIs (seen more than once) | 524 (626 extra hits) |
-| Dropped (no allow-listed taxonomy) | 405 |
-| Excluded (allow-listed code was not primary) | 534 |
-| Unique NPIs kept (primary taxonomy on the allow-list) | 3,199 |
-| NPI-1 / NPI-2 | 2,913 / 286 |
+| ICP | Pediatricians and PCPs only (9 NUCC codes) |
+| Raw hits | 1,866 |
+| Unique NPIs before taxonomy filter | 1,672 |
+| Duplicate NPIs (seen more than once) | 159 (194 extra hits) |
+| Dropped (no allow-listed taxonomy) | 436 |
+| Excluded (allow-listed code was not primary) | 461 |
+| Unique NPIs kept (primary taxonomy on the allow-list) | 775 |
+| NPI-1 / NPI-2 | 598 individuals / 177 organizations |
 | Missing address | 0 |
 | Missing phone | 0 |
 | Unparseable city, state, or ZIP | 0 |
 | PO Box | 0 |
 | ZIP outside county list | 0 |
-| Boundary ZIP | 529 (16.5%) |
+| Boundary ZIP | 136 (17.5%) |
 | Deactivated | 0 |
-| Matched on secondary taxonomy only | 0 kept; 534 excluded |
-| Places-match ready | 3,199 (100% of kept) |
-| Truncated API queries | 0 (busiest query was 3 pages; cap is 6) |
-| Top primary taxonomies | PA 899 (`363A00000X`); NP 659 (`363L00000X`); Family Medicine 381 (`207Q00000X`); Internal Medicine 337 (`207R00000X`); NP Family 250 (`363LF0000X`); Neurology 141 (`2084N0400X`); PA Medical 120 (`363AM0700X`); Orthopaedic Surgery 84 (`207X00000X`) |
+| Matched on secondary taxonomy only | 0 kept; 461 excluded |
+| Places-match ready | 775 (100% of kept) |
+| Truncated API queries | 0 (busiest query was 2 pages; cap is 6) |
 
-Allow-list groups among the 3,199: physician assistant 1,055; nurse practitioner 986; family medicine 408; internal medicine 348; neurology 149; orthopaedics 106; PM&R 55; rheumatology 38; pediatrics 17; general practice 17; early intervention 15; school / LEA 5.
+Primary taxonomy counts among the 775 kept NPIs:
 
-Primary pediatrician codes inside that pediatrics group: general pediatrics 6 (`208000000X`), developmental-behavioral 9 (`2080P0006X`), adolescent medicine 2 (`2080A0000X`). Pediatric NPs (`363LP0200X`, 26) are in the nurse-practitioner group. Pediatric subspecialties that are not on the allow-list (for example pediatric emergency medicine) are not counted.
+| Count | Code | Display name |
+|------:|------|--------------|
+| 381 | 207Q00000X | Family Medicine |
+| 337 | 207R00000X | Internal Medicine |
+| 17 | 208D00000X | General Practice |
+| 11 | 207RG0300X | Internal Medicine, Geriatric Medicine |
+| 9 | 2080P0006X | Pediatrics, Developmental - Behavioral Pediatrics |
+| 7 | 207QG0300X | Family Medicine, Geriatric Medicine |
+| 6 | 207QA0505X | Family Medicine, Adult Medicine |
+| 5 | 208000000X | Pediatrics |
+| 2 | 2080A0000X | Pediatrics, Adolescent Medicine |
+
+Groups: family medicine 394, internal medicine 348, general practice 17, pediatrics 16.
 
 ### What this means for ingest
 
 Do not bulk-load these rows into `ReferralSource`. A Places match rate is still unknown, and this pull is not a census of dirty addresses.
 
 - Every API query asked for `address_purpose=LOCATION` plus a ZIP, so providers with a blank practice address never showed up. Missing street, missing phone, bad ZIP, and PO Box are all zero **because of that filter**. The monthly V.2 CSV is the run that can measure that dirtiness.
-- 534 NPIs had an allow-listed taxonomy only as a non-primary code (the Internal Medicine search returns hospitalists and cardiologists). They are excluded. Loading "any taxonomy matches" would pollute the graph.
-- 529 kept rows (16.5%) use a boundary ZIP (Clemmons, Kernersville, 27107, 27127). A later Places match will mix in Davie and Guilford unless those rows are flagged.
-- No query hit the 1,200-row API cap, so this count is not truncated. It is still ZIP-based, not a county polygon.
-- PA and NP rows dominate (about 2,000 of 3,199). That is a product decision for the ingest ticket, not a reason to insert them now.
+- 461 NPIs had an allow-listed taxonomy only as a non-primary code (the Internal Medicine search returns hospitalists and cardiologists who also list general internal medicine). They are excluded.
+- 436 candidates had no pediatrician or PCP code at all (dentists from the General Practice search, pediatric nurse practitioners from the Pediatrics search, and similar). They are dropped.
+- 136 kept rows (17.5%) use a boundary ZIP (Clemmons, Kernersville, 27107, 27127). A later Places match will mix in Davie and Guilford unless those rows are flagged.
+- No query hit the 1,200-row API cap. The count is still ZIP-based, not a county polygon.
+- General pediatrics is a small slice of this pull (5 with primary `208000000X`, plus 9 developmental-behavioral and 2 adolescent medicine). Most of the 775 are family medicine and internal medicine physicians.
 
 ## Expected outputs
 

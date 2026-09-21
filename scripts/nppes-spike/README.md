@@ -1,6 +1,6 @@
 # NPPES spike
 
-Counts therapy-relevant NPPES rows for one county and measures how dirty the practice addresses are.
+Counts pediatrician and primary-care physician NPPES rows for one county and measures how dirty the practice addresses are.
 
 It does **not** call Google Places and it does **not** write to Prisma or `ReferralSource`. Bulk load waits until a Places match rate is known (ingest ticket).
 

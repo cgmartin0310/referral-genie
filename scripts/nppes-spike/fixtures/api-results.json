@@ -214,7 +214,7 @@
         "telephone_number": "336-555-0112"
       }
     ],
-    "taxonomies": [{ "code": "363L00000X", "desc": "Nurse Practitioner", "primary": true }]
+    "taxonomies": [{ "code": "208000000X", "desc": "Pediatrics", "primary": true }]
   },
   {
     "number": "9000000013",
@@ -230,7 +230,7 @@
         "telephone_number": "336-555-0113"
       }
     ],
-    "taxonomies": [{ "code": "207X00000X", "desc": "Orthopaedic Surgery", "primary": true }]
+    "taxonomies": [{ "code": "207Q00000X", "desc": "Family Medicine", "primary": true }]
   },
   {
     "number": "9000000014",

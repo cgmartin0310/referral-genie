@@ -1,11 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
-import PullEnrichPanel from './PullEnrichPanel';
-import ResearchPanel from './ResearchPanel';
-import type { MarketCountyView } from '@/lib/geo/market-view';
+import CountyPullRunner from './CountyPullRunner';
 
 interface StateOption {
   code: string;
@@ -28,10 +26,8 @@ interface CountyOption {
  * providers. No clinic is involved.
  */
 export default function CountyPullPanel() {
-  const queryClient = useQueryClient();
   const [stateCode, setStateCode] = useState('');
   const [fips, setFips] = useState('');
-  const [pullProgress, setPullProgress] = useState({ anyPastNppes: false, anyCompleted: false });
 
   const { data: states } = useQuery({
     queryKey: ['counties', 'states'],
@@ -50,14 +46,7 @@ export default function CountyPullPanel() {
   }, [stateCode]);
 
   const county = counties?.find((row) => row.fips === fips) ?? null;
-  const view: MarketCountyView | null = county && county.pullReady
-    ? { fips: county.fips, name: county.name, state: county.state, pullReady: true, seedCountyId: county.seedCountyId }
-    : null;
-
-  const refreshCatalog = () => {
-    queryClient.invalidateQueries({ queryKey: ['practices'] });
-    queryClient.invalidateQueries({ queryKey: ['providers'] });
-  };
+  const pullable = county && county.pullReady && county.seedCountyId ? county : null;
 
   return (
     <div className="space-y-5">
@@ -106,25 +95,13 @@ export default function CountyPullPanel() {
         that crosses the county line are kept and flagged.
       </p>
 
-      {view && (
-        <>
-          <PullEnrichPanel
-            key={view.seedCountyId ?? view.fips}
-            counties={[view]}
-            onProgress={(progress) => {
-              setPullProgress(progress);
-              if (progress.anyCompleted) refreshCatalog();
-            }}
-          />
-          <ResearchPanel
-            key={`research-${view.fips}`}
-            countyFips={view.fips}
-            refreshToken={`${pullProgress.anyPastNppes}-${pullProgress.anyCompleted}`}
-            onProgress={({ completed }) => {
-              if (completed) refreshCatalog();
-            }}
-          />
-        </>
+      {pullable && (
+        <CountyPullRunner
+          key={pullable.fips}
+          countyId={pullable.seedCountyId as string}
+          countyFips={pullable.fips}
+          countyName={`${pullable.name}, ${pullable.state}`}
+        />
       )}
     </div>
   );

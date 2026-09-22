@@ -23,6 +23,7 @@ model Organization {
   campaigns          Campaign[]
   campaignSources    CampaignToReferralSource[]
   countyIngestRuns   CountyIngestRun[]
+  researchRuns       ResearchRun[]
 }
 
 model ClinicLocation {
@@ -81,6 +82,8 @@ model ReferralSource {
   rating                   Float?
   expectedMonthlyReferrals Int?
   numberOfProviders        Int?
+  referralFormUrl          String?
+  preferredChannel         String?
   taxonomyCodes            String[]                   @default([])
   primaryTaxonomyCode      String?
   enumerationType          String?
@@ -206,4 +209,24 @@ model CountyIngestRun {
   updatedAt      DateTime     @updatedAt
 
   @@index([organizationId, countyId, createdAt])
+}
+
+/// One research pass over a clinic market or a single referral source.
+/// Each request handles one practice site, then the next request resumes.
+model ResearchRun {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  scopeKey       String
+  status         String       @default("QUEUED")
+  cursor         Json
+  summary        Json
+  error          String?
+  lockedAt       DateTime?
+  startedAt      DateTime     @default(now())
+  finishedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, scopeKey, createdAt])
 }

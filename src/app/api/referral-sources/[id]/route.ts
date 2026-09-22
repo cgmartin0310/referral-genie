@@ -70,6 +70,8 @@ export async function PUT(
     rating?: number | null;
     expectedMonthlyReferrals?: number | null;
     numberOfProviders?: number | null;
+    referralFormUrl?: string | null;
+    preferredChannel?: string | null;
     categoryId?: string | null;
   } = {};
 
@@ -116,6 +118,8 @@ export async function PUT(
       ...(data.rating !== undefined && { rating: data.rating }),
       ...(data.expectedMonthlyReferrals !== undefined && { expectedMonthlyReferrals: data.expectedMonthlyReferrals }),
       ...(data.numberOfProviders !== undefined && { numberOfProviders: data.numberOfProviders }),
+      ...(data.referralFormUrl !== undefined && { referralFormUrl: data.referralFormUrl || null }),
+      ...(data.preferredChannel !== undefined && { preferredChannel: data.preferredChannel || null }),
       ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
     };
     const edited = changedOverridableFields(exists, patch);

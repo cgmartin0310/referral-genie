@@ -457,16 +457,23 @@ async function formPractices(run: CountyIngestRun, summary: IngestSummary): Prom
   summary.practicesFormed = practices.length;
   summary.providersLinked = providersLinked;
 
-  // A practice keyed by address on the first pass can be re-keyed by place id
-  // on the second. Drop the stale row when nothing else refers to it.
+  // A row this pass did not produce is stale: re-keyed by place id, or a
+  // grouping that no longer exists. Drop it when nothing refers to it; when a
+  // clinic list or campaign still does, keep the row but stop it claiming
+  // providers that now sit elsewhere.
+  const keys = practices.map((built) => built.practiceKey);
   await prisma.practice.deleteMany({
     where: {
       organizationId: DEFAULT_ORGANIZATION_ID,
       countyFips: run.countyFips,
-      practiceKey: { notIn: practices.map((built) => built.practiceKey) },
+      practiceKey: { notIn: keys },
       clinicPractices: { none: {} },
       campaignTargets: { none: {} },
     },
+  });
+  await prisma.practice.updateMany({
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: run.countyFips, practiceKey: { notIn: keys } },
+    data: { providerCount: 0, taxonomyMix: {} },
   });
 }
 

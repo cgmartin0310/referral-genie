@@ -7,13 +7,14 @@ import {
 } from '../ingest/duplicates';
 
 /**
- * Practice formation.
+ * Referral source formation.
  *
- * A practice is a location, not an organization. NPPES does not link an
- * individual to their employer's org NPI, most practices in a county pull have
- * no NPI-2 at all, one org NPI can span several addresses, and one address can
- * host several org NPIs. So identity comes from the location and any org NPIs
- * are recorded as attributes of it.
+ * Providers at a location that has an organization NPI (NPI-2) are grouped
+ * under it: the org record carries the practice name and fax. Providers at a
+ * location with no organization NPI are listed individually, each as a
+ * referral source of one, rather than grouped under a made-up name. Identity
+ * of a group comes from the location (place id, else street and town), since
+ * NPPES does not link an individual to an employer.
  */
 
 export interface PracticeSourceRow {
@@ -129,10 +130,40 @@ function practiceName(orgs: PracticeSourceRow[], members: PracticeSourceRow[], f
       : [...orgs].sort((left, right) => left.name.localeCompare(right.name))[0];
     return { name: chosen.name, ambiguous: true };
   }
-  const listing = modal(members.map((row) => row.placeName ?? null));
-  if (listing) return { name: listing, ambiguous: false };
   const address = modal(members.map((row) => row.address));
   return { name: address ?? members[0]?.name ?? 'Unnamed practice', ambiguous: false };
+}
+
+/** One provider as their own referral source. */
+function soloPractice(row: PracticeSourceRow): BuiltPractice {
+  return {
+    practiceKey: `npi:${row.npiNumber ?? row.id}`,
+    placeId: row.placeId,
+    name: row.name,
+    nameAmbiguous: false,
+    address: row.address,
+    city: row.city,
+    state: row.state,
+    zipCode: row.zipCode,
+    countyName: row.countyName,
+    countyFips: row.countyFips,
+    phone: row.contactPhone,
+    faxNumber: row.faxNumber,
+    orgNpis: [],
+    providers: [
+      {
+        sourceId: row.id,
+        npiNumber: row.npiNumber,
+        name: row.name,
+        primaryTaxonomyCode: row.primaryTaxonomyCode,
+        taxonomyCodes: row.taxonomyCodes,
+        sourceType: row.sourceType,
+        faxNumber: row.faxNumber,
+      },
+    ],
+    providerCount: 1,
+    taxonomyMix: { [row.sourceType ?? 'unknown']: 1 },
+  };
 }
 
 export function buildPractices(rows: PracticeSourceRow[]): BuiltPractice[] {
@@ -158,6 +189,11 @@ export function buildPractices(rows: PracticeSourceRow[]): BuiltPractice[] {
   for (const [practiceKey, members] of groups) {
     const orgs = members.filter(isOrg);
     const people = members.filter((row) => !isOrg(row));
+    if (orgs.length === 0) {
+      // No organization here to group under: each provider stands alone.
+      for (const person of people) practices.push(soloPractice(person));
+      continue;
+    }
     const faxNumber = modal(members.map((row) => row.faxNumber));
     const { name, ambiguous } = practiceName(orgs, members, faxNumber);
 

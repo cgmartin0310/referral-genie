@@ -151,7 +151,7 @@ function ReferralList({ clinic }: { clinic: ClinicLocation }) {
               </div>
               <div className="col-span-6 mt-2 lg:col-span-3 lg:mt-0">
                 <p className="text-sm font-medium text-gray-900">
-                  {practice.providerCount === 0 ? 'Providers unknown' : `${practice.providerCount} providers`}
+                  {practice.providerCount === 0 ? 'Providers unknown' : `${practice.providerCount} provider${practice.providerCount === 1 ? '' : 's'}`}
                 </p>
                 {practice.providerCount > 0 && (
                   <p className="truncate text-xs text-gray-500">

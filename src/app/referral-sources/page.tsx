@@ -13,23 +13,27 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   PrinterIcon,
-  UsersIcon,
+  UserIcon,
 } from '@heroicons/react/24/outline';
 import MainLayout from '../../components/layout/MainLayout';
 import AddPracticeModal from '../../components/AddPracticeModal';
 import CountyPullPanel from '../../components/setup/CountyPullPanel';
 import type { PracticeView, ProviderView } from '@/lib/practices/present';
 
-type Tab = 'practices' | 'providers';
-
 interface Clinic {
   id: string;
   name: string;
 }
 
-interface PracticesResponse {
+interface SourcesResponse {
   practices: PracticeView[];
-  totals: { practices: number; providers: number; withFax: number; estimate: { low: number; high: number } };
+  totals: {
+    practices: number;
+    organizations: number;
+    providers: number;
+    withFax: number;
+    estimate: { low: number; high: number };
+  };
   counties: { fips: string | null; name: string | null; practices: number }[];
 }
 
@@ -43,13 +47,6 @@ function formatFax(value: string | null | undefined): string {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
-function mixLabel(mix: Record<string, number>, labels: Record<string, string>): string {
-  return Object.entries(mix)
-    .sort((left, right) => right[1] - left[1])
-    .map(([type, count]) => `${labels[type] ?? type} ${count}`)
-    .join(' · ');
-}
-
 const SHORT: Record<string, string> = {
   pediatrics: 'Pediatrics',
   pcp_family_medicine: 'Family medicine',
@@ -59,9 +56,21 @@ const SHORT: Record<string, string> = {
   clinic_center: 'Clinic / health center',
 };
 
+function mixLabel(mix: Record<string, number>): string {
+  return Object.entries(mix)
+    .sort((left, right) => right[1] - left[1])
+    .map(([type, count]) => `${SHORT[type] ?? type} ${count}`)
+    .join(' · ');
+}
+
 function estimateText(estimate: PracticeView['estimate']): string {
   if (!estimate) return '—';
   return estimate.low === estimate.high ? `${estimate.low}` : `${estimate.low}–${estimate.high}`;
+}
+
+/** An organization groups its providers; anyone else is their own referral source. */
+function isOrganization(source: PracticeView): boolean {
+  return source.orgNpis.length > 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -80,10 +89,7 @@ function OwnFaxToggle({ provider }: { provider: ProviderView }) {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: (useOwnFax: boolean) => axios.patch(`/api/providers/${provider.id}`, { useOwnFax }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['practices'] });
-      queryClient.invalidateQueries({ queryKey: ['providers'] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['practices'] }),
     onError: () => toast.error('Could not update the fax setting'),
   });
   const disabled = !provider.faxNumber;
@@ -121,26 +127,46 @@ function SendsTo({ provider }: { provider: ProviderView }) {
           sendsTo.level === 'provider' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600',
         )}
       >
-        {sendsTo.level === 'provider' ? 'own line' : 'practice'}
+        {sendsTo.level === 'provider' ? 'own line' : 'office'}
       </span>
       {sendsTo.fellBack && <span className="text-xs text-amber-600">own line requested, none on file</span>}
     </span>
   );
 }
 
+function ClinicChips({ clinics }: { clinics: PracticeView['clinics'] }) {
+  return (
+    <div className="flex flex-wrap justify-end gap-1">
+      {clinics.map((clinic) => (
+        <span
+          key={clinic.id}
+          title={`On ${clinic.name}’s list`}
+          className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20"
+        >
+          {clinic.name.split(' ')[0]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 
-function PracticeRow({
-  practice,
+function SourceRow({
+  source,
   selected,
   onToggle,
 }: {
-  practice: PracticeView;
+  source: PracticeView;
   selected: boolean;
   onToggle: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const canExpand = practice.providers.length > 0;
+  const organization = isOrganization(source);
+  const canExpand = organization && source.providers.length > 0;
+  const solo = !organization ? source.providers[0] : null;
+  const addressLine = [source.address, source.city, source.zipCode].filter(Boolean).join(', ');
+
   return (
     <li className={classNames('bg-white', selected && 'bg-green-50/40')}>
       <div className="grid grid-cols-12 items-center gap-x-4 px-4 py-3 sm:px-6">
@@ -149,42 +175,43 @@ function PracticeRow({
             type="checkbox"
             checked={selected}
             onChange={onToggle}
-            aria-label={`Select ${practice.name}`}
+            aria-label={`Select ${source.name}`}
             className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-600"
           />
-          <button
-            type="button"
-            onClick={() => canExpand && setOpen(!open)}
-            disabled={!canExpand}
-            aria-expanded={open}
-            aria-label={open ? 'Hide providers' : 'Show providers'}
-            className={classNames(
-              'rounded p-0.5 text-gray-400',
-              canExpand ? 'hover:bg-gray-100 hover:text-gray-600' : 'opacity-30',
-            )}
-          >
-            <ChevronRightIcon className={classNames('h-4 w-4 transition-transform', open && 'rotate-90')} />
-          </button>
+          {organization ? (
+            <button
+              type="button"
+              onClick={() => canExpand && setOpen(!open)}
+              disabled={!canExpand}
+              aria-expanded={open}
+              aria-label={open ? 'Hide providers' : 'Show providers'}
+              className={classNames('rounded p-0.5 text-gray-400', canExpand ? 'hover:bg-gray-100 hover:text-gray-600' : 'opacity-30')}
+            >
+              <ChevronRightIcon className={classNames('h-4 w-4 transition-transform', open && 'rotate-90')} />
+            </button>
+          ) : (
+            <span className="p-0.5 text-gray-300" aria-hidden="true">
+              <UserIcon className="h-4 w-4" />
+            </span>
+          )}
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-gray-900">
-              {practice.name}
-              {practice.nameAmbiguous && (
+              {source.name}
+              {source.nameAmbiguous && (
                 <span className="ml-2 text-xs font-normal text-amber-600" title="Two organizations share this address">
                   shared address
                 </span>
               )}
             </p>
-            <p className="truncate text-sm text-gray-500">
-              {[practice.address, practice.city, practice.zipCode].filter(Boolean).join(', ')}
-            </p>
+            <p className="truncate text-sm text-gray-500">{addressLine}</p>
           </div>
         </div>
 
         <div className="col-span-6 mt-2 whitespace-nowrap lg:col-span-2 lg:mt-0">
-          {practice.faxNumber ? (
+          {source.faxNumber ? (
             <p className="flex items-center gap-1.5 font-mono text-sm text-gray-800">
               <PrinterIcon className="h-4 w-4 text-gray-400" />
-              {formatFax(practice.faxNumber)}
+              {formatFax(source.faxNumber)}
             </p>
           ) : (
             <p className="text-sm text-gray-400">No fax</p>
@@ -192,37 +219,31 @@ function PracticeRow({
         </div>
 
         <div className="col-span-6 mt-2 lg:col-span-3 lg:mt-0">
-          <p className="text-sm font-medium text-gray-900">
-            {practice.providerCount === 0
-              ? 'Providers unknown'
-              : `${practice.providerCount} provider${practice.providerCount === 1 ? '' : 's'}`}
-          </p>
-          {practice.providerCount > 0 && (
-            <p className="truncate text-xs text-gray-500">{mixLabel(practice.taxonomyMix, SHORT)}</p>
+          {organization ? (
+            <>
+              <p className="text-sm font-medium text-gray-900">
+                {source.providerCount === 0 ? 'Organization' : `${source.providerCount} provider${source.providerCount === 1 ? '' : 's'}`}
+              </p>
+              {source.providerCount > 0 && <p className="truncate text-xs text-gray-500">{mixLabel(source.taxonomyMix)}</p>}
+            </>
+          ) : (
+            <p className="text-sm text-gray-700">{solo?.sourceTypeLabel ?? mixLabel(source.taxonomyMix)}</p>
           )}
         </div>
 
         <div className="col-span-6 mt-2 whitespace-nowrap lg:col-span-2 lg:mt-0 lg:text-right">
-          <p className="text-sm font-semibold text-gray-900">{estimateText(practice.estimate)}</p>
+          <p className="text-sm font-semibold text-gray-900">{estimateText(source.estimate)}</p>
           <p className="text-xs text-gray-500">est. referrals / mo</p>
         </div>
 
-        <div className="col-span-6 mt-2 flex flex-wrap justify-end gap-1 lg:col-span-1 lg:mt-0">
-          {practice.clinics.map((clinic) => (
-            <span
-              key={clinic.id}
-              title={`On ${clinic.name}’s list`}
-              className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20"
-            >
-              {clinic.name.split(' ')[0]}
-            </span>
-          ))}
+        <div className="col-span-6 mt-2 lg:col-span-1 lg:mt-0">
+          <ClinicChips clinics={source.clinics} />
         </div>
       </div>
 
       {open && (
         <ul className="border-t border-gray-100 bg-gray-50/60">
-          {practice.providers.map((provider) => (
+          {source.providers.map((provider) => (
             <li
               key={provider.id}
               className="grid grid-cols-12 items-center gap-x-4 px-4 py-2 pl-[4.25rem] text-sm sm:px-6 lg:pl-[4.75rem]"
@@ -249,7 +270,7 @@ function PracticeRow({
 
 /* ------------------------------------------------------------------ */
 
-function PracticesTab({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void }) {
+function SourceList({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void }) {
   const queryClient = useQueryClient();
   const [q, setQ] = useState('');
   const [countyFips, setCountyFips] = useState('');
@@ -278,7 +299,7 @@ function PracticesTab({ clinics, onPull }: { clinics: Clinic[]; onPull: () => vo
 
   const { data, isLoading } = useQuery({
     queryKey: ['practices', params],
-    queryFn: async () => (await axios.get<PracticesResponse>(`/api/practices?${params}`)).data,
+    queryFn: async () => (await axios.get<SourcesResponse>(`/api/practices?${params}`)).data,
   });
 
   const addToClinic = useMutation({
@@ -297,11 +318,11 @@ function PracticesTab({ clinics, onPull }: { clinics: Clinic[]; onPull: () => vo
       setSelected(new Set());
       queryClient.invalidateQueries({ queryKey: ['practices'] });
     },
-    onError: () => toast.error('Could not add practices'),
+    onError: () => toast.error('Could not add to the clinic'),
   });
 
-  const practices = data?.practices ?? [];
-  const allVisibleSelected = practices.length > 0 && practices.every((row) => selected.has(row.id));
+  const sources = data?.practices ?? [];
+  const allVisibleSelected = sources.length > 0 && sources.every((row) => selected.has(row.id));
   const clinicName = clinics.find((row) => row.id === clinicId)?.name;
 
   const toggle = (id: string) =>
@@ -322,7 +343,7 @@ function PracticesTab({ clinics, onPull }: { clinics: Clinic[]; onPull: () => vo
               type="search"
               value={q}
               onChange={(event) => setQ(event.target.value)}
-              placeholder="Search practices, providers, streets"
+              placeholder="Search providers, organizations, streets"
               className="w-full rounded-md border-gray-300 pl-9 text-sm focus:border-green-600 focus:ring-green-600"
             />
           </label>
@@ -391,27 +412,25 @@ function PracticesTab({ clinics, onPull }: { clinics: Clinic[]; onPull: () => vo
           <input
             type="checkbox"
             checked={allVisibleSelected}
-            onChange={() =>
-              setSelected(allVisibleSelected ? new Set() : new Set(practices.map((row) => row.id)))
-            }
+            onChange={() => setSelected(allVisibleSelected ? new Set() : new Set(sources.map((row) => row.id)))}
             aria-label="Select all shown"
             className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-600"
           />
           <span>
-            {practices.length} practice{practices.length === 1 ? '' : 's'}
+            {sources.length} referral source{sources.length === 1 ? '' : 's'}
             {selected.size > 0 && <span className="ml-2 normal-case text-green-700">· {selected.size} selected</span>}
           </span>
         </div>
 
         {isLoading ? (
           <p className="px-6 py-10 text-center text-sm text-gray-500">Loading…</p>
-        ) : practices.length === 0 ? (
+        ) : sources.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <BuildingOffice2Icon className="mx-auto h-10 w-10 text-gray-300" />
-            <p className="mt-3 text-sm font-medium text-gray-900">No practices yet</p>
+            <p className="mt-3 text-sm font-medium text-gray-900">No referral sources yet</p>
             <p className="mt-1 text-sm text-gray-500">
-              Pick a county and pull its pediatricians and primary care physicians from NPI. They will appear here as
-              practices.
+              Pick a county and pull its pediatricians, primary care physicians, nurse practitioners, and physician
+              assistants from NPI.
             </p>
             <button
               type="button"
@@ -423,13 +442,8 @@ function PracticesTab({ clinics, onPull }: { clinics: Clinic[]; onPull: () => vo
           </div>
         ) : (
           <ul role="list" className="divide-y divide-gray-200">
-            {practices.map((practice) => (
-              <PracticeRow
-                key={practice.id}
-                practice={practice}
-                selected={selected.has(practice.id)}
-                onToggle={() => toggle(practice.id)}
-              />
+            {sources.map((source) => (
+              <SourceRow key={source.id} source={source} selected={selected.has(source.id)} onToggle={() => toggle(source.id)} />
             ))}
           </ul>
         )}
@@ -440,84 +454,7 @@ function PracticesTab({ clinics, onPull }: { clinics: Clinic[]; onPull: () => vo
 
 /* ------------------------------------------------------------------ */
 
-function ProvidersTab() {
-  const [q, setQ] = useState('');
-  const { data, isLoading } = useQuery({
-    queryKey: ['providers', q],
-    queryFn: async () =>
-      (await axios.get<{ providers: ProviderView[] }>(`/api/providers?${q ? `q=${encodeURIComponent(q)}` : ''}`)).data,
-  });
-  const providers = data?.providers ?? [];
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-        <label className="relative block max-w-md">
-          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-          <input
-            type="search"
-            value={q}
-            onChange={(event) => setQ(event.target.value)}
-            placeholder="Search providers, NPI, practice"
-            className="w-full rounded-md border-gray-300 pl-9 text-sm focus:border-green-600 focus:ring-green-600"
-          />
-        </label>
-      </div>
-
-      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr className="text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-              <th className="px-4 py-2 sm:px-6">Provider</th>
-              <th className="px-4 py-2">Practice</th>
-              <th className="px-4 py-2">Type</th>
-              <th className="px-4 py-2">Faxes go to</th>
-              <th className="px-4 py-2 text-right sm:px-6">Own fax</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {isLoading ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-500">
-                  Loading…
-                </td>
-              </tr>
-            ) : providers.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-12 text-center">
-                  <UsersIcon className="mx-auto h-10 w-10 text-gray-300" />
-                  <p className="mt-3 text-sm text-gray-500">No providers yet.</p>
-                </td>
-              </tr>
-            ) : (
-              providers.map((provider) => (
-                <tr key={provider.id} className="text-sm">
-                  <td className="px-4 py-2.5 sm:px-6">
-                    <p className="font-medium text-gray-900">{provider.name}</p>
-                    <p className="text-xs text-gray-500">NPI {provider.npiNumber}</p>
-                  </td>
-                  <td className="px-4 py-2.5 text-gray-700">{provider.practiceName ?? <span className="text-gray-400">—</span>}</td>
-                  <td className="px-4 py-2.5 text-gray-600">{provider.sourceTypeLabel}</td>
-                  <td className="px-4 py-2.5">
-                    <SendsTo provider={provider} />
-                  </td>
-                  <td className="px-4 py-2.5 text-right sm:px-6">
-                    <OwnFaxToggle provider={provider} />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-
 export default function ReferralSourcesPage() {
-  const [tab, setTab] = useState<Tab>('practices');
   const [adding, setAdding] = useState(false);
   const [pulling, setPulling] = useState(false);
 
@@ -527,7 +464,7 @@ export default function ReferralSourcesPage() {
   });
   const { data: totals } = useQuery({
     queryKey: ['practices', ''],
-    queryFn: async () => (await axios.get<PracticesResponse>('/api/practices')).data,
+    queryFn: async () => (await axios.get<SourcesResponse>('/api/practices')).data,
   });
 
   const stats = totals?.totals;
@@ -548,13 +485,13 @@ export default function ReferralSourcesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Referral Sources</h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">
-            Practices that can refer to you, and the providers who work there. Pick practices and add them to a
-            clinic’s referral list.
+            Providers who can refer to you. Where an organization is on NPI, its providers sit under it; open the row
+            to see them. Check sources and add them to a clinic’s referral list.
           </p>
         </div>
-        <Menu as="div" className="relative mt-4 lg:mt-0">
+        <Menu as="div" className="relative mt-4 sm:mt-0">
           <Menu.Button className="inline-flex items-center gap-1 rounded-md bg-[#0B2A5B] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#123a7a]">
-            <PlusIcon className="h-4 w-4" /> Add practice <ChevronDownIcon className="h-4 w-4" />
+            <PlusIcon className="h-4 w-4" /> Add source <ChevronDownIcon className="h-4 w-4" />
           </Menu.Button>
           <Menu.Items className="absolute right-0 z-10 mt-2 w-64 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 focus:outline-none">
             <Menu.Item>
@@ -571,10 +508,7 @@ export default function ReferralSourcesPage() {
             </Menu.Item>
             <Menu.Item>
               {({ active }) => (
-                <Link
-                  href="/prospecting"
-                  className={classNames(active && 'bg-gray-50', 'block px-4 py-2 text-sm text-gray-700')}
-                >
+                <Link href="/prospecting" className={classNames(active && 'bg-gray-50', 'block px-4 py-2 text-sm text-gray-700')}>
                   Search Google listings
                   <span className="block text-xs text-gray-500">Find businesses by type near an address</span>
                 </Link>
@@ -586,8 +520,12 @@ export default function ReferralSourcesPage() {
       <AddPracticeModal open={adding} onClose={() => setAdding(false)} />
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatTile label="Practices" value={stats?.practices ?? '—'} />
         <StatTile label="Providers" value={stats?.providers ?? '—'} />
+        <StatTile
+          label="Organizations"
+          value={stats?.organizations ?? '—'}
+          hint={stats ? `${stats.practices - stats.organizations} providers listed on their own` : undefined}
+        />
         <StatTile
           label="With a fax"
           value={stats?.withFax ?? '—'}
@@ -596,7 +534,7 @@ export default function ReferralSourcesPage() {
         <StatTile
           label="Est. referrals / month"
           value={stats ? `${stats.estimate.low}–${stats.estimate.high}` : '—'}
-          hint="across all practices"
+          hint="across all sources"
         />
       </div>
 
@@ -610,8 +548,8 @@ export default function ReferralSourcesPage() {
           <span>
             <span className="block text-sm font-semibold text-gray-900">Pull referral sources for a county</span>
             <span className="block text-sm text-gray-500">
-              Pediatricians and primary care physicians from NPI, matched to Google Places, then researched for fax,
-              email, and referral details.
+              Pediatricians, primary care physicians, NPs, and PAs from NPI, matched to Google Places, then researched
+              for fax, email, and referral details.
             </span>
           </span>
           <ChevronDownIcon className={classNames('h-5 w-5 shrink-0 text-gray-400 transition-transform', pulling && 'rotate-180')} />
@@ -623,43 +561,8 @@ export default function ReferralSourcesPage() {
         )}
       </div>
 
-      <div className="mt-6 border-b border-gray-200">
-        <nav className="-mb-px flex gap-6" aria-label="Tabs">
-          {(
-            [
-              ['practices', 'Practices', stats?.practices],
-              ['providers', 'Providers', stats?.providers],
-            ] as [Tab, string, number | undefined][]
-          ).map(([key, label, count]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setTab(key)}
-              className={classNames(
-                tab === key
-                  ? 'border-green-600 text-green-700'
-                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700',
-                'whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium',
-              )}
-            >
-              {label}
-              {count !== undefined && (
-                <span
-                  className={classNames(
-                    tab === key ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600',
-                    'ml-2 rounded-full px-2 py-0.5 text-xs',
-                  )}
-                >
-                  {count}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      <div className="mt-4">
-        {tab === 'practices' ? <PracticesTab clinics={clinics ?? []} onPull={openPull} /> : <ProvidersTab />}
+      <div className="mt-6">
+        <SourceList clinics={clinics ?? []} onPull={openPull} />
       </div>
     </MainLayout>
   );

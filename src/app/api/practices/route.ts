@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
       practices,
       totals: {
         practices: practices.length,
+        organizations: practices.filter((practice) => practice.orgNpis.length > 0).length,
         providers: practices.reduce((sum, practice) => sum + practice.providerCount, 0),
         withFax: practices.filter((practice) => practice.faxNumber).length,
         estimate,

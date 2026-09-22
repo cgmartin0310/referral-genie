@@ -24,21 +24,24 @@ function row(overrides: Partial<PracticeSourceRow> & { id: string }): PracticeSo
 }
 
 describe('practice formation', () => {
-  it('nests providers at one address under one practice', () => {
-    const practices = buildPractices([row({ id: 'a' }), row({ id: 'b' }), row({ id: 'c' })]);
+  it('nests providers at one address under its organization', () => {
+    const practices = buildPractices([
+      row({ id: 'a' }), row({ id: 'b' }), row({ id: 'c' }),
+      row({ id: 'org', enumerationType: 'NPI-2', name: 'Kinston Pediatrics PA', npiNumber: '1679576722' }),
+    ]);
     assert.equal(practices.length, 1);
     assert.equal(practices[0].providerCount, 3);
     assert.equal(practices[0].providers.length, 3);
     assert.equal(practices[0].faxNumber, '252-555-0190');
   });
 
-  it('forms a practice with no org NPI at all', () => {
-    // 17 of 22 Lenoir clusters have no NPI-2. This is the common case.
-    const practices = buildPractices([row({ id: 'a' }), row({ id: 'b' })]);
-    assert.equal(practices.length, 1);
-    assert.deepEqual(practices[0].orgNpis, []);
-    assert.equal(practices[0].providerCount, 2);
-    assert.equal(practices[0].nameAmbiguous, false);
+  it('lists providers individually when their address has no organization NPI', () => {
+    // Nothing to group under, so no made-up "100 Airport Rd" practice.
+    const practices = buildPractices([row({ id: 'a', name: 'Joan Perry' }), row({ id: 'b', name: 'Orvil Reece' })]);
+    assert.equal(practices.length, 2);
+    assert.deepEqual(practices.map((p) => p.name).sort(), ['Joan Perry', 'Orvil Reece']);
+    assert.ok(practices.every((p) => p.providerCount === 1 && p.orgNpis.length === 0 && p.practiceKey.startsWith('npi:')));
+    assert.equal(practices[0].faxNumber, '252-555-0190');
   });
 
   it('names the practice from a single org NPI and excludes it from the count', () => {
@@ -52,16 +55,6 @@ describe('practice formation', () => {
     assert.deepEqual(practices[0].orgNpis, ['1679576722']);
     // An organization is not a provider.
     assert.equal(practices[0].providerCount, 2);
-  });
-
-  it('names a practice from its Google Places listing when it has no org NPI', () => {
-    const practices = buildPractices([
-      row({ id: 'a', address: '100 Airport Rd', placeName: 'UNC Lenoir Health Care' }),
-      row({ id: 'b', address: '100 Airport Rd', placeName: 'UNC Lenoir Health Care' }),
-      row({ id: 'c', address: '100 Airport Rd', placeName: null }),
-    ]);
-    assert.equal(practices.length, 1);
-    assert.equal(practices[0].name, 'UNC Lenoir Health Care');
   });
 
   it('does not call one health center registered three times ambiguous', () => {
@@ -115,12 +108,13 @@ describe('practice formation', () => {
     const practices = buildPractices([
       row({ id: 'a', address: '100 King St Ste 200', contactPhone: '252-555-0100' }),
       row({ id: 'b', address: '100 King Street, Suite 200', contactPhone: '252-555-0100' }),
+      row({ id: 'o', enumerationType: 'NPI-2', name: 'Suite 200 Peds PA', npiNumber: '7', address: '100 King St Ste 200', contactPhone: '252-555-0100' }),
       row({ id: 'c', address: '100 King St Ste 300', contactPhone: '252-555-0200' }),
     ]);
     assert.equal(practices.length, 2);
-    const bySize = practices.sort((left, right) => right.providerCount - left.providerCount);
-    assert.equal(bySize[0].providerCount, 2);
-    assert.equal(bySize[1].providerCount, 1);
+    const group = practices.find((p) => p.orgNpis.length > 0);
+    assert.equal(group?.providerCount, 2);
+    assert.equal(practices.find((p) => p.orgNpis.length === 0)?.providerCount, 1);
   });
 
   it('keeps one office together across its street ZIP and its PO Box ZIP', () => {
@@ -139,6 +133,7 @@ describe('practice formation', () => {
     const practices = buildPractices([
       row({ id: 'a', address: '100 Airport Rd', placeId: 'ChIJlenoir' }),
       row({ id: 'b', address: '100 Airport Rd, Lenoir Memorial Hospital', placeId: 'ChIJlenoir' }),
+      row({ id: 'org', enumerationType: 'NPI-2', name: 'Lenoir Memorial Hospital', npiNumber: '4', address: '100 Airport Rd', placeId: 'ChIJlenoir' }),
     ]);
     assert.equal(practices.length, 1);
     assert.equal(practices[0].placeId, 'ChIJlenoir');

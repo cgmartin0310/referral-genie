@@ -48,11 +48,14 @@ function errorMessage(error: unknown, fallback: string): string {
 
 export default function ResearchPanel({
   clinicId,
+  countyFips,
   sourceId,
   refreshToken = '',
   onProgress,
 }: {
   clinicId?: string;
+  /** Research every source pulled for this county instead of a clinic's market. */
+  countyFips?: string;
   sourceId?: string;
   refreshToken?: string | number;
   onProgress?: (progress: { completed: boolean }) => void;
@@ -72,7 +75,7 @@ export default function ResearchPanel({
 
   useEffect(() => {
     let cancelled = false;
-    const params = sourceId ? { sourceId } : { clinicId };
+    const params = sourceId ? { sourceId } : clinicId ? { clinicId } : { countyFips };
     setState((current) => ({ ...current, loading: true, loadError: null }));
     axios
       .get('/api/research', { params })
@@ -107,7 +110,7 @@ export default function ResearchPanel({
     };
     // onProgress is a parent callback; clinic, source, and pull progress decide when to reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clinicId, sourceId, refreshToken]);
+  }, [clinicId, countyFips, sourceId, refreshToken]);
 
   const runResearch = async () => {
     setState((current) => ({ ...current, working: true, actionError: null }));
@@ -118,6 +121,7 @@ export default function ResearchPanel({
       for (let step = 0; step < 500; step += 1) {
         const { data } = await axios.post('/api/research', {
           clinicId,
+          countyFips,
           sourceId,
           runId,
           mode,

@@ -7,10 +7,12 @@ import {
   advanceResearchRun,
   assertSource,
   clinicScope,
+  countyScope,
   createOrResumeResearchRun,
   latestResearchRun,
   presentResearchRun,
   sourceIdsForClinic,
+  sourceIdsForCounty,
   sourceScope,
   type ResearchRunView,
 } from '@/lib/research/advance';
@@ -21,12 +23,21 @@ export async function GET(request: NextRequest) {
   try {
     const clinicId = request.nextUrl.searchParams.get('clinicId');
     const sourceId = request.nextUrl.searchParams.get('sourceId');
-    if (!clinicId && !sourceId) {
-      return NextResponse.json({ error: 'Choose a clinic or a referral source.' }, { status: 400 });
+    const countyFips = request.nextUrl.searchParams.get('countyFips')?.trim() || null;
+    if (!clinicId && !sourceId && !countyFips) {
+      return NextResponse.json({ error: 'Choose a clinic, a county, or a referral source.' }, { status: 400 });
     }
-    const scopeKey = sourceId ? sourceScope(sourceId) : clinicScope(clinicId as string);
+    const scopeKey = sourceId
+      ? sourceScope(sourceId)
+      : clinicId
+        ? clinicScope(clinicId)
+        : countyScope(countyFips as string);
     if (sourceId) await assertSource(sourceId);
-    const counts = clinicId ? await clinicCounts(clinicId) : await sourceCounts(sourceId as string);
+    const counts = sourceId
+      ? await sourceCounts(sourceId)
+      : clinicId
+        ? await clinicCounts(clinicId)
+        : await countsForIds(await sourceIdsForCounty(countyFips as string));
     let latestRun: ResearchRunView | null = null;
     let runError: string | null = null;
     try {
@@ -54,16 +65,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json() as {
       clinicId?: string;
       sourceId?: string;
+      countyFips?: string;
       runId?: string;
       mode?: 'continue' | 'refresh';
     };
-    if (!body.clinicId && !body.sourceId) {
-      return NextResponse.json({ error: 'Choose a clinic or a referral source.' }, { status: 400 });
+    const countyFips = body.countyFips?.trim() || null;
+    if (!body.clinicId && !body.sourceId && !countyFips) {
+      return NextResponse.json({ error: 'Choose a clinic, a county, or a referral source.' }, { status: 400 });
     }
-    const scopeKey = body.sourceId ? sourceScope(body.sourceId) : clinicScope(body.clinicId as string);
+    const scopeKey = body.sourceId
+      ? sourceScope(body.sourceId)
+      : body.clinicId
+        ? clinicScope(body.clinicId)
+        : countyScope(countyFips as string);
     const sourceIds = body.sourceId
       ? [body.sourceId]
-      : await sourceIdsForClinic(body.clinicId as string);
+      : body.clinicId
+        ? await sourceIdsForClinic(body.clinicId)
+        : await sourceIdsForCounty(countyFips as string);
     if (body.sourceId) await assertSource(body.sourceId);
     const mode = body.mode === 'continue' ? 'continue' : 'refresh';
     const run = await createOrResumeResearchRun({
@@ -82,7 +101,10 @@ export async function POST(request: NextRequest) {
 }
 
 async function clinicCounts(clinicId: string): Promise<{ sourceCount: number; withWebsite: number }> {
-  const ids = await sourceIdsForClinic(clinicId);
+  return countsForIds(await sourceIdsForClinic(clinicId));
+}
+
+async function countsForIds(ids: string[]): Promise<{ sourceCount: number; withWebsite: number }> {
   if (ids.length === 0) return { sourceCount: 0, withWebsite: 0 };
   const rows = await prisma.referralSource.findMany({
     where: { organizationId: DEFAULT_ORGANIZATION_ID, id: { in: ids } },

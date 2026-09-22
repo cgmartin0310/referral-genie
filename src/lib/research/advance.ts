@@ -91,6 +91,11 @@ export function presentResearchRun(run: ResearchRun): ResearchRunView {
   };
 }
 
+/** Research every source pulled for one county, whichever clinics list it. */
+export function countyScope(countyFips: string): string {
+  return `county:${countyFips.trim()}`;
+}
+
 export function clinicScope(clinicId: string): string {
   return `clinic:${clinicId}`;
 }
@@ -341,6 +346,17 @@ async function finishRun(id: string, summary: ResearchSummary, cursor: ResearchC
       finishedAt: new Date(),
     },
   });
+}
+
+export async function sourceIdsForCounty(countyFips: string): Promise<string[]> {
+  const fips = researchCountyFips([countyFips]);
+  if (fips.length === 0) return [];
+  const sources = await prisma.referralSource.findMany({
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: { not: null } },
+    select: { id: true, countyFips: true },
+    orderBy: { id: 'asc' },
+  });
+  return sourceIdsMatchingFips(sources, fips);
 }
 
 export async function sourceIdsForClinic(clinicId: string): Promise<string[]> {

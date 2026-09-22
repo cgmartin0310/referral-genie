@@ -17,6 +17,7 @@ import {
 } from '@heroicons/react/24/outline';
 import MainLayout from '../../components/layout/MainLayout';
 import AddPracticeModal from '../../components/AddPracticeModal';
+import CountyPullPanel from '../../components/setup/CountyPullPanel';
 import type { PracticeView, ProviderView } from '@/lib/practices/present';
 
 type Tab = 'practices' | 'providers';
@@ -246,7 +247,7 @@ function PracticeRow({
 
 /* ------------------------------------------------------------------ */
 
-function PracticesTab({ clinics }: { clinics: Clinic[] }) {
+function PracticesTab({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void }) {
   const queryClient = useQueryClient();
   const [q, setQ] = useState('');
   const [countyFips, setCountyFips] = useState('');
@@ -407,14 +408,16 @@ function PracticesTab({ clinics }: { clinics: Clinic[] }) {
             <BuildingOffice2Icon className="mx-auto h-10 w-10 text-gray-300" />
             <p className="mt-3 text-sm font-medium text-gray-900">No practices yet</p>
             <p className="mt-1 text-sm text-gray-500">
-              Pull referral sources for a clinic’s counties and they will appear here as practices.
+              Pick a county and pull its pediatricians and primary care physicians from NPI. They will appear here as
+              practices.
             </p>
-            <Link
-              href="/clinic-locations"
+            <button
+              type="button"
+              onClick={onPull}
               className="mt-4 inline-flex items-center rounded-md bg-[#0B2A5B] px-3 py-2 text-sm font-semibold text-white hover:bg-[#123a7a]"
             >
-              Go to Our Clinics
-            </Link>
+              Pull a county
+            </button>
           </div>
         ) : (
           <ul role="list" className="divide-y divide-gray-200">
@@ -514,6 +517,7 @@ function ProvidersTab() {
 export default function ReferralSourcesPage() {
   const [tab, setTab] = useState<Tab>('practices');
   const [adding, setAdding] = useState(false);
+  const [pulling, setPulling] = useState(false);
 
   const { data: clinics } = useQuery({
     queryKey: ['clinic-locations'],
@@ -525,6 +529,16 @@ export default function ReferralSourcesPage() {
   });
 
   const stats = totals?.totals;
+
+  // Nothing pulled yet: open the county pull so the first step is on screen.
+  useEffect(() => {
+    if (stats && stats.practices === 0) setPulling(true);
+  }, [stats]);
+
+  const openPull = () => {
+    setPulling(true);
+    setTimeout(() => document.getElementById('pull-county')?.scrollIntoView({ behavior: 'smooth' }), 50);
+  };
 
   return (
     <MainLayout>
@@ -584,6 +598,29 @@ export default function ReferralSourcesPage() {
         />
       </div>
 
+      <div id="pull-county" className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <button
+          type="button"
+          onClick={() => setPulling((open) => !open)}
+          aria-expanded={pulling}
+          className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-gray-50"
+        >
+          <span>
+            <span className="block text-sm font-semibold text-gray-900">Pull referral sources for a county</span>
+            <span className="block text-sm text-gray-500">
+              Pediatricians and primary care physicians from NPI, matched to Google Places, then researched for fax,
+              email, and referral details.
+            </span>
+          </span>
+          <ChevronDownIcon className={classNames('h-5 w-5 shrink-0 text-gray-400 transition-transform', pulling && 'rotate-180')} />
+        </button>
+        {pulling && (
+          <div className="border-t border-gray-200 px-5 py-5">
+            <CountyPullPanel />
+          </div>
+        )}
+      </div>
+
       <div className="mt-6 border-b border-gray-200">
         <nav className="-mb-px flex gap-6" aria-label="Tabs">
           {(
@@ -620,7 +657,7 @@ export default function ReferralSourcesPage() {
       </div>
 
       <div className="mt-4">
-        {tab === 'practices' ? <PracticesTab clinics={clinics ?? []} /> : <ProvidersTab />}
+        {tab === 'practices' ? <PracticesTab clinics={clinics ?? []} onPull={openPull} /> : <ProvidersTab />}
       </div>
     </MainLayout>
   );

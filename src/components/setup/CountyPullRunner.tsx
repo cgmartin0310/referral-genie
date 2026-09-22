@@ -27,6 +27,7 @@ interface CountyRun {
     duplicatesFlagged: number;
     practicesFormed: number;
     providersLinked: number;
+    retired?: number;
     nppesQueries: number;
     nppesQueryTotal: number;
   };
@@ -281,7 +282,7 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
           fraction={summary && summary.nppesQueryTotal > 0 ? summary.nppesQueries / summary.nppesQueryTotal : null}
           detail={
             summary
-              ? `${summary.npisUpserted} providers · ${summary.nppesQueries}/${summary.nppesQueryTotal} ${countyRun?.source === 'api' ? 'ZIP queries' : 'slices'}${summary.practicesFormed ? ` · ${summary.practicesFormed} practices` : ''}`
+              ? `${summary.npisUpserted} providers · ${summary.nppesQueries}/${summary.nppesQueryTotal} ${countyRun?.source === 'api' ? 'ZIP queries' : 'slices'}${summary.practicesFormed ? ` · ${summary.practicesFormed} practices` : ''}${summary.retired ? ` · ${summary.retired} no longer on NPI removed` : ''}`
               : 'Pediatricians and primary care physicians from the NPI registry.'
           }
           error={stages.pull === 'failed' ? countyRun?.error : null}

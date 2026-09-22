@@ -33,6 +33,7 @@ export interface PracticeSourceRow {
   contactPhone: string | null;
   faxNumber: string | null;
   placeId: string | null;
+  placeName?: string | null;
 }
 
 export interface BuiltProvider {
@@ -100,17 +101,25 @@ export function practiceKeyFor(row: PracticeSourceRow, clusterKey: string | null
   );
 }
 
+function sameOrg(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\b(inc|llc|pllc|pa|pc|corp|ltd)\b/g, '').trim();
+}
+
 /**
- * Pick the practice name. A single org NPI at the location names it. Several
- * org NPIs means two practices may share an address, so prefer the one whose
- * fax matches the practice fax and mark the name ambiguous.
+ * Pick the practice name. An org NPI at the location names it; several org
+ * NPIs with one name (a health center registered three times) still do.
+ * Different org names mean two practices may share an address, so prefer the
+ * one whose fax matches the practice fax and mark the name ambiguous. With no
+ * org NPI, the Google Places listing names it; the street is the last resort.
  */
 function practiceName(orgs: PracticeSourceRow[], members: PracticeSourceRow[], fax: string | null): {
   name: string;
   ambiguous: boolean;
 } {
-  if (orgs.length === 1) return { name: orgs[0].name, ambiguous: false };
-  if (orgs.length > 1) {
+  const distinct = new Map<string, PracticeSourceRow>();
+  for (const org of orgs) if (!distinct.has(sameOrg(org.name))) distinct.set(sameOrg(org.name), org);
+  if (distinct.size === 1) return { name: [...distinct.values()][0].name, ambiguous: false };
+  if (distinct.size > 1) {
     const faxDigits = digitsOnly(fax ?? '').slice(-10);
     const matching = faxDigits
       ? orgs.filter((org) => digitsOnly(org.faxNumber ?? '').slice(-10) === faxDigits)
@@ -120,6 +129,8 @@ function practiceName(orgs: PracticeSourceRow[], members: PracticeSourceRow[], f
       : [...orgs].sort((left, right) => left.name.localeCompare(right.name))[0];
     return { name: chosen.name, ambiguous: true };
   }
+  const listing = modal(members.map((row) => row.placeName ?? null));
+  if (listing) return { name: listing, ambiguous: false };
   const address = modal(members.map((row) => row.address));
   return { name: address ?? members[0]?.name ?? 'Unnamed practice', ambiguous: false };
 }

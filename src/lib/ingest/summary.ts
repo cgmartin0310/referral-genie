@@ -20,6 +20,8 @@ export interface IngestSummary {
   duplicateClusters: number;
   practicesFormed: number;
   providersLinked: number;
+  /** Sources from earlier pulls that this pull did not see and removed. */
+  retired: number;
   droppedNotAllowList: number;
   excludedSecondaryOnly: number;
   nppesQueries: number;
@@ -45,6 +47,7 @@ export function emptySummary(nppesQueryTotal: number): IngestSummary {
     duplicateClusters: 0,
     practicesFormed: 0,
     providersLinked: 0,
+    retired: 0,
     droppedNotAllowList: 0,
     excludedSecondaryOnly: 0,
     nppesQueries: 0,
@@ -87,6 +90,7 @@ export function parseSummary(value: unknown): IngestSummary {
     duplicateClusters: numberField(row.duplicateClusters),
     practicesFormed: numberField(row.practicesFormed),
     providersLinked: numberField(row.providersLinked),
+    retired: numberField(row.retired),
     droppedNotAllowList: numberField(row.droppedNotAllowList),
     excludedSecondaryOnly: numberField(row.excludedSecondaryOnly),
     nppesQueries: numberField(row.nppesQueries),

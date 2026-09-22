@@ -22,6 +22,7 @@ export interface SourceWrite {
   countyName?: string | null;
   countyFips?: string | null;
   placeId?: string | null;
+  placeName?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   reviewCount?: number | null;
@@ -123,6 +124,7 @@ export function buildPlacesWrite(match: PlaceMatch | null, existingProvenance: u
     placesMatchStatus: 'matched',
     provenance,
   };
+  if (match.name) incoming.placeName = match.name;
   if (match.phone) incoming.contactPhone = match.phone;
   if (match.website) incoming.website = match.website;
   if (match.rating != null) incoming.rating = match.rating;

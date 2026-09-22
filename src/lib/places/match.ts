@@ -29,6 +29,8 @@ export interface PlaceDetails {
 
 export interface PlaceMatch {
   placeId: string;
+  /** Business name on the listing. Names a practice with no organization NPI. */
+  name?: string | null;
   confidence: number;
   phone: string | null;
   website: string | null;
@@ -106,6 +108,7 @@ export async function matchPractice(input: PracticeQuery, client: PlaceClient): 
 
   return {
     placeId: winner.candidate.placeId,
+    name: details?.name || winner.candidate.name || null,
     confidence,
     phone: details?.phone ?? null,
     website: details?.website ?? null,

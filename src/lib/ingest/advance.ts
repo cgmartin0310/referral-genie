@@ -387,7 +387,7 @@ async function formPractices(run: CountyIngestRun, summary: IngestSummary): Prom
       primaryTaxonomyCode: true, taxonomyCodes: true, sourceType: true,
       address: true, city: true, state: true, zipCode: true,
       countyName: true, countyFips: true, contactPhone: true,
-      faxNumber: true, placeId: true,
+      faxNumber: true, placeId: true, placeName: true,
     },
   });
 
@@ -470,12 +470,42 @@ async function formPractices(run: CountyIngestRun, summary: IngestSummary): Prom
   });
 }
 
-/** After the NPI pull: form practices now, then hand off to Places. */
+/**
+ * Sources for this county that the pull did not see are gone from NPI (or
+ * moved counties). Remove them unless a person has logged activity or a
+ * campaign against them, or added them by hand. Otherwise every pull leaves
+ * ghosts behind and the counts never agree.
+ */
+async function retireUnseen(run: CountyIngestRun, summary: IngestSummary): Promise<number> {
+  const seen = new Set(summary.seenNpis.map((npi) => normalizeNpiNumber(npi)).filter((npi): npi is string => Boolean(npi)));
+  const candidates = await prisma.referralSource.findMany({
+    where: {
+      organizationId: DEFAULT_ORGANIZATION_ID,
+      countyFips: run.countyFips,
+      npiNumber: { not: null },
+      interactions: { none: {} },
+      campaigns: { none: {} },
+    },
+    select: { id: true, npiNumber: true, provenance: true },
+  });
+  const stale = candidates.filter((row) => {
+    if (!row.npiNumber || seen.has(row.npiNumber)) return false;
+    const origin = (row.provenance as { origin?: string } | null)?.origin;
+    return origin !== 'user';
+  });
+  if (stale.length === 0) return 0;
+  await prisma.provider.deleteMany({ where: { organizationId: DEFAULT_ORGANIZATION_ID, npiNumber: { in: stale.map((row) => row.npiNumber as string) } } });
+  const result = await prisma.referralSource.deleteMany({ where: { id: { in: stale.map((row) => row.id) } } });
+  return result.count;
+}
+
+/** After the NPI pull: retire what it did not see, form practices, then hand off to Places. */
 async function stepGroup(
   run: CountyIngestRun,
   summary: IngestSummary,
   cursor: IngestCursor,
 ): Promise<CountyIngestRun> {
+  summary.retired = await retireUnseen(run, summary);
   await formPractices(run, summary);
   cursor.phase = 'places';
   return saveRun(run.id, { status: 'RUNNING', phase: 'places', cursor, summary, clearLock: true });

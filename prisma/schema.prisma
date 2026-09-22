@@ -96,6 +96,8 @@ model ReferralSource {
   countyName               String?
   countyFips               String?
   placeId                  String?
+  /// Business name from Google Places. Names a practice that has no organization NPI.
+  placeName                String?
   latitude                 Float?
   longitude                Float?
   reviewCount              Int?

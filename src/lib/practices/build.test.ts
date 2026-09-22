@@ -54,6 +54,28 @@ describe('practice formation', () => {
     assert.equal(practices[0].providerCount, 2);
   });
 
+  it('names a practice from its Google Places listing when it has no org NPI', () => {
+    const practices = buildPractices([
+      row({ id: 'a', address: '100 Airport Rd', placeName: 'UNC Lenoir Health Care' }),
+      row({ id: 'b', address: '100 Airport Rd', placeName: 'UNC Lenoir Health Care' }),
+      row({ id: 'c', address: '100 Airport Rd', placeName: null }),
+    ]);
+    assert.equal(practices.length, 1);
+    assert.equal(practices[0].name, 'UNC Lenoir Health Care');
+  });
+
+  it('does not call one health center registered three times ambiguous', () => {
+    const practices = buildPractices([
+      row({ id: 'a' }),
+      row({ id: 'o1', enumerationType: 'NPI-2', name: 'Kinston Community Health Center, Inc', npiNumber: '1' }),
+      row({ id: 'o2', enumerationType: 'NPI-2', name: 'KINSTON COMMUNITY HEALTH CENTER, INC.', npiNumber: '2' }),
+      row({ id: 'o3', enumerationType: 'NPI-2', name: 'Kinston Community Health Center Inc', npiNumber: '3' }),
+    ]);
+    assert.equal(practices.length, 1);
+    assert.equal(practices[0].nameAmbiguous, false);
+    assert.equal(practices[0].orgNpis.length, 3);
+  });
+
   it('picks the org whose fax matches when an address hosts two orgs', () => {
     // 744 Airport Rd holds both Eastern Carolina Physicians and Physicians East.
     const practices = buildPractices([

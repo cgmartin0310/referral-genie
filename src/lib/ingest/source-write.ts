@@ -1,6 +1,7 @@
 import { CATEGORY_ID_BY_SOURCE_TYPE, type TaxonomyGroup } from '../nppes/taxonomies';
 import type { CountyMarket } from '../nppes/counties';
 import type { KeptProvider } from '../nppes/types';
+import { normalizeNpiNumber } from '../npi';
 import { nextIngestProvenance, parseProvenance, stripOverriddenFields, type Provenance } from '../provenance';
 import type { PlaceMatch } from '../places/match';
 
@@ -13,7 +14,7 @@ export interface SourceWrite {
   contactPhone?: string | null;
   website?: string | null;
   rating?: number | null;
-  npiNumber?: string;
+  npiNumber?: string | null;
   taxonomyCodes?: string[];
   primaryTaxonomyCode?: string | null;
   enumerationType?: string | null;
@@ -48,7 +49,7 @@ export function buildNppesUpsert(
   const provenance = nextIngestProvenance(existingProvenance, null, 'nppes');
   const create: SourceWrite = {
     organizationId,
-    npiNumber: kept.npi,
+    npiNumber: normalizeNpiNumber(kept.npi),
     name: kept.name,
     address: kept.address || null,
     city: kept.city || null,

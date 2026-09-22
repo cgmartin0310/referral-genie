@@ -70,6 +70,16 @@ ADD COLUMN "organizationId" TEXT;
 UPDATE "ReferralSource" SET "organizationId" = 'org_default' WHERE "organizationId" IS NULL;
 ALTER TABLE "ReferralSource" ALTER COLUMN "organizationId" SET NOT NULL;
 ALTER TABLE "ReferralSource" ADD CONSTRAINT "ReferralSource_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- Blank NPIs are not identifiers. Postgres unique indexes treat '' as a
+-- value, so multiple manual CRM / Places rows in one organization collide
+-- (23505 on organizationId, npiNumber). NULL does not collide, which matches
+-- upsert-by-NPI: lookup only when an NPI is present.
+UPDATE "ReferralSource"
+SET "npiNumber" = NULL
+WHERE "npiNumber" IS NOT NULL
+  AND "npiNumber" ~ '^[[:space:]]*$';
+
 CREATE UNIQUE INDEX "ReferralSource_organizationId_npiNumber_key" ON "ReferralSource"("organizationId", "npiNumber");
 CREATE INDEX "ReferralSource_organizationId_countyFips_idx" ON "ReferralSource"("organizationId", "countyFips");
 CREATE INDEX "ReferralSource_organizationId_idx" ON "ReferralSource"("organizationId");

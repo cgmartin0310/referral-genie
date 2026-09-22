@@ -1,8 +1,8 @@
-# Kinston / Lenoir County pilot
+# Lenoir County ZIP list
 
-Design-partner market: **Lenoir County, North Carolina** (county seat Kinston, FIPS `37107`).
+The product path is in [market-setup.md](./market-setup.md): add a clinic, pick counties, pull referral sources, enrich with Google Places. This note is the practice-location ZIP list for **Lenoir County, North Carolina** (FIPS `37107`), the county the NPI pull can query today.
 
-The county seed loads pediatricians and primary care physicians from the NPPES Read API, upserts them onto `ReferralSource` by NPI, then matches Google Places by phone and address. Keyword Nearby Search is no longer the way the source list is built. It remains at **Non-NPI search** for partners that do not have an NPI.
+The pull loads pediatricians and primary care physicians from the NPPES Read API, upserts them onto `ReferralSource` by NPI, then matches Google Places by phone and address. Keyword Nearby Search is no longer the way the source list is built. It remains at **Non-NPI search** for partners that do not have an NPI.
 
 This does not add inbound referrals, attribution, or fax changes.
 
@@ -76,8 +76,8 @@ Breaking change: deploys that relied on the old shared login must set `AUTH_USER
 1. Deploy this branch. The build runs `npx prisma migrate deploy`.
 2. Set the env vars above and redeploy if they were missing at boot.
 3. Sign in.
-4. Open **County seed**. Lenoir County, NC is selected.
-5. Press **Seed / refresh county**.
+4. Open **Clinics**, add a clinic if you need one, and save Lenoir County, NC on its market.
+5. Press **Pull referral sources**, then **Enrich with Google Places**.
 
 The page drives the job. Each request does one slice and writes progress to `CountyIngestRun`:
 
@@ -85,7 +85,7 @@ The page drives the job. Each request does one slice and writes progress to `Cou
 - up to five Places matches, or
 - the duplicate pass, which finishes the run
 
-The browser calls the next slice only after the previous response returns. That is real work, not a timer that marks the run complete. Closing the browser pauses the run. Open County seed again and press **Continue seed**. A failed run (missing Places key, NPPES timeout, Places quota) keeps the rows already written. Fix the cause and press **Resume seed**.
+The browser calls the next slice only after the previous response returns. That is real work, not a timer that marks the run complete. Closing the browser pauses the run. Open the clinic or **Pull sources** again and press **Continue pull** or **Enrich with Google Places**. A failed run (missing Places key, NPPES timeout, Places quota) keeps the rows already written. Fix the cause and press **Resume pull** or **Resume enrichment**.
 
 Shell alternative, from a Render shell with the service env:
 

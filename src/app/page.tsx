@@ -5,7 +5,13 @@ import axios from 'axios';
 import Link from 'next/link';
 import MainLayout from '../components/layout/MainLayout';
 import RecentInteractionsWidget from '../components/RecentInteractionsWidget';
-import { UserGroupIcon, CalendarIcon, MegaphoneIcon } from '@heroicons/react/24/outline';
+import { UserGroupIcon, CalendarIcon, MegaphoneIcon, MapPinIcon } from '@heroicons/react/24/outline';
+
+interface ClinicSummary {
+  id: string;
+  name: string;
+  marketCounties?: { fips: string }[];
+}
 
 export default function Dashboard() {
   // Fetch summary data for the dashboard
@@ -48,14 +54,52 @@ export default function Dashboard() {
     },
   });
 
+  const { data: clinics } = useQuery<ClinicSummary[]>({
+    queryKey: ['clinic-locations'],
+    queryFn: async () => {
+      const { data } = await axios.get('/api/clinic-locations');
+      return data;
+    },
+  });
+
+  const nextClinic = clinics?.find((clinic) => (clinic.marketCounties?.length ?? 0) === 0) ?? clinics?.[0];
+  const startHref = !clinics || clinics.length === 0
+    ? '/clinic-locations'
+    : (nextClinic && (nextClinic.marketCounties?.length ?? 0) === 0)
+      ? `/clinic-locations/${nextClinic.id}#market`
+      : `/clinic-locations/${nextClinic?.id}#sources`;
+  const startLabel = !clinics || clinics.length === 0
+    ? 'Add a clinic'
+    : (nextClinic && (nextClinic.marketCounties?.length ?? 0) === 0)
+      ? 'Pick counties'
+      : 'Pull referral sources';
+
   return (
     <MainLayout>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-          <p className="mt-2 text-sm text-gray-700">
-          Track and manage your referral sources, interactions, and campaigns
+      <div className="mb-8 overflow-hidden rounded-lg bg-white shadow">
+        <div className="p-6">
+          <p className="text-sm font-medium text-indigo-600">Get started</p>
+          <h1 className="mt-1 text-2xl font-semibold text-gray-900">Add a clinic</h1>
+          <p className="mt-2 max-w-2xl text-sm text-gray-600">
+            Add the clinic site, pick the counties it serves, pull pediatric and primary care referral sources, then enrich those sources with Google Places.
           </p>
+          <ol className="mt-4 grid gap-3 sm:grid-cols-4">
+            <li className="text-sm text-gray-800"><span className="font-semibold text-indigo-700">1.</span> Add a clinic</li>
+            <li className="text-sm text-gray-800"><span className="font-semibold text-indigo-700">2.</span> Pick counties</li>
+            <li className="text-sm text-gray-800"><span className="font-semibold text-indigo-700">3.</span> Pull referral sources</li>
+            <li className="text-sm text-gray-800"><span className="font-semibold text-indigo-700">4.</span> Enrich with Google Places</li>
+          </ol>
+          <div className="mt-6">
+            <Link
+              href={startHref}
+              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+            >
+              <MapPinIcon className="-ml-0.5 mr-1.5 h-5 w-5" aria-hidden="true" />
+              {startLabel}
+            </Link>
+          </div>
         </div>
+      </div>
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 mb-8">
@@ -163,10 +207,10 @@ export default function Dashboard() {
           <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2">
             <div>
               <Link
-                href="/referral-sources/new"
+                href="/clinic-locations"
                 className="inline-flex w-full items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
               >
-                Add Referral Source
+                Add a clinic
               </Link>
             </div>
             <div>
@@ -190,9 +234,9 @@ export default function Dashboard() {
                 href="/county-seed"
                 className="inline-flex w-full items-center justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
               >
-                Seed county
+                Pull referral sources
               </Link>
-          </div>
+            </div>
         </div>
       </div>
     </div>

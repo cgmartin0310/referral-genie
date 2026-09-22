@@ -18,7 +18,7 @@ async function main() {
   const mode = process.argv.includes('--refresh') ? 'refresh' : 'continue';
   const created = await createOrResumeRun({ countyId, mode });
   const runId = created.id;
-  console.log(`County seed ${created.id} ${created.countyName} (${created.countyId}) status=${created.status} phase=${created.phase}`);
+  console.log(`Pull ${created.id} ${created.countyName} (${created.countyId}) status=${created.status} phase=${created.phase}`);
 
   for (let step = 0; step < 2000; step += 1) {
     const result = await advanceCountyIngest(runId);
@@ -38,7 +38,7 @@ async function main() {
     }
   }
 
-  throw new Error('County seed exceeded the step limit');
+  throw new Error('Referral source pull exceeded the step limit');
 }
 
 main().catch((error) => {

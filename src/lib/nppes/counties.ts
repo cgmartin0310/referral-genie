@@ -1,5 +1,10 @@
 /**
- * Design-partner market: Lenoir County, NC (Kinston).
+ * Counties the NPI pull can query. NPPES has no county parameter, so each
+ * entry is a practice-location ZIP list. Lenoir County, NC is the list that
+ * ships today. A clinic market can include any US county; only counties in
+ * this file can be pulled.
+ *
+ * Lenoir County, NC (county seat Kinston).
  *
  * ZIP codes are not counties. Land-share notes are the Census 2020 ZCTA share
  * inside FIPS 37107. `core` is about 90% or more of the ZCTA. `boundary` is

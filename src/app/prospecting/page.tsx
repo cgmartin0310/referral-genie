@@ -226,9 +226,9 @@ export default function ProspectingPage() {
         <h1 className="text-2xl font-semibold text-gray-900 mb-2">Find non-NPI partners</h1>
         <p className="mb-6 text-sm text-gray-600">
           Secondary search. Keyword Nearby Search is not how the county source list is built.
-          Use <a href="/county-seed" className="text-indigo-600 hover:text-indigo-500">County seed</a> for
-          pediatricians and primary care physicians. Use this page only for partners that do not
-          have an NPI, such as schools.
+          Use <a href="/clinic-locations" className="text-indigo-600 hover:text-indigo-500">Clinics</a> to
+          add a clinic, pick counties, and pull pediatricians and primary care physicians. Use this page
+          only for partners that do not have an NPI, such as schools.
         </p>
         
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-8">

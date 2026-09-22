@@ -40,9 +40,25 @@ model ClinicLocation {
   organizationId  String
   organization    Organization     @relation(fields: [organizationId], references: [id])
   referralSources ReferralSource[]
+  marketCounties  ClinicMarketCounty[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
+}
+
+/// Counties this clinic serves. Any US county can be saved. The NPI pull
+/// still runs only for counties that have a practice-location ZIP list.
+model ClinicMarketCounty {
+  id               String         @id @default(cuid())
+  clinicLocationId String
+  clinicLocation   ClinicLocation @relation(fields: [clinicLocationId], references: [id], onDelete: Cascade)
+  countyFips       String
+  countyName       String
+  state            String
+  createdAt        DateTime       @default(now())
+
+  @@unique([clinicLocationId, countyFips])
+  @@index([clinicLocationId])
 }
 
 model ReferralSource {

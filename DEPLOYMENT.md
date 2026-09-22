@@ -38,7 +38,7 @@ After deployment, go to your web service settings and add these environment vari
 5. `GOOGLE_PLACES_API_KEY` - Required for county Places matching and the non-NPI search page.
 6. `NEXTAUTH_URL` - The public Render URL, for example `https://your-app-name.onrender.com`
 
-County seed for the Kinston pilot is documented in `docs/kinston-pilot.md`.
+Market setup is documented in `docs/market-setup.md`. The Lenoir County, NC ZIP list used by the NPI pull is in `docs/kinston-pilot.md`.
 
 ### 4. File Uploads Configuration
 

@@ -19,11 +19,16 @@ function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ');
 }
 
+function isCurrent(pathname: string, href: string): boolean {
+  if (href === '/') return pathname === '/';
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export const navigation = [
+  { name: 'Clinics', href: '/clinic-locations', icon: MapPinIcon },
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Referral Sources', href: '/referral-sources', icon: UserGroupIcon },
-  { name: 'County seed', href: '/county-seed', icon: MapIcon },
-  { name: 'Clinic Locations', href: '/clinic-locations', icon: MapPinIcon },
+  { name: 'Pull sources', href: '/county-seed', icon: MapIcon },
   { name: 'Interactions', href: '/interactions', icon: CalendarIcon },
   { name: 'Campaigns', href: '/campaigns', icon: MegaphoneIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
@@ -44,7 +49,7 @@ export default function Navigation() {
                 <Link
                   href={item.href}
                   className={classNames(
-                    pathname === item.href
+                    isCurrent(pathname, item.href)
                       ? 'bg-gray-50 text-indigo-600'
                       : 'text-gray-700 hover:text-indigo-600 hover:bg-gray-50',
                     'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
@@ -52,7 +57,7 @@ export default function Navigation() {
                 >
                   <item.icon
                     className={classNames(
-                      pathname === item.href
+                      isCurrent(pathname, item.href)
                         ? 'text-indigo-600'
                         : 'text-gray-400 group-hover:text-indigo-600',
                       'h-6 w-6 shrink-0'

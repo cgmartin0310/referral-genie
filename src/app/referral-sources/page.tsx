@@ -178,7 +178,7 @@ export default function ReferralSourcesPage() {
             Referral Sources
           </h1>
           <p className="mt-2 text-sm text-gray-700">
-            Pediatricians and primary care physicians from a county seed show up here with NPI,
+            Pediatricians and primary care physicians pulled for a clinic market show up here with NPI,
             source type, and Places match status. Add a source by hand for anyone else.
           </p>
         </div>
@@ -240,7 +240,11 @@ export default function ReferralSourcesPage() {
               <div className="text-center py-4">Loading...</div>
             ) : filteredAndSortedReferralSources?.length === 0 ? (
               <div className="text-center py-4 text-gray-500">
-                No referral sources found. Seed Lenoir County or add one by hand.
+                No referral sources yet.{' '}
+                <a href="/clinic-locations" className="font-medium text-indigo-600 hover:text-indigo-500">
+                  Add a clinic
+                </a>
+                , pick its counties, then pull referral sources.
               </div>
             ) : (
               <table className="min-w-full divide-y divide-gray-300">

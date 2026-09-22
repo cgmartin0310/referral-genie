@@ -1,6 +1,8 @@
 /**
  * ICP: outpatient OT/PT/ST referral sources are pediatricians and primary
- * care physicians, plus the clinic/center organizations (NPI-2) that run
+ * care physicians (family medicine and general practice; internal medicine is
+ * excluded because adult internists rarely refer to pediatric therapy), nurse
+ * practitioners and physician assistants, plus the clinic/center organizations (NPI-2) that run
  * primary care: primary care clinics, rural health clinics, FQHCs, health
  * departments, multi-specialty groups. Those org records carry the practice
  * name and fax, so without them a practice shows up named by its street.
@@ -17,7 +19,6 @@ export interface TaxonomyCode {
 
 export type TaxonomyGroup =
   | 'pcp_family_medicine'
-  | 'pcp_internal_medicine'
   | 'pcp_general_practice'
   | 'pediatrics'
   | 'pediatrics_np'
@@ -28,8 +29,6 @@ export const TAXONOMY_ALLOW_LIST: TaxonomyCode[] = [
   { code: '207Q00000X', description: 'Family Medicine', group: 'pcp_family_medicine' },
   { code: '207QA0505X', description: 'Family Medicine, Adult Medicine', group: 'pcp_family_medicine' },
   { code: '207QG0300X', description: 'Family Medicine, Geriatric Medicine', group: 'pcp_family_medicine' },
-  { code: '207R00000X', description: 'Internal Medicine', group: 'pcp_internal_medicine' },
-  { code: '207RG0300X', description: 'Internal Medicine, Geriatric Medicine', group: 'pcp_internal_medicine' },
   { code: '208D00000X', description: 'General Practice', group: 'pcp_general_practice' },
   { code: '208000000X', description: 'Pediatrics', group: 'pediatrics' },
   { code: '2080A0000X', description: 'Pediatrics, Adolescent Medicine', group: 'pediatrics' },
@@ -54,7 +53,6 @@ export const TAXONOMY_ALLOW_LIST: TaxonomyCode[] = [
 
 export const TAXONOMY_SEARCHES: { search: string; why: string }[] = [
   { search: 'Family Medicine', why: 'Family medicine PCPs, including adult and geriatric medicine' },
-  { search: 'Internal Medicine', why: 'General and geriatric internal medicine; subspecialists are dropped' },
   { search: 'General Practice', why: 'Physician general practice. Dentist hits are dropped' },
   { search: 'Pediatrics', why: 'Pediatricians, including adolescent and developmental-behavioral pediatrics' },
   { search: 'Nurse Practitioner', why: 'Pediatric, family, primary care, adult, and gerontology NPs; other NP specialties are dropped' },
@@ -69,7 +67,6 @@ export const TAXONOMY_SEARCHES: { search: string; why: string }[] = [
 export const SOURCE_TYPE_LABELS: Record<TaxonomyGroup, string> = {
   pediatrics: 'Pediatrician',
   pcp_family_medicine: 'PCP - Family Medicine',
-  pcp_internal_medicine: 'PCP - Internal Medicine',
   pcp_general_practice: 'PCP - General Practice',
   pediatrics_np: 'Pediatric Nurse Practitioner',
   pcp_np_pa: 'PCP - Nurse Practitioner / PA',
@@ -80,7 +77,6 @@ export const SOURCE_TYPE_LABELS: Record<TaxonomyGroup, string> = {
 export const CATEGORY_ID_BY_SOURCE_TYPE: Record<TaxonomyGroup, string> = {
   pediatrics: 'cat_pediatrician',
   pcp_family_medicine: 'cat_pcp_family_medicine',
-  pcp_internal_medicine: 'cat_pcp_internal_medicine',
   pcp_general_practice: 'cat_pcp_general_practice',
   pediatrics_np: 'cat_pediatric_np',
   pcp_np_pa: 'cat_pcp_np_pa',

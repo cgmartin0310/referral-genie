@@ -53,7 +53,6 @@ function mixLabel(mix: Record<string, number>, labels: Record<string, string>): 
 const SHORT: Record<string, string> = {
   pediatrics: 'Pediatrics',
   pcp_family_medicine: 'Family medicine',
-  pcp_internal_medicine: 'Internal medicine',
   pcp_general_practice: 'General practice',
   pediatrics_np: 'Pediatric NP',
   pcp_np_pa: 'NP / PA',

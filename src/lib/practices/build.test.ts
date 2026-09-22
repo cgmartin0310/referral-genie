@@ -71,10 +71,10 @@ describe('practice formation', () => {
     const practices = buildPractices([
       row({ id: 'a', sourceType: 'pediatrics' }),
       row({ id: 'b', sourceType: 'pediatrics' }),
-      row({ id: 'c', sourceType: 'pcp_internal_medicine' }),
+      row({ id: 'c', sourceType: 'pcp_family_medicine' }),
       row({ id: 'org', enumerationType: 'NPI-2', name: 'Some Group', npiNumber: '9' }),
     ]);
-    assert.deepEqual(practices[0].taxonomyMix, { pediatrics: 2, pcp_internal_medicine: 1 });
+    assert.deepEqual(practices[0].taxonomyMix, { pediatrics: 2, pcp_family_medicine: 1 });
     assert.equal(practices[0].providerCount, 3);
   });
 

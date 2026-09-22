@@ -4,12 +4,12 @@ import { estimateMonthlyReferrals, sumEstimates } from './estimate';
 
 describe('referral estimate', () => {
   it('sums providers by type at the default rates and shows a range', () => {
-    const estimate = estimateMonthlyReferrals({ pediatrics: 4, pcp_internal_medicine: 8 });
+    const estimate = estimateMonthlyReferrals({ pediatrics: 4, pcp_family_medicine: 8 });
     assert.ok(estimate);
-    // 4 × 1 + 8 × 0.25 = 6
-    assert.equal(estimate.point, 6);
-    assert.equal(estimate.low, 3);
-    assert.equal(estimate.high, 9);
+    // 4 × 1 + 8 × 0.5 = 8
+    assert.equal(estimate.point, 8);
+    assert.equal(estimate.low, 4);
+    assert.equal(estimate.high, 12);
     assert.equal(estimate.drivers[0].sourceType, 'pediatrics');
   });
 

@@ -31,7 +31,7 @@ function hit(overrides: Partial<RawHit>): RawHit {
 
 describe('Lenoir allow-list', () => {
   it('keeps the nine pediatrician and PCP codes and the Kinston ZIP', () => {
-    assert.equal(TAXONOMY_ALLOW_LIST.length, 22);
+    assert.equal(TAXONOMY_ALLOW_LIST.length, 20);
     assert.equal(LENOIR_NC.fips, '37107');
     assert.ok(LENOIR_NC.zips.some((row) => row.zip === '28501'));
     assert.equal(LENOIR_NC.zips.some((row) => row.zip === '28502'), false);
@@ -58,7 +58,7 @@ describe('Lenoir allow-list', () => {
       hit({
         taxonomies: [
           { code: '207RC0000X', desc: 'Cardiovascular Disease', primary: true },
-          { code: '207R00000X', desc: 'Internal Medicine', primary: false },
+          { code: '207Q00000X', desc: 'Family Medicine', primary: false },
         ],
       }),
       LENOIR_NC,

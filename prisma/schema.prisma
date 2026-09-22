@@ -26,6 +26,7 @@ model Organization {
   researchRuns       ResearchRun[]
   practices          Practice[]
   providers          Provider[]
+  clinicPractices    ClinicPractice[]
 }
 
 model ClinicLocation {
@@ -44,6 +45,7 @@ model ClinicLocation {
   organization    Organization     @relation(fields: [organizationId], references: [id])
   referralSources ReferralSource[]
   marketCounties  ClinicMarketCounty[]
+  clinicPractices ClinicPractice[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -268,6 +270,7 @@ model Practice {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   providers      Provider[]
+  clinicPractices ClinicPractice[]
 
   @@unique([organizationId, practiceKey])
   @@index([organizationId, countyFips])
@@ -297,4 +300,26 @@ model Provider {
   @@unique([organizationId, npiNumber])
   @@index([practiceId])
   @@index([organizationId, countyFips])
+}
+
+/// A practice on a clinic's referral list. This is the association a user
+/// makes after sources are pulled and enriched: "these practices refer to
+/// this clinic." Relationship data lives here, not on the shared practice.
+model ClinicPractice {
+  id                       String   @id @default(cuid())
+  clinicLocationId         String
+  practiceId               String
+  /// Optional override of the estimate for this relationship.
+  expectedMonthlyReferrals Int?
+  notes                    String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  organizationId           String
+  clinicLocation           ClinicLocation @relation(fields: [clinicLocationId], references: [id], onDelete: Cascade)
+  practice                 Practice       @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  organization             Organization   @relation(fields: [organizationId], references: [id])
+
+  @@unique([clinicLocationId, practiceId])
+  @@index([practiceId])
+  @@index([organizationId])
 }

@@ -3,16 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import { 
-  HomeIcon, 
-  UserGroupIcon, 
-  CalendarIcon, 
-  MegaphoneIcon, 
-  ChartBarIcon,
-  MagnifyingGlassIcon,
+import {
   ArrowRightOnRectangleIcon,
-  MapPinIcon,
-  MapIcon,
+  BuildingOffice2Icon,
+  ClockIcon,
+  MegaphoneIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/outline';
 
 function classNames(...classes: string[]) {
@@ -24,15 +20,16 @@ function isCurrent(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/**
+ * Four destinations. Setup steps (counties, pull, enrich, research) live on a
+ * clinic's page; Google keyword search and manual entry are ways to add a
+ * practice, reached from Referral Sources.
+ */
 export const navigation = [
-  { name: 'Clinics', href: '/clinic-locations', icon: MapPinIcon },
-  { name: 'Dashboard', href: '/', icon: HomeIcon },
+  { name: 'Our Clinics', href: '/clinic-locations', icon: BuildingOffice2Icon },
   { name: 'Referral Sources', href: '/referral-sources', icon: UserGroupIcon },
-  { name: 'Pull sources', href: '/county-seed', icon: MapIcon },
-  { name: 'Interactions', href: '/interactions', icon: CalendarIcon },
   { name: 'Campaigns', href: '/campaigns', icon: MegaphoneIcon },
-  { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
-  { name: 'Non-NPI search', href: '/prospecting', icon: MagnifyingGlassIcon },
+  { name: 'Activity', href: '/interactions', icon: ClockIcon },
 ];
 
 export default function Navigation() {
@@ -44,53 +41,51 @@ export default function Navigation() {
       <ul role="list" className="flex flex-1 flex-col gap-y-7">
         <li>
           <ul role="list" className="-mx-2 space-y-1">
-            {navigation.map((item) => (
-              <li key={item.name}>
-                <Link
-                  href={item.href}
-                  className={classNames(
-                    isCurrent(pathname, item.href)
-                      ? 'bg-gray-50 text-indigo-600'
-                      : 'text-gray-700 hover:text-indigo-600 hover:bg-gray-50',
-                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                  )}
-                >
-                  <item.icon
+            {navigation.map((item) => {
+              const current = isCurrent(pathname, item.href);
+              return (
+                <li key={item.name}>
+                  <Link
+                    href={item.href}
+                    aria-current={current ? 'page' : undefined}
                     className={classNames(
-                      isCurrent(pathname, item.href)
-                        ? 'text-indigo-600'
-                        : 'text-gray-400 group-hover:text-indigo-600',
-                      'h-6 w-6 shrink-0'
+                      current
+                        ? 'bg-white/10 text-white border-green-400'
+                        : 'text-blue-100 hover:bg-white/5 hover:text-white border-transparent',
+                      'group flex gap-x-3 rounded-md border-l-2 p-2 pl-3 text-sm font-semibold leading-6',
                     )}
-                    aria-hidden="true"
-                  />
-                  {item.name}
-                </Link>
-              </li>
-            ))}
+                  >
+                    <item.icon
+                      className={classNames(
+                        current ? 'text-green-400' : 'text-blue-200 group-hover:text-white',
+                        'h-6 w-6 shrink-0',
+                      )}
+                      aria-hidden="true"
+                    />
+                    {item.name}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </li>
-        <li className="mt-auto">
-          <div className="border-t border-gray-200 pt-4">
-            {session?.user && (
-              <div className="px-2 mb-2">
-                <p className="text-xs text-gray-500">Logged in as</p>
-                <p className="text-sm font-medium text-gray-700">{session.user.name}</p>
-              </div>
-            )}
-            <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
-              className="text-gray-700 hover:text-indigo-600 hover:bg-gray-50 group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold w-full"
-            >
-              <ArrowRightOnRectangleIcon
-                className="text-gray-400 group-hover:text-indigo-600 h-6 w-6 shrink-0"
-                aria-hidden="true"
-              />
-              Sign out
-            </button>
-          </div>
+
+        <li className="-mx-2 mt-auto border-t border-white/10 pt-4">
+          {session?.user?.name && (
+            <p className="px-2 text-xs text-blue-200">
+              Signed in as <span className="font-medium text-white">{session.user.name}</span>
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="group mt-2 flex w-full gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-blue-100 hover:bg-white/5 hover:text-white"
+          >
+            <ArrowRightOnRectangleIcon className="h-6 w-6 shrink-0 text-blue-200 group-hover:text-white" aria-hidden="true" />
+            Sign out
+          </button>
         </li>
       </ul>
     </nav>
   );
-} 
+}

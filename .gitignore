@@ -46,3 +46,6 @@ next-env.d.ts
 
 # migrations (contains sensitive data)
 /migrations/
+
+# local dev-server config with scratch-DB credentials
+.claude/launch.json

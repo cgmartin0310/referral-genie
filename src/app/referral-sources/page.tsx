@@ -1,393 +1,583 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
+import { Switch } from '@headlessui/react';
+import {
+  BuildingOffice2Icon,
+  ChevronRightIcon,
+  MagnifyingGlassIcon,
+  PrinterIcon,
+  UsersIcon,
+} from '@heroicons/react/24/outline';
 import MainLayout from '../../components/layout/MainLayout';
-import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/20/solid';
-import ReferralSourceModal from '../../components/ReferralSourceModal';
+import type { PracticeView, ProviderView } from '@/lib/practices/present';
 
-interface ReferralSource {
+type Tab = 'practices' | 'providers';
+
+interface Clinic {
   id: string;
   name: string;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  zipCode: string | null;
-  clinicLocationId: string | null;
-  clinicLocation: {
-    id: string;
-    name: string;
-  } | null;
-  contactPerson: string | null;
-  contactPhone: string | null;
-  contactEmail: string | null;
-  faxNumber: string | null;
-  npiNumber: string | null;
-  website: string | null;
-  expectedMonthlyReferrals: number | null;
-  numberOfProviders: number | null;
-  sourceType: string | null;
-  countyName: string | null;
-  placesMatchStatus: string | null;
-  likelyDuplicate: boolean;
-  reviewCount: number | null;
-  businessStatus: string | null;
-  rating: number | null;
-  createdAt: string;
-  category: { id: string; name: string } | null;
 }
 
-type SortField = 'name' | 'clinicLocation' | 'address' | 'expectedMonthlyReferrals' | 'numberOfProviders';
-type SortDirection = 'asc' | 'desc';
+interface PracticesResponse {
+  practices: PracticeView[];
+  totals: { practices: number; providers: number; withFax: number; estimate: { low: number; high: number } };
+  counties: { fips: string | null; name: string | null; practices: number }[];
+}
 
-export default function ReferralSourcesPage() {
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [clinicLocationFilter, setClinicLocationFilter] = useState<string>('');
-  const [countyFilter, setCountyFilter] = useState<string>('');
-  const [sortField, setSortField] = useState<SortField>('name');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+function classNames(...classes: (string | false | null | undefined)[]) {
+  return classes.filter(Boolean).join(' ');
+}
 
-  const { data: referralSources, isLoading, refetch } = useQuery({
-    queryKey: ['referral-sources'],
-    queryFn: async () => {
-      try {
-        const { data } = await axios.get('/api/referral-sources');
-        return data;
-      } catch (error) {
-        console.error('Error fetching referral sources:', error);
-        toast.error('Failed to load referral sources');
-        return [];
-      }
-    },
-  });
+function formatFax(value: string | null | undefined): string {
+  const digits = (value ?? '').replace(/\D/g, '').slice(-10);
+  if (digits.length !== 10) return value ?? '';
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
 
-  // Get unique clinic locations for filter
-  const uniqueClinicLocations = useMemo(() => {
-    if (!referralSources) return [];
-    const locations = new Map<string, string>();
-    referralSources.forEach((source: ReferralSource) => {
-      if (source.clinicLocation) {
-        locations.set(source.clinicLocation.id, source.clinicLocation.name);
-      }
-    });
-    return Array.from(locations.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [referralSources]);
+function mixLabel(mix: Record<string, number>, labels: Record<string, string>): string {
+  return Object.entries(mix)
+    .sort((left, right) => right[1] - left[1])
+    .map(([type, count]) => `${labels[type] ?? type} ${count}`)
+    .join(' · ');
+}
 
-  const countyNames = useMemo(() => {
-    if (!referralSources) return [];
-    const names = new Set<string>();
-    referralSources.forEach((source: ReferralSource) => {
-      if (source.countyName) names.add(source.countyName);
-    });
-    return Array.from(names).sort();
-  }, [referralSources]);
+const SHORT: Record<string, string> = {
+  pediatrics: 'Pediatrics',
+  pcp_family_medicine: 'Family medicine',
+  pcp_internal_medicine: 'Internal medicine',
+  pcp_general_practice: 'General practice',
+};
 
-  // Filter and sort referral sources
-  const filteredAndSortedReferralSources = useMemo(() => {
-    if (!referralSources) return [];
-    
-    // First filter by clinic location
-    let result = [...referralSources];
-    if (clinicLocationFilter) {
-      result = result.filter((source: ReferralSource) => 
-        source.clinicLocation?.id === clinicLocationFilter
-      );
-    }
-    if (countyFilter) {
-      result = result.filter((source: ReferralSource) => source.countyName === countyFilter);
-    }
-    
-    // Then sort by the selected field
-    result.sort((a: ReferralSource, b: ReferralSource) => {
-      let valA, valB;
-      
-      switch (sortField) {
-        case 'name':
-          valA = a.name || '';
-          valB = b.name || '';
-          break;
-        case 'clinicLocation':
-          valA = a.clinicLocation?.name || '';
-          valB = b.clinicLocation?.name || '';
-          break;
-        case 'address':
-          valA = (a.address ? (a.city ? `${a.address}, ${a.city}` : a.address) : '') || '';
-          valB = (b.address ? (b.city ? `${b.address}, ${b.city}` : b.address) : '') || '';
-          break;
-        case 'expectedMonthlyReferrals':
-          valA = a.expectedMonthlyReferrals || 0;
-          valB = b.expectedMonthlyReferrals || 0;
-          break;
-        case 'numberOfProviders':
-          valA = a.numberOfProviders || 0;
-          valB = b.numberOfProviders || 0;
-          break;
-        default:
-          valA = a.name || '';
-          valB = b.name || '';
-      }
-      
-      if (sortDirection === 'asc') {
-        return valA > valB ? 1 : valA < valB ? -1 : 0;
-      } else {
-        return valA < valB ? 1 : valA > valB ? -1 : 0;
-      }
-    });
-    
-    return result;
-  }, [referralSources, clinicLocationFilter, countyFilter, sortField, sortDirection]);
-  
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      // Toggle sort direction if clicking the same field
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      // Set new sort field and default to ascending
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
-  
-  const renderSortIcon = (field: SortField) => {
-    if (sortField !== field) return null;
-    
-    return sortDirection === 'asc' 
-      ? <ChevronUpIcon className="h-4 w-4 inline-block ml-1" /> 
-      : <ChevronDownIcon className="h-4 w-4 inline-block ml-1" />;
-  };
+function estimateText(estimate: PracticeView['estimate']): string {
+  if (!estimate) return '—';
+  return estimate.low === estimate.high ? `${estimate.low}` : `${estimate.low}–${estimate.high}`;
+}
 
-  const handleAddReferralSource = () => {
-    setIsAddModalOpen(true);
-  };
+/* ------------------------------------------------------------------ */
 
-  const handleModalClose = () => {
-    setIsAddModalOpen(false);
-  };
-
-  const handleModalSuccess = () => {
-    refetch();
-  };
-
+function StatTile({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <MainLayout>
-      <div className="sm:flex sm:items-center">
-        <div className="sm:flex-auto">
-          <h1 className="text-base font-semibold leading-6 text-gray-900">
-            Referral Sources
-          </h1>
-          <p className="mt-2 text-sm text-gray-700">
-            Pediatricians and primary care physicians pulled for a clinic market show up here with NPI,
-            source type, and Places match status. Add a source by hand for anyone else.
-          </p>
-        </div>
-        <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
+    <div className="rounded-lg border border-gray-200 bg-white px-5 py-4 shadow-sm">
+      <p className="text-sm font-medium text-gray-500">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-gray-900">{value}</p>
+      {hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
+    </div>
+  );
+}
+
+function OwnFaxToggle({ provider }: { provider: ProviderView }) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (useOwnFax: boolean) => axios.patch(`/api/providers/${provider.id}`, { useOwnFax }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['practices'] });
+      queryClient.invalidateQueries({ queryKey: ['providers'] });
+    },
+    onError: () => toast.error('Could not update the fax setting'),
+  });
+  const disabled = !provider.faxNumber;
+  return (
+    <Switch
+      checked={provider.useOwnFax}
+      disabled={disabled || mutation.isPending}
+      onChange={(value: boolean) => mutation.mutate(value)}
+      title={disabled ? 'No fax on file for this provider' : 'Send faxes to this provider’s own line'}
+      className={classNames(
+        provider.useOwnFax ? 'bg-green-600' : 'bg-gray-200',
+        disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer',
+        'relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2',
+      )}
+    >
+      <span
+        className={classNames(
+          provider.useOwnFax ? 'translate-x-4' : 'translate-x-0',
+          'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition',
+        )}
+      />
+    </Switch>
+  );
+}
+
+function SendsTo({ provider }: { provider: ProviderView }) {
+  const { sendsTo } = provider;
+  if (!sendsTo.number) return <span className="text-sm text-red-600">No fax on file</span>;
+  return (
+    <span className="inline-flex items-center gap-2 text-sm text-gray-700">
+      <span className="font-mono">{formatFax(sendsTo.number)}</span>
+      <span
+        className={classNames(
+          'rounded-full px-2 py-0.5 text-xs font-medium',
+          sendsTo.level === 'provider' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600',
+        )}
+      >
+        {sendsTo.level === 'provider' ? 'own line' : 'practice'}
+      </span>
+      {sendsTo.fellBack && <span className="text-xs text-amber-600">own line requested, none on file</span>}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function PracticeRow({
+  practice,
+  selected,
+  onToggle,
+}: {
+  practice: PracticeView;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const canExpand = practice.providers.length > 0;
+  return (
+    <li className={classNames('bg-white', selected && 'bg-green-50/40')}>
+      <div className="grid grid-cols-12 items-center gap-x-4 px-4 py-3 sm:px-6">
+        <div className="col-span-12 flex items-center gap-3 sm:col-span-4">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggle}
+            aria-label={`Select ${practice.name}`}
+            className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-600"
+          />
           <button
             type="button"
-            onClick={handleAddReferralSource}
-            className="block rounded-md bg-indigo-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            onClick={() => canExpand && setOpen(!open)}
+            disabled={!canExpand}
+            aria-expanded={open}
+            aria-label={open ? 'Hide providers' : 'Show providers'}
+            className={classNames(
+              'rounded p-0.5 text-gray-400',
+              canExpand ? 'hover:bg-gray-100 hover:text-gray-600' : 'opacity-30',
+            )}
           >
-            Add Referral Source
+            <ChevronRightIcon className={classNames('h-4 w-4 transition-transform', open && 'rotate-90')} />
+          </button>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-gray-900">
+              {practice.name}
+              {practice.nameAmbiguous && (
+                <span className="ml-2 text-xs font-normal text-amber-600" title="Two organizations share this address">
+                  shared address
+                </span>
+              )}
+            </p>
+            <p className="truncate text-sm text-gray-500">
+              {[practice.address, practice.city, practice.zipCode].filter(Boolean).join(', ')}
+            </p>
+          </div>
+        </div>
+
+        <div className="col-span-6 mt-2 whitespace-nowrap sm:col-span-2 sm:mt-0">
+          {practice.faxNumber ? (
+            <p className="flex items-center gap-1.5 font-mono text-sm text-gray-800">
+              <PrinterIcon className="h-4 w-4 text-gray-400" />
+              {formatFax(practice.faxNumber)}
+            </p>
+          ) : (
+            <p className="text-sm text-gray-400">No fax</p>
+          )}
+        </div>
+
+        <div className="col-span-6 mt-2 sm:col-span-3 sm:mt-0">
+          <p className="text-sm font-medium text-gray-900">
+            {practice.providerCount === 0
+              ? 'Providers unknown'
+              : `${practice.providerCount} provider${practice.providerCount === 1 ? '' : 's'}`}
+          </p>
+          {practice.providerCount > 0 && (
+            <p className="truncate text-xs text-gray-500">{mixLabel(practice.taxonomyMix, SHORT)}</p>
+          )}
+        </div>
+
+        <div className="col-span-6 mt-2 whitespace-nowrap sm:col-span-2 sm:mt-0 sm:text-right">
+          <p className="text-sm font-semibold text-gray-900">{estimateText(practice.estimate)}</p>
+          <p className="text-xs text-gray-500">est. referrals / mo</p>
+        </div>
+
+        <div className="col-span-6 mt-2 flex flex-wrap justify-end gap-1 sm:col-span-1 sm:mt-0">
+          {practice.clinics.map((clinic) => (
+            <span
+              key={clinic.id}
+              title={`On ${clinic.name}’s list`}
+              className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20"
+            >
+              {clinic.name.split(' ')[0]}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {open && (
+        <ul className="border-t border-gray-100 bg-gray-50/60">
+          {practice.providers.map((provider) => (
+            <li
+              key={provider.id}
+              className="grid grid-cols-12 items-center gap-x-4 px-4 py-2 pl-[4.25rem] text-sm sm:px-6 sm:pl-[4.75rem]"
+            >
+              <div className="col-span-12 sm:col-span-4">
+                <span className="font-medium text-gray-900">{provider.name}</span>
+                <span className="ml-2 text-xs text-gray-500">NPI {provider.npiNumber}</span>
+              </div>
+              <div className="col-span-6 text-gray-600 sm:col-span-2">{provider.sourceTypeLabel}</div>
+              <div className="col-span-6 sm:col-span-5">
+                <SendsTo provider={provider} />
+              </div>
+              <div className="col-span-12 mt-1 flex items-center justify-end gap-2 sm:col-span-1 sm:mt-0">
+                <span className="text-xs text-gray-500">Own fax</span>
+                <OwnFaxToggle provider={provider} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function PracticesTab({ clinics }: { clinics: Clinic[] }) {
+  const queryClient = useQueryClient();
+  const [q, setQ] = useState('');
+  const [countyFips, setCountyFips] = useState('');
+  const [hasFax, setHasFax] = useState(false);
+  const [clinicId, setClinicId] = useState('');
+  const [hideListed, setHideListed] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const params = useMemo(() => {
+    const search = new URLSearchParams();
+    if (q) search.set('q', q);
+    if (countyFips) search.set('countyFips', countyFips);
+    if (hasFax) search.set('hasFax', '1');
+    if (hideListed && clinicId) search.set('notOnClinicId', clinicId);
+    return search.toString();
+  }, [q, countyFips, hasFax, hideListed, clinicId]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['practices', params],
+    queryFn: async () => (await axios.get<PracticesResponse>(`/api/practices?${params}`)).data,
+  });
+
+  const addToClinic = useMutation({
+    mutationFn: async () =>
+      (await axios.post(`/api/clinic-locations/${clinicId}/practices`, { practiceIds: [...selected] })).data as {
+        added: number;
+        alreadyListed: number;
+      },
+    onSuccess: (result) => {
+      const clinic = clinics.find((row) => row.id === clinicId)?.name ?? 'the clinic';
+      toast.success(
+        result.alreadyListed
+          ? `Added ${result.added} to ${clinic} (${result.alreadyListed} already listed)`
+          : `Added ${result.added} to ${clinic}`,
+      );
+      setSelected(new Set());
+      queryClient.invalidateQueries({ queryKey: ['practices'] });
+    },
+    onError: () => toast.error('Could not add practices'),
+  });
+
+  const practices = data?.practices ?? [];
+  const allVisibleSelected = practices.length > 0 && practices.every((row) => selected.has(row.id));
+  const clinicName = clinics.find((row) => row.id === clinicId)?.name;
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-1 flex-wrap items-center gap-3">
+          <label className="relative min-w-[16rem] flex-1">
+            <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+            <input
+              type="search"
+              value={q}
+              onChange={(event) => setQ(event.target.value)}
+              placeholder="Search practices, providers, streets"
+              className="w-full rounded-md border-gray-300 pl-9 text-sm focus:border-green-600 focus:ring-green-600"
+            />
+          </label>
+          <select
+            value={countyFips}
+            onChange={(event) => setCountyFips(event.target.value)}
+            className="rounded-md border-gray-300 text-sm focus:border-green-600 focus:ring-green-600"
+          >
+            <option value="">All counties</option>
+            {(data?.counties ?? []).map((county) => (
+              <option key={county.fips ?? 'none'} value={county.fips ?? ''}>
+                {county.name} ({county.practices})
+              </option>
+            ))}
+          </select>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={hasFax}
+              onChange={(event) => setHasFax(event.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-600"
+            />
+            Has fax
+          </label>
+          <label
+            className={classNames('inline-flex items-center gap-2 text-sm', clinicId ? 'text-gray-700' : 'text-gray-400')}
+            title={clinicId ? '' : 'Choose a clinic first'}
+          >
+            <input
+              type="checkbox"
+              checked={hideListed}
+              disabled={!clinicId}
+              onChange={(event) => setHideListed(event.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-600 disabled:opacity-40"
+            />
+            Not yet on list
+          </label>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <select
+            value={clinicId}
+            onChange={(event) => setClinicId(event.target.value)}
+            className="rounded-md border-gray-300 text-sm focus:border-green-600 focus:ring-green-600"
+          >
+            <option value="">Add to clinic…</option>
+            {clinics.map((clinic) => (
+              <option key={clinic.id} value={clinic.id}>
+                {clinic.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={!clinicId || selected.size === 0 || addToClinic.isPending}
+            onClick={() => addToClinic.mutate()}
+            className="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:cursor-not-allowed disabled:bg-gray-300"
+          >
+            {selected.size > 0 && clinicName ? `Add ${selected.size} to ${clinicName}` : 'Add selected'}
           </button>
         </div>
       </div>
 
-      {/* Filter Section */}
-      <div className="mt-4 flex flex-col sm:flex-row gap-4">
-        <div className="sm:w-64">
-          <label htmlFor="clinicLocationFilter" className="block text-sm font-medium text-gray-700">
-            Filter by Clinic Location
-          </label>
-          <select
-            id="clinicLocationFilter"
-            value={clinicLocationFilter}
-            onChange={(e) => setClinicLocationFilter(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-          >
-            <option value="">All Locations</option>
-            {uniqueClinicLocations.map(([locationId, locationName]) => (
-              <option key={locationId} value={locationId}>
-                {locationName}
-              </option>
-            ))}
-          </select>
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 sm:px-6">
+          <input
+            type="checkbox"
+            checked={allVisibleSelected}
+            onChange={() =>
+              setSelected(allVisibleSelected ? new Set() : new Set(practices.map((row) => row.id)))
+            }
+            aria-label="Select all shown"
+            className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-600"
+          />
+          <span>
+            {practices.length} practice{practices.length === 1 ? '' : 's'}
+            {selected.size > 0 && <span className="ml-2 normal-case text-green-700">· {selected.size} selected</span>}
+          </span>
         </div>
-        <div className="sm:w-64">
-          <label htmlFor="countyFilter" className="block text-sm font-medium text-gray-700">
-            Filter by county
-          </label>
-          <select
-            id="countyFilter"
-            value={countyFilter}
-            onChange={(e) => setCountyFilter(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-          >
-            <option value="">All counties</option>
-            {countyNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
 
-      <div className="mt-8 flow-root">
-        <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-            {isLoading ? (
-              <div className="text-center py-4">Loading...</div>
-            ) : filteredAndSortedReferralSources?.length === 0 ? (
-              <div className="text-center py-4 text-gray-500">
-                No referral sources yet.{' '}
-                <a href="/clinic-locations" className="font-medium text-indigo-600 hover:text-indigo-500">
-                  Add a clinic
-                </a>
-                , pick its counties, then pull referral sources.
-              </div>
-            ) : (
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead>
-                  <tr>
-                    <th 
-                      scope="col" 
-                      className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0 cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('name')}
-                    >
-                      <span className="group inline-flex">
-                        Name
-                        {renderSortIcon('name')}
-                      </span>
-                    </th>
-                    <th 
-                      scope="col" 
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('clinicLocation')}
-                    >
-                      <span className="group inline-flex">
-                        Clinic Location
-                        {renderSortIcon('clinicLocation')}
-                      </span>
-                    </th>
-                    <th 
-                      scope="col" 
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('address')}
-                    >
-                      <span className="group inline-flex">
-                        Address
-                        {renderSortIcon('address')}
-                      </span>
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Source type
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      County
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Places
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      <span className="group inline-flex">
-                        Fax
-                      </span>
-                    </th>
-                    <th 
-                      scope="col" 
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('expectedMonthlyReferrals')}
-                    >
-                      <span className="group inline-flex">
-                        Expected Monthly Referrals
-                        {renderSortIcon('expectedMonthlyReferrals')}
-                      </span>
-                    </th>
-                    <th 
-                      scope="col" 
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('numberOfProviders')}
-                    >
-                      <span className="group inline-flex">
-                        Number of Providers
-                        {renderSortIcon('numberOfProviders')}
-                      </span>
-                    </th>
-                    <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-0">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredAndSortedReferralSources?.map((source: ReferralSource) => (
-                    <tr key={source.id}>
-                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-0">
-                        <a href={`/referral-sources/${source.id}`} className="text-indigo-600 hover:text-indigo-900">
-                          {source.name}
-                        </a>
-                        {source.npiNumber && (
-                          <div className="text-xs font-normal text-gray-500">NPI {source.npiNumber}</div>
-                        )}
-                        {source.likelyDuplicate && (
-                          <div className="text-xs font-normal text-amber-700">Possible duplicate</div>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {source.clinicLocation?.name || 'Not specified'}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {source.address ? 
-                          (source.city ? `${source.address}, ${source.city}` : source.address) 
-                          : 'Not specified'}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {source.category?.name || source.sourceType || '—'}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {source.countyName || '—'}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {source.placesMatchStatus === 'matched'
-                          ? `Matched${source.rating != null ? ` ${source.rating}` : ''}${source.reviewCount != null ? ` (${source.reviewCount})` : ''}`
-                          : source.placesMatchStatus === 'unmatched'
-                            ? 'Unmatched'
-                            : source.placesMatchStatus === 'quarantined'
-                              ? 'Quarantined'
-                              : source.placesMatchStatus === 'pending'
-                                ? 'Pending'
-                                : '—'}
-                        {source.businessStatus ? ` · ${source.businessStatus}` : ''}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {source.faxNumber || 'Not specified'}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {source.expectedMonthlyReferrals ?? 'N/A'}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {source.numberOfProviders ?? 'N/A'}
-                      </td>
-                      <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
-                        <a href={`/referral-sources/${source.id}/edit`} className="text-indigo-600 hover:text-indigo-900">
-                          Edit<span className="sr-only">, {source.name}</span>
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+        {isLoading ? (
+          <p className="px-6 py-10 text-center text-sm text-gray-500">Loading…</p>
+        ) : practices.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <BuildingOffice2Icon className="mx-auto h-10 w-10 text-gray-300" />
+            <p className="mt-3 text-sm font-medium text-gray-900">No practices yet</p>
+            <p className="mt-1 text-sm text-gray-500">
+              Pull referral sources for a clinic’s counties and they will appear here as practices.
+            </p>
+            <Link
+              href="/clinic-locations"
+              className="mt-4 inline-flex items-center rounded-md bg-[#0B2A5B] px-3 py-2 text-sm font-semibold text-white hover:bg-[#123a7a]"
+            >
+              Go to Our Clinics
+            </Link>
           </div>
+        ) : (
+          <ul role="list" className="divide-y divide-gray-200">
+            {practices.map((practice) => (
+              <PracticeRow
+                key={practice.id}
+                practice={practice}
+                selected={selected.has(practice.id)}
+                onToggle={() => toggle(practice.id)}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function ProvidersTab() {
+  const [q, setQ] = useState('');
+  const { data, isLoading } = useQuery({
+    queryKey: ['providers', q],
+    queryFn: async () =>
+      (await axios.get<{ providers: ProviderView[] }>(`/api/providers?${q ? `q=${encodeURIComponent(q)}` : ''}`)).data,
+  });
+  const providers = data?.providers ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+        <label className="relative block max-w-md">
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+          <input
+            type="search"
+            value={q}
+            onChange={(event) => setQ(event.target.value)}
+            placeholder="Search providers, NPI, practice"
+            className="w-full rounded-md border-gray-300 pl-9 text-sm focus:border-green-600 focus:ring-green-600"
+          />
+        </label>
+      </div>
+
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr className="text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <th className="px-4 py-2 sm:px-6">Provider</th>
+              <th className="px-4 py-2">Practice</th>
+              <th className="px-4 py-2">Type</th>
+              <th className="px-4 py-2">Faxes go to</th>
+              <th className="px-4 py-2 text-right sm:px-6">Own fax</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {isLoading ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-500">
+                  Loading…
+                </td>
+              </tr>
+            ) : providers.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center">
+                  <UsersIcon className="mx-auto h-10 w-10 text-gray-300" />
+                  <p className="mt-3 text-sm text-gray-500">No providers yet.</p>
+                </td>
+              </tr>
+            ) : (
+              providers.map((provider) => (
+                <tr key={provider.id} className="text-sm">
+                  <td className="px-4 py-2.5 sm:px-6">
+                    <p className="font-medium text-gray-900">{provider.name}</p>
+                    <p className="text-xs text-gray-500">NPI {provider.npiNumber}</p>
+                  </td>
+                  <td className="px-4 py-2.5 text-gray-700">{provider.practiceName ?? <span className="text-gray-400">—</span>}</td>
+                  <td className="px-4 py-2.5 text-gray-600">{provider.sourceTypeLabel}</td>
+                  <td className="px-4 py-2.5">
+                    <SendsTo provider={provider} />
+                  </td>
+                  <td className="px-4 py-2.5 text-right sm:px-6">
+                    <OwnFaxToggle provider={provider} />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+export default function ReferralSourcesPage() {
+  const [tab, setTab] = useState<Tab>('practices');
+
+  const { data: clinics } = useQuery({
+    queryKey: ['clinic-locations'],
+    queryFn: async () => (await axios.get<Clinic[]>('/api/clinic-locations')).data,
+  });
+  const { data: totals } = useQuery({
+    queryKey: ['practices', ''],
+    queryFn: async () => (await axios.get<PracticesResponse>('/api/practices')).data,
+  });
+
+  const stats = totals?.totals;
+
+  return (
+    <MainLayout>
+      <div className="sm:flex sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Referral Sources</h1>
+          <p className="mt-1 max-w-2xl text-sm text-gray-600">
+            Practices that can refer to you, and the providers who work there. Pick practices and add them to a
+            clinic’s referral list.
+          </p>
         </div>
       </div>
 
-      {/* Add Referral Source Modal */}
-      <ReferralSourceModal
-        isOpen={isAddModalOpen}
-        onClose={handleModalClose}
-        onSuccess={handleModalSuccess}
-      />
+      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatTile label="Practices" value={stats?.practices ?? '—'} />
+        <StatTile label="Providers" value={stats?.providers ?? '—'} />
+        <StatTile
+          label="With a fax"
+          value={stats?.withFax ?? '—'}
+          hint={stats ? `${stats.practices - stats.withFax} need research` : undefined}
+        />
+        <StatTile
+          label="Est. referrals / month"
+          value={stats ? `${stats.estimate.low}–${stats.estimate.high}` : '—'}
+          hint="across all practices"
+        />
+      </div>
+
+      <div className="mt-6 border-b border-gray-200">
+        <nav className="-mb-px flex gap-6" aria-label="Tabs">
+          {(
+            [
+              ['practices', 'Practices', stats?.practices],
+              ['providers', 'Providers', stats?.providers],
+            ] as [Tab, string, number | undefined][]
+          ).map(([key, label, count]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={classNames(
+                tab === key
+                  ? 'border-green-600 text-green-700'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700',
+                'whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium',
+              )}
+            >
+              {label}
+              {count !== undefined && (
+                <span
+                  className={classNames(
+                    tab === key ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600',
+                    'ml-2 rounded-full px-2 py-0.5 text-xs',
+                  )}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      <div className="mt-4">
+        {tab === 'practices' ? <PracticesTab clinics={clinics ?? []} /> : <ProvidersTab />}
+      </div>
     </MainLayout>
   );
-} 
+}

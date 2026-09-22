@@ -8,7 +8,6 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import MainLayout from '@/components/layout/MainLayout';
 import ClinicFormFields, { clinicToForm, emptyClinicForm, type ClinicFormValues } from '@/components/clinic/ClinicFormFields';
-import SetupSteps from '@/components/setup/SetupSteps';
 import { PlusIcon, PencilIcon, TrashIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { Dialog } from '@headlessui/react';
 import type { MarketCountyView } from '@/lib/geo/market-view';
@@ -123,58 +122,31 @@ export default function ClinicLocationsPage() {
     }
   };
 
-  const hasClinics = (clinicLocations?.length ?? 0) > 0;
-  const needsMarket = clinicLocations?.find((clinic) => (clinic.marketCounties?.length ?? 0) === 0);
-  const readyToPull = clinicLocations?.find((clinic) => (clinic.marketCounties?.length ?? 0) > 0);
-  const setupStep = !hasClinics ? 1 : needsMarket ? 2 : 3;
-
   return (
     <MainLayout>
       <div className="mb-6">
-        <p className="text-sm font-medium text-indigo-600">Get started</p>
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Our Clinics</h1>
             <p className="mt-2 max-w-2xl text-sm text-gray-700">
-              Step 1. Add a clinic site: name, address, phone, and fax. Then pick the counties that clinic serves.
+              Your clinic sites. Each one keeps its own referral list, built from the practices under Referral Sources.
             </p>
           </div>
           <button
             onClick={() => openModal()}
-            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            className="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
           >
             <PlusIcon className="-ml-0.5 mr-1.5 h-5 w-5" aria-hidden="true" />
             Add clinic
           </button>
         </div>
-        <div className="mt-6">
-          <SetupSteps current={setupStep} />
-        </div>
-        {needsMarket && (
-          <p className="mt-4 text-sm text-gray-700">
-            Next:{' '}
-            <Link href={`/clinic-locations/${needsMarket.id}#market`} className="font-medium text-indigo-600 hover:text-indigo-500">
-              pick counties for {needsMarket.name}
-            </Link>
-            .
-          </p>
-        )}
-        {!needsMarket && readyToPull && (
-          <p className="mt-4 text-sm text-gray-700">
-            Next:{' '}
-            <Link href={`/clinic-locations/${readyToPull.id}#sources`} className="font-medium text-indigo-600 hover:text-indigo-500">
-              pull referral sources for {readyToPull.name}
-            </Link>
-            .
-          </p>
-        )}
       </div>
 
       {isLoading ? (
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
         </div>
-      ) : !hasClinics ? (
+      ) : (clinicLocations?.length ?? 0) === 0 ? (
         <div className="bg-white shadow rounded-lg px-6 py-12 text-center">
           <MapPinIcon className="mx-auto h-8 w-8 text-indigo-600" aria-hidden="true" />
           <h2 className="mt-3 text-base font-semibold text-gray-900">Add a clinic</h2>

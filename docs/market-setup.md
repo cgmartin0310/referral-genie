@@ -48,7 +48,7 @@ Inbound referrals, attribution, and fax campaigns are out of scope.
 ## Click path
 
 1. Sign in. Home is a dashboard of your clinics.
-2. **Our Clinics** → add a clinic. Under **Market & data**, pick its counties, then pull referral sources, enrich with Google Places, and research missing details. That fills the shared catalog.
-3. **Referral Sources** lists the catalog as practices (with providers nested, fax, provider count, and a referral estimate) and as providers (with the own-fax switch). Check practices and **Add to clinic**. "Add practice" covers a school, program, or office without an NPI, and links to Google keyword search.
-4. Back on the clinic, **Referral list** shows what was added, with the estimate rolled up.
-5. **Campaigns** → new campaign → choose the clinic. The audience is that clinic's list, previewed as pages to send: everyone at a practice who shares a fax machine gets one page, a provider on their own line gets their own, and anyone unreachable is listed rather than dropped.
+2. **Referral Sources** → *Pull referral sources for a county*. Pick a county; pull pediatricians and primary care physicians from NPI, enrich with Google Places, research websites. This builds the catalog and has nothing to do with any clinic.
+3. **Our Clinics** → add a clinic (name, address, fax). Its *Market* tab is only a label for the counties it serves.
+4. Back on **Referral Sources**, check practices and **Add to clinic**. The clinic's **Referral list** shows what was added, with the estimate rolled up.
+5. **Campaigns** → new campaign → choose the clinic. The audience is its referral list, previewed as pages to send.

@@ -59,11 +59,11 @@ function GettingStarted() {
       <h2 className="mt-1 text-lg font-semibold text-gray-900">Add your first clinic</h2>
       <ol className="mt-4 space-y-2 text-sm text-gray-700">
         <li>
-          <span className="font-semibold text-[#0B2A5B]">1.</span> Add a clinic and the counties it serves.
+          <span className="font-semibold text-[#0B2A5B]">1.</span> Under Referral Sources, pull a county: pediatricians
+          and primary care physicians from NPI, enriched with Google Places and website research.
         </li>
         <li>
-          <span className="font-semibold text-[#0B2A5B]">2.</span> Pull pediatric and primary care practices from NPI and
-          enrich them.
+          <span className="font-semibold text-[#0B2A5B]">2.</span> Add your clinic.
         </li>
         <li>
           <span className="font-semibold text-[#0B2A5B]">3.</span> Add the practices that refer to that clinic to its list,
@@ -191,7 +191,7 @@ export default function DashboardPage() {
             {[
               { href: '/referral-sources', icon: UserGroupIcon, label: 'Browse referral sources', hint: 'Add practices to a clinic’s list' },
               { href: '/campaigns/new', icon: MegaphoneIcon, label: 'New campaign', hint: 'Fax a clinic’s referral list' },
-              { href: '/clinic-locations', icon: PlusIcon, label: 'Add a clinic', hint: 'Then pick its counties' },
+              { href: '/clinic-locations', icon: PlusIcon, label: 'Add a clinic', hint: 'Then build its referral list' },
             ].map((action) => (
               <Link
                 key={action.href}

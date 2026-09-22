@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -10,10 +10,7 @@ import { Dialog } from '@headlessui/react';
 import { ArrowLeftIcon, PlusIcon, PrinterIcon, UsersIcon } from '@heroicons/react/24/outline';
 import MainLayout from '@/components/layout/MainLayout';
 import ClinicFormFields, { clinicToForm, type ClinicFormValues } from '@/components/clinic/ClinicFormFields';
-import SetupSteps from '@/components/setup/SetupSteps';
 import CountyMarketPicker from '@/components/setup/CountyMarketPicker';
-import PullEnrichPanel from '@/components/setup/PullEnrichPanel';
-import ResearchPanel from '@/components/setup/ResearchPanel';
 import type { MarketCountyView } from '@/lib/geo/market-view';
 import type { PracticeView } from '@/lib/practices/present';
 
@@ -35,7 +32,7 @@ interface ReferralListResponse {
   totals: { practices: number; providers: number; estimate: { low: number; high: number } };
 }
 
-type Tab = 'list' | 'data';
+type Tab = 'list' | 'market';
 
 const SHORT: Record<string, string> = {
   pediatrics: 'Pediatrics',
@@ -120,9 +117,8 @@ function ReferralList({ clinic }: { clinic: ClinicLocation }) {
           <UsersIcon className="mx-auto h-10 w-10 text-gray-300" />
           <p className="mt-3 text-sm font-medium text-gray-900">No practices on this list yet</p>
           <p className="mt-1 text-sm text-gray-500">
-            {clinic.marketCounties.length === 0
-              ? 'Pick the counties this clinic serves under Market & data, pull referral sources, then add practices here.'
-              : 'Open Referral Sources, pick the practices that refer to this clinic, and add them.'}
+            Practices come from the catalog. Pull a county under Referral Sources if it is empty, then pick the
+            practices that refer to this clinic and add them here.
           </p>
           <Link
             href={addHref}
@@ -195,8 +191,6 @@ export default function ClinicPage() {
   const [tab, setTab] = useState<Tab>('list');
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState<ClinicFormValues | null>(null);
-  const [pullProgress, setPullProgress] = useState({ anyPastNppes: false, anyCompleted: false });
-  const [researchDone, setResearchDone] = useState(false);
 
   const { data: clinic, isLoading, isError } = useQuery<ClinicLocation>({
     queryKey: ['clinic-location', id],
@@ -224,13 +218,6 @@ export default function ClinicPage() {
   });
 
   const counties = clinic?.marketCounties ?? [];
-  const step = counties.length === 0 ? 2 : researchDone ? 6 : pullProgress.anyCompleted ? 5 : pullProgress.anyPastNppes ? 4 : 3;
-
-  // A clinic with no counties yet has nothing to list; open the setup tab.
-  const hasCounties = counties.length > 0;
-  useEffect(() => {
-    if (clinic && !hasCounties) setTab('data');
-  }, [clinic, hasCounties]);
 
   const totals = list?.totals;
 
@@ -278,7 +265,7 @@ export default function ClinicPage() {
             <StatTile
               label="Market"
               value={counties.length === 0 ? 'Not set' : `${counties.length} count${counties.length === 1 ? 'y' : 'ies'}`}
-              hint={counties.map((county) => county.name).join(', ') || 'Pick counties under Market & data'}
+              hint={counties.map((county) => county.name).join(', ') || 'Counties this clinic serves'}
             />
           </div>
 
@@ -287,7 +274,7 @@ export default function ClinicPage() {
               {(
                 [
                   ['list', 'Referral list', totals?.practices],
-                  ['data', 'Market & data', undefined],
+                  ['market', 'Market', undefined],
                 ] as [Tab, string, number | undefined][]
               ).map(([key, label, count]) => (
                 <button
@@ -323,10 +310,13 @@ export default function ClinicPage() {
             ) : (
               <div className="max-w-3xl space-y-6">
                 <p className="text-sm text-gray-600">
-                  Pick the counties this clinic serves, pull pediatric and primary care sources from NPI, enrich them
-                  with Google Places, then research missing contact details. Results land in Referral Sources.
+                  The counties this clinic serves. This is a label for the clinic; it does not pull any data. Referral
+                  sources are pulled by county under{' '}
+                  <Link href="/referral-sources" className="font-medium text-green-700 hover:text-green-600">
+                    Referral Sources
+                  </Link>
+                  .
                 </p>
-                <SetupSteps current={step} />
                 <CountyMarketPicker
                   clinicId={clinic.id}
                   saved={counties}
@@ -337,14 +327,6 @@ export default function ClinicPage() {
                     queryClient.invalidateQueries({ queryKey: ['clinic-locations'] });
                   }}
                 />
-                <PullEnrichPanel counties={counties} onProgress={setPullProgress} />
-                {counties.length > 0 && (
-                  <ResearchPanel
-                    clinicId={clinic.id}
-                    refreshToken={`${pullProgress.anyPastNppes}-${pullProgress.anyCompleted}`}
-                    onProgress={({ completed }) => setResearchDone(completed)}
-                  />
-                )}
               </div>
             )}
           </div>

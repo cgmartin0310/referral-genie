@@ -24,7 +24,7 @@ Re-runs upsert on `(organizationId, npiNumber)`. Fields a person edited in the C
 
 ## Taxonomy allow-list
 
-Same nine NUCC codes as the NPPES spike. A row is kept only when the **primary** taxonomy is on this list.
+Fifteen NUCC codes: the nine physician codes from the NPPES spike plus six clinic/center organization codes. A row is kept only when the **primary** taxonomy is on this list. Organization rows are never counted as providers; they name the practice and carry its fax.
 
 | Code | Display name |
 |------|----------------|
@@ -37,6 +37,12 @@ Same nine NUCC codes as the NPPES spike. A row is kept only when the **primary**
 | 208000000X | Pediatrics |
 | 2080A0000X | Pediatrics, Adolescent Medicine |
 | 2080P0006X | Pediatrics, Developmental - Behavioral Pediatrics |
+| 261QP2300X | Clinic/Center, Primary Care |
+| 261QR1300X | Clinic/Center, Rural Health |
+| 261QF0400X | Clinic/Center, FQHC |
+| 261QP0905X | Clinic/Center, Public Health, State or Local |
+| 261QP0904X | Clinic/Center, Public Health, Federal |
+| 261QM1300X | Clinic/Center, Multi-Specialty |
 
 ## Lenoir ZIP list
 

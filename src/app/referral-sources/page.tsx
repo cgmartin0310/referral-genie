@@ -55,6 +55,7 @@ const SHORT: Record<string, string> = {
   pcp_family_medicine: 'Family medicine',
   pcp_internal_medicine: 'Internal medicine',
   pcp_general_practice: 'General practice',
+  clinic_center: 'Clinic / health center',
 };
 
 function estimateText(estimate: PracticeView['estimate']): string {

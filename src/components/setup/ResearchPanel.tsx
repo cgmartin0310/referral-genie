@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
+import { researchCountMessage } from '@/lib/research/status-message';
 
 interface ResearchSummary {
   total: number;
@@ -26,57 +27,90 @@ interface ResearchState {
   run: ResearchRun | null;
   sourceCount: number;
   withWebsite: number;
+  countsKnown: boolean;
   loading: boolean;
   working: boolean;
+  loadError: string | null;
+  actionError: string | null;
+  configError: string | null;
+  runError: string | null;
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data;
+    if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' && data.error.trim()) {
+      return data.error;
+    }
+  }
+  return fallback;
 }
 
 export default function ResearchPanel({
   clinicId,
   sourceId,
+  refreshToken = '',
   onProgress,
 }: {
   clinicId?: string;
   sourceId?: string;
+  refreshToken?: string | number;
   onProgress?: (progress: { completed: boolean }) => void;
 }) {
   const [state, setState] = useState<ResearchState>({
     run: null,
     sourceCount: 0,
     withWebsite: 0,
+    countsKnown: false,
     loading: true,
     working: false,
+    loadError: null,
+    actionError: null,
+    configError: null,
+    runError: null,
   });
 
   useEffect(() => {
     let cancelled = false;
     const params = sourceId ? { sourceId } : { clinicId };
+    setState((current) => ({ ...current, loading: true, loadError: null }));
     axios
       .get('/api/research', { params })
       .then(({ data }) => {
         if (cancelled) return;
-        setState({
-          run: data.latestRun,
-          sourceCount: data.sourceCount ?? 0,
-          withWebsite: data.withWebsite ?? 0,
+        const countsKnown = typeof data.sourceCount === 'number' && typeof data.withWebsite === 'number';
+        setState((current) => ({
+          ...current,
+          run: data.latestRun ?? null,
+          sourceCount: countsKnown ? data.sourceCount : current.sourceCount,
+          withWebsite: countsKnown ? data.withWebsite : current.withWebsite,
+          countsKnown: countsKnown || current.countsKnown,
           loading: false,
-          working: false,
-        });
+          loadError: countsKnown ? null : 'Research status did not include a source count.',
+          configError: typeof data.configError === 'string' ? data.configError : null,
+          runError: typeof data.runError === 'string' ? data.runError : null,
+        }));
         onProgress?.({ completed: data.latestRun?.status === 'COMPLETED' });
       })
-      .catch(() => {
-        if (!cancelled) {
-          toast.error('Failed to load research');
-          setState((current) => ({ ...current, loading: false }));
-        }
+      .catch((error) => {
+        if (cancelled) return;
+        const message = errorMessage(error, 'Failed to load research');
+        toast.error(message);
+        setState((current) => ({
+          ...current,
+          loading: false,
+          loadError: message,
+        }));
       });
     return () => {
       cancelled = true;
     };
+    // onProgress is a parent callback; clinic, source, and pull progress decide when to reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clinicId, sourceId]);
+  }, [clinicId, sourceId, refreshToken]);
 
   const runResearch = async () => {
-    setState((current) => ({ ...current, working: true }));
+    setState((current) => ({ ...current, working: true, actionError: null }));
     const resume = state.run && state.run.status !== 'COMPLETED';
     let runId = resume ? state.run?.id : undefined;
     let mode: 'continue' | 'refresh' = resume ? 'continue' : 'refresh';
@@ -89,7 +123,7 @@ export default function ResearchPanel({
           mode,
         });
         const run = data.run as ResearchRun;
-        setState((current) => ({ ...current, run, working: true }));
+        setState((current) => ({ ...current, run, working: true, actionError: null }));
         onProgress?.({ completed: run.status === 'COMPLETED' });
         runId = run.id;
         mode = 'continue';
@@ -107,10 +141,9 @@ export default function ResearchPanel({
         }
       }
     } catch (error) {
-      const message = axios.isAxiosError(error)
-        ? error.response?.data?.error || 'Research failed'
-        : 'Research failed';
+      const message = errorMessage(error, 'Research failed');
       toast.error(message);
+      setState((current) => ({ ...current, actionError: message }));
     } finally {
       setState((current) => ({ ...current, working: false }));
     }
@@ -125,6 +158,15 @@ export default function ResearchPanel({
         : 'Continue research';
 
   const summary = state.run?.summary;
+  const statusText = researchCountMessage({
+    loading: state.loading,
+    countsKnown: state.countsKnown,
+    loadError: state.loadError,
+    sourceCount: state.sourceCount,
+    withWebsite: state.withWebsite,
+    singleSource: Boolean(sourceId),
+  });
+  const canResearch = state.countsKnown && state.sourceCount > 0 && !state.loading && !state.working;
 
   return (
     <section id="research" className="bg-white shadow rounded-lg p-6">
@@ -134,15 +176,19 @@ export default function ResearchPanel({
         referral email, referral form, and channel only when the page states them. Blank stays blank when
         the page does not.
       </p>
-      <p className="mt-2 text-sm text-gray-600">
-        {state.loading
-          ? 'Loading research status…'
-          : `${state.withWebsite} of ${state.sourceCount} referral sources have a public website. Sources without one are skipped.`}
-      </p>
+      <p className="mt-2 text-sm text-gray-600">{statusText}</p>
+      {state.countsKnown && state.loadError && (
+        <p className="mt-2 text-sm text-red-700">{state.loadError}</p>
+      )}
+      {state.runError && <p className="mt-2 text-sm text-red-700">{state.runError}</p>}
+      {state.configError && state.run?.error !== state.configError && (
+        <p className="mt-2 text-sm text-red-700">{state.configError}</p>
+      )}
+      {state.actionError && <p className="mt-2 text-sm text-red-700">{state.actionError}</p>}
       <button
         type="button"
         onClick={runResearch}
-        disabled={state.working || state.loading || state.sourceCount === 0}
+        disabled={!canResearch}
         className="mt-4 inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:bg-indigo-300"
       >
         {label}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { countiesInState, getUsCounty, listStateOptions, seedCountyIdForFips } from './us-counties';
+import { countiesInState, getUsCounty, listStateOptions, normalizeCountyFips, seedCountyIdForFips } from './us-counties';
 import { resolveMarketFips } from './market';
 
 describe('US county catalog', () => {
@@ -19,7 +19,10 @@ describe('US county catalog', () => {
 
   it('marks ZIP-backed counties ready to pull and leaves the rest saved-only', () => {
     assert.equal(seedCountyIdForFips('37107'), 'lenoir-nc');
+    assert.equal(seedCountyIdForFips(' 37-107 '), 'lenoir-nc');
+    assert.equal(normalizeCountyFips('37107 '), '37107');
     assert.equal(seedCountyIdForFips('06037'), null);
+    assert.equal(seedCountyIdForFips('lenoir-nc'), null);
   });
 
   it('lists North Carolina by name', () => {

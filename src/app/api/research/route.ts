@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 import { practiceUrl } from '@/lib/research/html';
+import { readResearchLlmConfig, researchConfigMessage } from '@/lib/research/llm';
 import {
   advanceResearchRun,
   assertSource,
@@ -11,6 +12,7 @@ import {
   presentResearchRun,
   sourceIdsForClinic,
   sourceScope,
+  type ResearchRunView,
 } from '@/lib/research/advance';
 
 export const dynamic = 'force-dynamic';
@@ -25,10 +27,20 @@ export async function GET(request: NextRequest) {
     const scopeKey = sourceId ? sourceScope(sourceId) : clinicScope(clinicId as string);
     if (sourceId) await assertSource(sourceId);
     const counts = clinicId ? await clinicCounts(clinicId) : await sourceCounts(sourceId as string);
-    const latest = await latestResearchRun(scopeKey);
+    let latestRun: ResearchRunView | null = null;
+    let runError: string | null = null;
+    try {
+      const latest = await latestResearchRun(scopeKey);
+      latestRun = latest ? presentResearchRun(latest) : null;
+    } catch (error) {
+      console.error('Error loading research run:', error);
+      runError = error instanceof Error ? error.message : 'Failed to load the latest research run';
+    }
     return NextResponse.json({
       ...counts,
-      latestRun: latest ? presentResearchRun(latest) : null,
+      latestRun,
+      runError,
+      configError: readResearchLlmConfig() ? null : researchConfigMessage(),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load research';

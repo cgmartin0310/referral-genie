@@ -3,6 +3,7 @@ import prisma from '../prisma';
 import { DEFAULT_ORGANIZATION_ID } from '../org';
 import { parseProvenance, researchProvenance } from '../provenance';
 import { acceptProposals } from './accept';
+import { researchCountyFips, seedIdsForMarket, sourceIdsMatchingFips } from './clinic-sources';
 import { fetchPracticePages, practiceUrl } from './html';
 import { createResearchJudge, ResearchConfigError } from './llm';
 
@@ -348,14 +349,29 @@ export async function sourceIdsForClinic(clinicId: string): Promise<string[]> {
     include: { marketCounties: true },
   });
   if (!clinic) throw new Error('Clinic not found');
-  const fips = clinic.marketCounties.map((county) => county.countyFips);
+  const marketFips = clinic.marketCounties.map((county) => county.countyFips);
+  const fips = await fipsWrittenForMarket(marketFips);
   if (fips.length === 0) return [];
+  // Compare normalized FIPS in memory. A market row, an ingest run, and a
+  // source can store "37107", "37-107", or the seed id for the same county.
   const sources = await prisma.referralSource.findMany({
-    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: { in: fips } },
-    select: { id: true },
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: { not: null } },
+    select: { id: true, countyFips: true },
     orderBy: { id: 'asc' },
   });
-  return sources.map((source) => source.id);
+  return sourceIdsMatchingFips(sources, fips);
+}
+
+/** Market FIPS plus the FIPS the pull actually stored for those seed counties. */
+async function fipsWrittenForMarket(marketFips: string[]): Promise<string[]> {
+  const seedIds = seedIdsForMarket(marketFips);
+  const runs = seedIds.length === 0
+    ? []
+    : await prisma.countyIngestRun.findMany({
+        where: { organizationId: DEFAULT_ORGANIZATION_ID, countyId: { in: seedIds } },
+        select: { countyFips: true },
+      });
+  return researchCountyFips([...marketFips, ...runs.map((run) => run.countyFips)]);
 }
 
 export async function assertSource(sourceId: string): Promise<void> {

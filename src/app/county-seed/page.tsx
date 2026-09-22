@@ -130,6 +130,7 @@ export default function PullSourcesPage() {
               <ResearchPanel
                 key={`${clinic.id}-research`}
                 clinicId={clinic.id}
+                refreshToken={`${pullProgress.anyPastNppes}-${pullProgress.anyCompleted}`}
                 onProgress={({ completed }) => setResearchDone(completed)}
               />
             )}

@@ -154,7 +154,11 @@ export default function ClinicSetupPage() {
 
           <PullEnrichPanel counties={counties} onProgress={setPullProgress} />
           {counties.length > 0 && (
-            <ResearchPanel clinicId={clinic.id} onProgress={({ completed }) => setResearchDone(completed)} />
+            <ResearchPanel
+              clinicId={clinic.id}
+              refreshToken={`${pullProgress.anyPastNppes}-${pullProgress.anyCompleted}`}
+              onProgress={({ completed }) => setResearchDone(completed)}
+            />
           )}
         </div>
       )}

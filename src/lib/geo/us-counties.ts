@@ -97,7 +97,20 @@ export function stateName(code: string): string {
   return STATE_NAMES[code] ?? code;
 }
 
+/**
+ * Census county FIPS is 5 digits (state + county). Market rows, ingest runs,
+ * and referral sources can pick up spaces or punctuation; compare the digits.
+ */
+export function normalizeCountyFips(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const digits = value.replace(/\D/g, '');
+  if (!/^\d{1,5}$/.test(digits)) return null;
+  return digits.padStart(5, '0');
+}
+
 /** County id for the existing NPI pull, when a practice-location ZIP list exists. */
 export function seedCountyIdForFips(fips: string): string | null {
-  return SEED_ID_BY_FIPS.get(fips) ?? null;
+  const normalized = normalizeCountyFips(fips);
+  if (!normalized) return null;
+  return SEED_ID_BY_FIPS.get(normalized) ?? null;
 }

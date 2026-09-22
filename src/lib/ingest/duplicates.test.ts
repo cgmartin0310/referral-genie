@@ -90,7 +90,71 @@ describe('source writes', () => {
     assert.equal(write.reviewCount, 8);
     assert.equal(write.businessStatus, 'OPERATIONAL');
     assert.equal(write.rating, undefined);
+    assert.equal(write.website, 'https://example.test');
+    assert.equal(write.contactPhone, '(252) 555-0100');
     assert.equal(write.placesMatchStatus, 'matched');
     assert.equal(write.provenance?.confidence, 0.95);
+  });
+
+  it('persists a Places website and leaves an edited website alone', () => {
+    const matched = buildPlacesWrite(
+      {
+        placeId: 'ChIJlenoir',
+        confidence: 0.91,
+        phone: null,
+        website: 'https://kinston.example/refer',
+        rating: null,
+        reviewCount: 3,
+        businessStatus: 'OPERATIONAL',
+        latitude: 35.26,
+        longitude: -77.58,
+        matchedBy: 'address',
+      },
+      null,
+    );
+    assert.equal(matched.website, 'https://kinston.example/refer');
+    assert.equal(matched.placesMatchStatus, 'matched');
+    assert.equal('website' in matched, true);
+
+    const edited = buildPlacesWrite(
+      {
+        placeId: 'ChIJlenoir',
+        confidence: 0.91,
+        phone: null,
+        website: 'https://kinston.example/refer',
+        rating: null,
+        reviewCount: 3,
+        businessStatus: 'OPERATIONAL',
+        latitude: 35.26,
+        longitude: -77.58,
+        matchedBy: 'address',
+      },
+      {
+        origin: 'user',
+        confidence: null,
+        overriddenBy: 'casey',
+        overriddenAt: '2026-09-21T00:00:00.000Z',
+        overriddenFields: ['website'],
+      },
+    );
+    assert.equal(edited.website, undefined);
+    assert.equal(edited.placesMatchStatus, 'matched');
+
+    const noSite = buildPlacesWrite(
+      {
+        placeId: 'ChIJlenoir',
+        confidence: 0.91,
+        phone: null,
+        website: null,
+        rating: null,
+        reviewCount: null,
+        businessStatus: 'OPERATIONAL',
+        latitude: null,
+        longitude: null,
+        matchedBy: 'address',
+      },
+      null,
+    );
+    assert.equal(noSite.website, undefined);
   });
 });

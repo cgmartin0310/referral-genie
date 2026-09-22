@@ -1,0 +1,5 @@
+NPI,Entity Type Code,Provider Organization Name (Legal Business Name),Provider Last Name (Legal Name),Provider First Name,Provider First Line Business Practice Location Address,Provider Second Line Business Practice Location Address,Provider Business Practice Location Address City Name,Provider Business Practice Location Address State Name,Provider Business Practice Location Address Postal Code,Provider Business Practice Location Address Telephone Number,Healthcare Provider Taxonomy Code_1,Healthcare Provider Primary Taxonomy Switch_1,Healthcare Provider Taxonomy Code_2,Healthcare Provider Primary Taxonomy Switch_2
+9000000101,1,,DOE,JANE,100 MAIN ST,,WINSTON SALEM,NC,27103,3365550101,207Q00000X,Y,,
+9000000101,1,,DOE,JANE,100 MAIN ST,,WINSTON SALEM,NC,27103,3365550101,207Q00000X,Y,,
+9000000102,1,,MOLAR,TOOTH,1 DENTAL WAY,,WINSTON SALEM,NC,27103,3365550199,122300000X,Y,,
+9000000103,2,"HELPING HANDS, EI",,,,,,,,,208000000X,Y,,

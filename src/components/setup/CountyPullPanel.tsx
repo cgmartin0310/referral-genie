@@ -17,6 +17,13 @@ interface CountyOption {
   pullReady: boolean;
   seedCountyId: string | null;
   zipCount: number;
+  npiRecords: number;
+}
+
+interface NpiFileStatus {
+  loaded: boolean;
+  records: number;
+  latest: { fileName: string; status: string; finishedAt: string | null; rowsKept: number } | null;
 }
 
 /**
@@ -29,6 +36,10 @@ export default function CountyPullPanel() {
   const [stateCode, setStateCode] = useState('');
   const [fips, setFips] = useState('');
 
+  const { data: npiFile } = useQuery({
+    queryKey: ['npi-file'],
+    queryFn: async () => (await axios.get<NpiFileStatus>('/api/npi-file')).data,
+  });
   const { data: states } = useQuery({
     queryKey: ['counties', 'states'],
     queryFn: async () => (await axios.get<{ states: StateOption[] }>('/api/counties')).data.states,
@@ -84,16 +95,29 @@ export default function CountyPullPanel() {
             {(counties ?? []).map((row) => (
               <option key={row.fips} value={row.fips} disabled={!row.pullReady}>
                 {row.name}
-                {row.zipCount > 0 ? ` · ${row.zipCount} ZIP${row.zipCount === 1 ? '' : 's'}` : ' · no ZIPs on file'}
+                {npiFile?.loaded
+                  ? ` · ${row.npiRecords.toLocaleString()} on NPI file`
+                  : row.zipCount > 0
+                    ? ` · ${row.zipCount} ZIP${row.zipCount === 1 ? '' : 's'}`
+                    : ' · no ZIPs on file'}
               </option>
             ))}
           </select>
         </div>
       </div>
-      <p className="text-xs text-gray-500">
-        NPI has no county field, so a county is pulled by the ZIP codes that lie mostly inside it. Practices in a ZIP
-        that crosses the county line are kept and flagged.
-      </p>
+      {npiFile?.loaded ? (
+        <p className="text-xs text-gray-500">
+          Source: the NPI file{npiFile.latest ? ` (${npiFile.latest.fileName.replace(/NPPES_Data_Dissemination_|_V2\.zip/g, '').replace('_', ' ')})` : ''}
+          , {npiFile.records.toLocaleString()} providers and practices mapped to counties by practice ZIP. Complete and
+          immediate; no API limits.
+        </p>
+      ) : (
+        <p className="text-xs text-amber-700">
+          The NPI file is not loaded, so pulls query the NPPES API ZIP by ZIP, which is slower, capped at 1,200 rows
+          per ZIP, and cannot see practices registered under a PO Box ZIP. Load it with{' '}
+          <code className="rounded bg-amber-50 px-1">npm run npi:load -- --states NC</code> on the server.
+        </p>
+      )}
 
       {pullable && (
         <CountyPullRunner

@@ -95,7 +95,7 @@ export function practiceKeyFor(row: PracticeSourceRow, clusterKey: string | null
   return (
     clusterKey
     ?? placeClusterKey(row.placeId)
-    ?? addressClusterKey(row.address, row.zipCode)
+    ?? addressClusterKey(row.address, row.zipCode, row.city)
     ?? `npi:${row.npiNumber ?? row.id}`
   );
 }
@@ -131,6 +131,7 @@ export function buildPractices(rows: PracticeSourceRow[]): BuiltPractice[] {
     placeId: row.placeId,
     address: row.address,
     zipCode: row.zipCode,
+    city: row.city,
   }));
   const assignments = new Map(
     assignDuplicateClusters(clusterInputs).map((row) => [row.id, row.duplicateClusterKey]),

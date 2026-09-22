@@ -7,6 +7,8 @@ export interface ClusterInput {
   placeId: string | null;
   address: string | null;
   zipCode: string | null;
+  /** Town. One office registers under its street ZIP and its PO Box ZIP; the town is the same. */
+  city?: string | null;
 }
 
 export interface ClusterAssignment {
@@ -28,24 +30,32 @@ export function phoneClusterKey(phone: string | null): string | null {
   return `phone:${last10}`;
 }
 
-export function addressClusterKey(address: string | null, zip: string | null): string | null {
+/** Town or, without one, the 5-digit ZIP. */
+export function placeToken(city: string | null | undefined, zip: string | null | undefined): string | null {
+  const town = (city ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (town) return town;
   const zip5 = digitsOnly(zip ?? '').slice(0, 5);
-  if (zip5.length !== 5 || !address) return null;
+  return zip5.length === 5 ? zip5 : null;
+}
+
+export function addressClusterKey(address: string | null, zip: string | null, city?: string | null): string | null {
+  const place = placeToken(city, zip);
+  if (!place || !address) return null;
   const { street, unit } = normalizeStreet(address);
   if (street.replace(/ /g, '').length < 3) return null;
-  return `addr:${street}${unit ? `|${unit}` : ''}|${zip5}`;
+  return `addr:${street}${unit ? `|${unit}` : ''}|${place}`;
 }
 
 /**
  * Street and ZIP without the tenant space. Two rows at one street address that
  * disagree only on suite or floor share this key.
  */
-export function baseAddressKey(address: string | null, zip: string | null): string | null {
-  const zip5 = digitsOnly(zip ?? '').slice(0, 5);
-  if (zip5.length !== 5 || !address) return null;
+export function baseAddressKey(address: string | null, zip: string | null, city?: string | null): string | null {
+  const place = placeToken(city, zip);
+  if (!place || !address) return null;
   const { street } = normalizeStreet(address);
   if (street.replace(/ /g, '').length < 3) return null;
-  return `base:${street}|${zip5}`;
+  return `base:${street}|${place}`;
 }
 
 export function placeClusterKey(placeId: string | null): string | null {
@@ -96,11 +106,11 @@ export function assignDuplicateClusters(rows: ClusterInput[]): ClusterAssignment
 
   for (const row of rows) {
     add(placeClusterKey(row.placeId), row.id);
-    add(addressClusterKey(row.address, row.zipCode), row.id);
+    add(addressClusterKey(row.address, row.zipCode, row.city), row.id);
     // Corroborated merge: one street address, one phone, differing suite or
     // floor. A hospital campus writes its address three ways; a multi-site
     // group shares a phone but not a street, so this never joins two sites.
-    const base = baseAddressKey(row.address, row.zipCode);
+    const base = baseAddressKey(row.address, row.zipCode, row.city);
     const phone = phoneClusterKey(row.phone);
     if (base && phone) add(`${base}+${phone}`, row.id);
   }

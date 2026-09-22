@@ -3,8 +3,10 @@ import prisma from '../prisma';
 import { DEFAULT_ORGANIZATION_ID } from '../org';
 import { getCounty, type CountyMarket } from '../nppes/counties';
 import { classifyHit } from '../nppes/normalize';
+import type { RawHit } from '../nppes/types';
 import { fetchNppesPage } from '../nppes/api';
 import { advanceScanCursor, searchDescriptionAt } from './scan';
+import { hitFromNpiRecord, withRecordZips, FILE_SLICE } from './npi-file';
 import { googlePlacesClient, matchPractice, PlacesConfigError, PlacesQuotaError } from '../places/match';
 import { assignDuplicateClusters } from './duplicates';
 import { buildPractices, type PracticeSourceRow } from '../practices/build';
@@ -36,6 +38,7 @@ export interface CountyRunView {
   finishedAt: string | null;
   updatedAt: string;
   summary: PublicSummary;
+  source: 'file' | 'api';
 }
 
 export interface AdvanceResult {
@@ -74,6 +77,7 @@ export function presentRun(run: CountyIngestRun): CountyRunView {
     finishedAt: run.finishedAt ? run.finishedAt.toISOString() : null,
     updatedAt: run.updatedAt.toISOString(),
     summary: publicSummary(parseSummary(run.summary)),
+    source: parseCursor(run.cursor).source,
   };
 }
 
@@ -133,6 +137,83 @@ function blankCategory(write: SourceWrite, ids: Set<string>) {
   if (write.categoryId && !ids.has(write.categoryId)) write.categoryId = null;
 }
 
+/** Classify one NPPES record for the county and upsert it as a referral source. */
+async function keepHit(
+  hit: RawHit,
+  county: CountyMarket,
+  summary: IngestSummary,
+  ids: Set<string>,
+): Promise<void> {
+  const decision = classifyHit(hit, county);
+  if (decision.action === 'drop') {
+    if (decision.reason === 'not_allow_list') summary.droppedNotAllowList += 1;
+    if (decision.reason === 'secondary_only') summary.excludedSecondaryOnly += 1;
+    return;
+  }
+
+  const kept = decision.provider;
+  const npiNumber = normalizeNpiNumber(kept.npi);
+  if (!npiNumber) return;
+  const existing = await prisma.referralSource.findFirst({
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, npiNumber },
+  });
+  const built = buildNppesUpsert(kept, county, DEFAULT_ORGANIZATION_ID, existing?.provenance ?? null);
+  blankCategory(built.create, ids);
+  blankCategory(built.update, ids);
+
+  if (!existing) {
+    await prisma.referralSource.create({
+      data: asWrite(built.create) as Prisma.ReferralSourceUncheckedCreateInput,
+    });
+  } else {
+    await prisma.referralSource.update({
+      where: { id: existing.id },
+      data: asWrite(built.update),
+    });
+  }
+
+  if (!summary.seenNpis.includes(kept.npi)) {
+    summary.seenNpis.push(kept.npi);
+    summary.npisUpserted += 1;
+    if (existing) summary.npisUpdated += 1;
+    else summary.npisCreated += 1;
+    if (kept.quarantined) summary.quarantined += 1;
+  }
+}
+
+/**
+ * NPI stage from the loaded NPI file: every record whose practice ZIP maps to
+ * this county, one slice per call. Complete and immediate; no API, no cap.
+ */
+async function stepNppesFile(
+  run: CountyIngestRun,
+  summary: IngestSummary,
+  cursor: IngestCursor,
+  county: CountyMarket,
+): Promise<CountyIngestRun> {
+  const records = await prisma.npiRecord.findMany({
+    where: { countyFips: county.fips },
+    orderBy: { npi: 'asc' },
+    skip: cursor.skip,
+    take: FILE_SLICE,
+  });
+  if (records.length === 0) {
+    cursor.phase = 'group';
+    return saveRun(run.id, { status: 'RUNNING', phase: 'group', cursor, summary, clearLock: true });
+  }
+
+  summary.nppesQueries += 1;
+  const ids = await categoryIds();
+  const scoped = withRecordZips(county, records);
+  for (const record of records) {
+    await keepHit(hitFromNpiRecord(record), scoped, summary, ids);
+  }
+
+  cursor.skip += FILE_SLICE;
+  if (records.length < FILE_SLICE) cursor.phase = 'group';
+  return saveRun(run.id, { status: 'RUNNING', phase: cursor.phase, cursor, summary, clearLock: true });
+}
+
 async function stepNppes(
   run: CountyIngestRun,
   summary: IngestSummary,
@@ -162,42 +243,7 @@ async function stepNppes(
 
   const ids = await categoryIds();
   for (const hit of page.results) {
-    const decision = classifyHit(hit, county);
-    if (decision.action === 'drop') {
-      if (decision.reason === 'not_allow_list') summary.droppedNotAllowList += 1;
-      if (decision.reason === 'secondary_only') summary.excludedSecondaryOnly += 1;
-      continue;
-    }
-
-    const kept = decision.provider;
-
-    const npiNumber = normalizeNpiNumber(kept.npi);
-    if (!npiNumber) continue;
-    const existing = await prisma.referralSource.findFirst({
-      where: { organizationId: DEFAULT_ORGANIZATION_ID, npiNumber },
-    });
-    const built = buildNppesUpsert(kept, county, DEFAULT_ORGANIZATION_ID, existing?.provenance ?? null);
-    blankCategory(built.create, ids);
-    blankCategory(built.update, ids);
-
-    if (!existing) {
-      await prisma.referralSource.create({
-        data: asWrite(built.create) as Prisma.ReferralSourceUncheckedCreateInput,
-      });
-    } else {
-      await prisma.referralSource.update({
-        where: { id: existing.id },
-        data: asWrite(built.update),
-      });
-    }
-
-    if (!summary.seenNpis.includes(kept.npi)) {
-      summary.seenNpis.push(kept.npi);
-      summary.npisUpserted += 1;
-      if (existing) summary.npisUpdated += 1;
-      else summary.npisCreated += 1;
-      if (kept.quarantined) summary.quarantined += 1;
-    }
+    await keepHit(hit, county, summary, ids);
   }
 
   const moved = advanceScanCursor(cursor, county.zips.length, { rawCount: page.rawCount });
@@ -513,6 +559,8 @@ export async function createOrResumeRun(input: {
     });
   }
 
+  // Read from the loaded NPI file when it covers this county; otherwise scan NPPES by ZIP.
+  const onFile = await prisma.npiRecord.count({ where: { countyFips: county.fips } });
   return prisma.countyIngestRun.create({
     data: {
       organizationId: DEFAULT_ORGANIZATION_ID,
@@ -521,8 +569,8 @@ export async function createOrResumeRun(input: {
       countyFips: county.fips,
       status: 'QUEUED',
       phase: 'nppes',
-      cursor: asJson(emptyCursor()),
-      summary: asJson(emptySummary(county.zips.length)),
+      cursor: asJson({ ...emptyCursor(), source: onFile > 0 ? 'file' : 'api' }),
+      summary: asJson(emptySummary(onFile > 0 ? Math.ceil(onFile / FILE_SLICE) : county.zips.length)),
     },
   });
 }
@@ -559,7 +607,9 @@ export async function advanceCountyIngest(runId: string, options?: { budgetMs?: 
     const county = getCounty(run.countyId);
 
     if (cursor.phase === 'nppes') {
-      run = await stepNppes(run, summary, cursor, county);
+      run = cursor.source === 'file'
+        ? await stepNppesFile(run, summary, cursor, county)
+        : await stepNppes(run, summary, cursor, county);
     } else if (cursor.phase === 'group') {
       run = await stepGroup(run, summary, cursor);
     } else if (cursor.phase === 'places') {

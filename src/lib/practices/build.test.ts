@@ -101,6 +101,18 @@ describe('practice formation', () => {
     assert.equal(bySize[1].providerCount, 1);
   });
 
+  it('keeps one office together across its street ZIP and its PO Box ZIP', () => {
+    // Kinston Pediatric Associates: some providers registered under 28501, the org under 28502.
+    const practices = buildPractices([
+      row({ id: 'a', address: '2509 N Queen St', zipCode: '28501', city: 'Kinston' }),
+      row({ id: 'b', address: '2509 North Queen St', zipCode: '28502', city: 'KINSTON' }),
+      row({ id: 'org', enumerationType: 'NPI-2', name: 'Kinston Pediatric Associates PA', npiNumber: '1871577197', address: '2509 North Queen St', zipCode: '28502', city: 'Kinston' }),
+    ]);
+    assert.equal(practices.length, 1);
+    assert.equal(practices[0].name, 'Kinston Pediatric Associates PA');
+    assert.equal(practices[0].providerCount, 2);
+  });
+
   it('uses a place id to join addresses a person typed differently', () => {
     const practices = buildPractices([
       row({ id: 'a', address: '100 Airport Rd', placeId: 'ChIJlenoir' }),

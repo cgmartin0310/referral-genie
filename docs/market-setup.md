@@ -14,11 +14,17 @@ After a clinic exists, open it and save one or more US counties as that clinic�
 
 Counties are stored on the clinic in `ClinicMarketCounty` (clinic, FIPS, county name, state). Removing a clinic removes its market rows.
 
-### 3. Pull referral sources (NPI) — partial
+### 3. Pull referral sources (NPI) — implemented
 
-Pediatricians and primary care physicians come from the NPPES Read API. The pull is the existing county ingest job, NPPES phase only, started from the clinic page or from **Pull sources** (`/county-seed`).
+Pediatricians, primary care physicians, nurse practitioners, physician assistants, and the clinic/center organizations that run primary care come from the **NPI dissemination file**, loaded into `NpiRecord` by `npm run npi:load`. The loader streams the monthly file from CMS (about 1.2 GB zipped), keeps rows whose primary taxonomy is a referral-source type, and maps each practice-location ZIP to a county: street ZIPs through the Census ZCTA crosswalk, PO Box ZIPs through the town that its street ZIPs landed in. Pulling a county then reads that table: complete and immediate, with no API cap and no missed records.
 
-NPPES has no county parameter, so a county is pulled by its practice-location ZIPs. Any US county can be pulled: its ZIP list comes from the Census 2020 ZCTA-to-county relationship file (`src/data/zcta-county.json`, rebuilt with `node scripts/build-zcta-county.mjs`), keeping ZCTAs with at least 15% of their land inside the county. Lenoir County, NC keeps a hand-checked list with place names. The national NPPES file is not downloaded.
+Run it on the server from a Render shell, restricting to the states you serve to keep the table small (`--states NC` is about 40,000 rows; the whole country is about 1.3 million):
+
+```bash
+npm run npi:load -- --states NC,SC,VA
+```
+
+Re-run it monthly when CMS publishes the next file. Until the file is loaded, pulls fall back to scanning the NPPES API ZIP by ZIP, which is slower, capped at 1,200 rows per ZIP, and cannot see practices registered under a PO Box ZIP.
 
 ### 4. Enrich with Google Places — partial
 

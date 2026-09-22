@@ -5,6 +5,8 @@ export interface IngestCursor {
   zipIndex: number;
   searchIndex: number;
   skip: number;
+  /** Where the NPI stage reads from: the loaded NPI file, or the NPPES API ZIP by ZIP. */
+  source: 'file' | 'api';
 }
 
 export interface IngestSummary {
@@ -28,7 +30,7 @@ export interface IngestSummary {
 }
 
 export function emptyCursor(): IngestCursor {
-  return { phase: 'nppes', zipIndex: 0, searchIndex: 0, skip: 0 };
+  return { phase: 'nppes', zipIndex: 0, searchIndex: 0, skip: 0, source: 'api' };
 }
 
 export function emptySummary(nppesQueryTotal: number): IngestSummary {
@@ -66,6 +68,7 @@ export function parseCursor(value: unknown): IngestCursor {
     zipIndex: numberField(row.zipIndex),
     searchIndex: numberField(row.searchIndex),
     skip: numberField(row.skip),
+    source: row.source === 'file' ? 'file' : 'api',
   };
 }
 

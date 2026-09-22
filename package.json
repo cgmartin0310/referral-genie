@@ -7,9 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsx --test src/lib/nppes/*.test.ts src/lib/places/*.test.ts src/lib/ingest/*.test.ts src/lib/geo/*.test.ts src/lib/research/*.test.ts src/lib/practices/*.test.ts src/lib/campaigns/*.test.ts src/lib/npi.test.ts src/lib/provenance.test.ts src/lib/auth.test.ts",
+    "test": "tsx --test src/lib/nppes/*.test.ts src/lib/places/*.test.ts src/lib/ingest/*.test.ts src/lib/geo/*.test.ts src/lib/research/*.test.ts src/lib/practices/*.test.ts src/lib/campaigns/*.test.ts src/lib/npi/*.test.ts src/lib/npi.test.ts src/lib/provenance.test.ts src/lib/auth.test.ts",
     "postinstall": "prisma generate",
     "seed:county": "tsx scripts/seed-county.ts",
+    "npi:load": "tsx scripts/load-npi-file.ts",
     "migrate-data": "tsx migrations/migrate-data.ts"
   },
   "dependencies": {

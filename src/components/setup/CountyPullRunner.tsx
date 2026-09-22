@@ -18,6 +18,7 @@ interface CountyRun {
   status: string;
   phase: string;
   error: string | null;
+  source?: 'file' | 'api';
   summary: {
     npisUpserted: number;
     quarantined: number;
@@ -274,13 +275,13 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
       <ol className="mt-4 divide-y divide-gray-100">
         <StageRow
           step={1}
-          title="Pull from NPI"
+          title={countyRun?.source === 'api' ? 'Pull from the NPPES API' : 'Pull from the NPI file'}
           state={stages.pull}
           active={working && stages.pull !== 'done'}
           fraction={summary && summary.nppesQueryTotal > 0 ? summary.nppesQueries / summary.nppesQueryTotal : null}
           detail={
             summary
-              ? `${summary.npisUpserted} providers · ${summary.nppesQueries}/${summary.nppesQueryTotal} ZIP queries${summary.practicesFormed ? ` · ${summary.practicesFormed} practices` : ''}`
+              ? `${summary.npisUpserted} providers · ${summary.nppesQueries}/${summary.nppesQueryTotal} ${countyRun?.source === 'api' ? 'ZIP queries' : 'slices'}${summary.practicesFormed ? ` · ${summary.practicesFormed} practices` : ''}`
               : 'Pediatricians and primary care physicians from the NPI registry.'
           }
           error={stages.pull === 'failed' ? countyRun?.error : null}

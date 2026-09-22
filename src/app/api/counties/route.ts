@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { countiesInState, listStateOptions, seedCountyIdForFips } from '@/lib/geo/us-counties';
 import { countyMarketForFips } from '@/lib/nppes/counties';
+import prisma from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,18 @@ export async function GET(request: NextRequest) {
 
   const query = (request.nextUrl.searchParams.get('q') || '').trim().toLowerCase();
   let counties = countiesInState(state);
+  // Providers on the loaded NPI file, per county in this state.
+  const onFile = new Map<string, number>();
+  try {
+    const groups = await prisma.npiRecord.groupBy({
+      by: ['countyFips'],
+      where: { state: state.trim().toUpperCase(), countyFips: { not: null } },
+      _count: { _all: true },
+    });
+    for (const group of groups) if (group.countyFips) onFile.set(group.countyFips, group._count._all);
+  } catch (error) {
+    console.error('NPI file counts unavailable:', error);
+  }
   if (query) {
     counties = counties.filter((county) => county.name.toLowerCase().includes(query));
   }
@@ -26,6 +39,7 @@ export async function GET(request: NextRequest) {
         pullReady: seedCountyId !== null,
         seedCountyId,
         zipCount: countyMarketForFips(county.fips)?.zips.length ?? 0,
+        npiRecords: onFile.get(county.fips) ?? 0,
       };
     }),
   });

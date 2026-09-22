@@ -362,3 +362,47 @@ model CampaignTarget {
   @@index([campaignId])
   @@index([organizationId])
 }
+
+/// One row from the NPI dissemination file, kept when its primary taxonomy
+/// is a referral-source type. Global, not per organization. Practice ZIP maps
+/// to a county at load time. Pulling a county reads this table.
+model NpiRecord {
+  npi                 String   @id
+  entityType          String
+  name                String
+  firstName           String?
+  lastName            String?
+  credential          String?
+  address1            String?
+  address2            String?
+  city                String?
+  state               String?
+  zip                 String?
+  postalCode          String?
+  phone               String?
+  fax                 String?
+  primaryTaxonomyCode String
+  taxonomyCodes       String[] @default([])
+  countyFips          String?
+  /// How the county was found: "zcta" (street ZIP) or "city" (PO Box ZIP via city and state).
+  countyMatch         String?
+  lastUpdated         String?
+  loadedAt            DateTime
+
+  @@index([countyFips])
+  @@index([state, city])
+  @@index([zip])
+}
+
+/// A run of the NPI file loader.
+model NpiLoad {
+  id           String    @id @default(cuid())
+  fileName     String
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  status       String    @default("RUNNING")
+  rowsRead     Int       @default(0)
+  rowsKept     Int       @default(0)
+  countyMapped Int       @default(0)
+  error        String?
+}

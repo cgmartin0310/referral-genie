@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     const address = text(body.address);
     const zipCode = text(body.zipCode);
-    const practiceKey = addressClusterKey(address, zipCode) ?? `manual:${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    const practiceKey = addressClusterKey(address, zipCode, text(body.city)) ?? `manual:${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
     const existing = await prisma.practice.findUnique({
       where: { organizationId_practiceKey: { organizationId: DEFAULT_ORGANIZATION_ID, practiceKey } },

@@ -1,4 +1,4 @@
-export type IngestPhase = 'nppes' | 'places' | 'duplicates' | 'practices' | 'done';
+export type IngestPhase = 'nppes' | 'group' | 'places' | 'duplicates' | 'practices' | 'done';
 
 export interface IngestCursor {
   phase: IngestPhase;
@@ -60,7 +60,7 @@ function numberField(value: unknown, fallback = 0): number {
 export function parseCursor(value: unknown): IngestCursor {
   const row = value && typeof value === 'object' ? (value as Partial<IngestCursor>) : {};
   const phase = row.phase;
-  const allowed: IngestPhase[] = ['nppes', 'places', 'duplicates', 'practices', 'done'];
+  const allowed: IngestPhase[] = ['nppes', 'group', 'places', 'duplicates', 'practices', 'done'];
   return {
     phase: allowed.includes(phase as IngestPhase) ? (phase as IngestPhase) : 'nppes',
     zipIndex: numberField(row.zipIndex),

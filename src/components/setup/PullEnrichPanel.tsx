@@ -40,28 +40,33 @@ interface CountyJob {
 
 const PHASE_LABEL: Record<string, string> = {
   nppes: 'Pulling referral sources',
+  group: 'Grouping into practices',
   places: 'Enriching with Google Places',
   duplicates: 'Checking duplicates',
+  practices: 'Updating practices',
   done: 'Finished',
 };
+
+/** Phases the "pull" button owns; enrichment picks up from Places onward. */
+const PULL_PHASES = new Set(['nppes', 'group']);
 
 const emptyJob = (): CountyJob => ({ run: null, placesPending: 0, loading: true, working: null });
 
 function pullMode(run: CountyRun | null): { mode: 'continue' | 'refresh'; runId?: string } {
-  if (run && run.status !== 'COMPLETED' && run.phase === 'nppes') {
+  if (run && run.status !== 'COMPLETED' && PULL_PHASES.has(run.phase)) {
     return { mode: 'continue', runId: run.id };
   }
   return { mode: 'refresh' };
 }
 
 function canEnrich(run: CountyRun | null): boolean {
-  return !!run && run.status !== 'COMPLETED' && (run.phase === 'places' || run.phase === 'duplicates');
+  return !!run && run.status !== 'COMPLETED' && ['places', 'duplicates', 'practices'].includes(run.phase);
 }
 
 function pullLabel(job: CountyJob): string {
   if (job.working === 'pull') return 'Pulling…';
   const run = job.run;
-  if (!run || run.status === 'COMPLETED' || run.phase !== 'nppes') {
+  if (!run || run.status === 'COMPLETED' || !PULL_PHASES.has(run.phase)) {
     return run ? 'Pull again' : 'Pull referral sources';
   }
   if (run.status === 'FAILED') return 'Resume pull';
@@ -183,7 +188,7 @@ export default function PullEnrichPanel({
           toast.error(run.error || 'Referral source pull failed');
           break;
         }
-        if (action === 'pull' && run.phase !== 'nppes') {
+        if (action === 'pull' && !PULL_PHASES.has(run.phase)) {
           toast.success(`Referral sources pulled for ${county.name}. Enrich with Google Places when you are ready.`);
           break;
         }

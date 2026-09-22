@@ -140,8 +140,8 @@ async function stepNppes(
   county: CountyMarket,
 ): Promise<CountyIngestRun> {
   if (cursor.zipIndex >= county.zips.length) {
-    cursor.phase = 'places';
-    return saveRun(run.id, { status: 'RUNNING', phase: 'places', cursor, summary, clearLock: true });
+    cursor.phase = 'group';
+    return saveRun(run.id, { status: 'RUNNING', phase: 'group', cursor, summary, clearLock: true });
   }
 
   const zip = county.zips[cursor.zipIndex];
@@ -210,7 +210,7 @@ async function stepNppes(
       cursor.searchIndex = 0;
       cursor.zipIndex += 1;
     }
-    if (cursor.zipIndex >= county.zips.length) cursor.phase = 'places';
+    if (cursor.zipIndex >= county.zips.length) cursor.phase = 'group';
   }
 
   return saveRun(run.id, {
@@ -338,14 +338,11 @@ async function stepDuplicates(
 
 /**
  * Form practices from the county's referral sources and nest providers under
- * them. Runs after Places so a place id can anchor identity, and after the
- * duplicate pass so the clusters are already settled.
+ * them. Runs right after the NPI pull so the catalog shows practices at once,
+ * and again after Places and the duplicate pass so a place id can anchor
+ * identity. Upserts, so running twice is safe.
  */
-async function stepPractices(
-  run: CountyIngestRun,
-  summary: IngestSummary,
-  cursor: IngestCursor,
-): Promise<CountyIngestRun> {
+async function formPractices(run: CountyIngestRun, summary: IngestSummary): Promise<void> {
   const sources = await prisma.referralSource.findMany({
     where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: run.countyFips },
     select: {
@@ -422,6 +419,38 @@ async function stepPractices(
 
   summary.practicesFormed = practices.length;
   summary.providersLinked = providersLinked;
+
+  // A practice keyed by address on the first pass can be re-keyed by place id
+  // on the second. Drop the stale row when nothing else refers to it.
+  await prisma.practice.deleteMany({
+    where: {
+      organizationId: DEFAULT_ORGANIZATION_ID,
+      countyFips: run.countyFips,
+      practiceKey: { notIn: practices.map((built) => built.practiceKey) },
+      clinicPractices: { none: {} },
+      campaignTargets: { none: {} },
+    },
+  });
+}
+
+/** After the NPI pull: form practices now, then hand off to Places. */
+async function stepGroup(
+  run: CountyIngestRun,
+  summary: IngestSummary,
+  cursor: IngestCursor,
+): Promise<CountyIngestRun> {
+  await formPractices(run, summary);
+  cursor.phase = 'places';
+  return saveRun(run.id, { status: 'RUNNING', phase: 'places', cursor, summary, clearLock: true });
+}
+
+/** After Places and the duplicate pass: re-form with place ids and finish. */
+async function stepPractices(
+  run: CountyIngestRun,
+  summary: IngestSummary,
+  cursor: IngestCursor,
+): Promise<CountyIngestRun> {
+  await formPractices(run, summary);
   cursor.phase = 'done';
   return saveRun(run.id, {
     status: 'COMPLETED',
@@ -540,6 +569,8 @@ export async function advanceCountyIngest(runId: string, options?: { budgetMs?: 
 
     if (cursor.phase === 'nppes') {
       run = await stepNppes(run, summary, cursor, county);
+    } else if (cursor.phase === 'group') {
+      run = await stepGroup(run, summary, cursor);
     } else if (cursor.phase === 'places') {
       run = await stepPlaces(run, summary, cursor, started, budgetMs);
     } else if (cursor.phase === 'duplicates') {

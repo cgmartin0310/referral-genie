@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { audienceForClinic, targetRows } from '@/lib/campaigns/audience-db';
 import prisma from '../../../../lib/prisma';
 import { executeWithRetry } from '../../../../lib/db-helpers';
 import { parseLocalDate } from '../../../../lib/utils';
@@ -20,7 +21,9 @@ export async function GET(
             include: {
               referralSource: true
             }
-          }
+          },
+          targets: { orderBy: [{ practiceName: 'asc' }, { toName: 'asc' }] },
+          audienceClinic: { select: { id: true, name: true } },
         }
       })
     );
@@ -56,6 +59,7 @@ export async function PUT(
     documentUrl?: string | null;
     documentName?: string | null;
     referralSourceIds?: string[];
+    audienceClinicId?: string | null;
   } = {};
 
   try {
@@ -77,6 +81,16 @@ export async function PUT(
       );
     }
 
+    // Audience change: null clears it, a clinic id rebuilds the pending targets.
+    const audienceGiven = data.audienceClinicId !== undefined;
+    const audienceClinicId = typeof data.audienceClinicId === 'string' && data.audienceClinicId.trim()
+      ? data.audienceClinicId.trim()
+      : null;
+    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId) : null;
+    if (audienceClinicId && !audience) {
+      return NextResponse.json({ error: 'Clinic not found' }, { status: 400 });
+    }
+
     // Use transaction to update campaign and manage relationships
     const updatedCampaign = await prisma.$transaction(async (tx) => {
       // First prepare the campaign data
@@ -88,6 +102,7 @@ export async function PUT(
         status: data.status,
         type: data.type,
         content: data.content,
+        ...(audienceGiven ? { audienceClinicId } : {}),
       };
 
       // Add document fields if provided
@@ -141,6 +156,14 @@ export async function PUT(
               status: 'PENDING',
             },
           });
+        }
+      }
+
+      if (audienceGiven) {
+        // Pages already sent stay as the record of what went out.
+        await tx.campaignTarget.deleteMany({ where: { campaignId: id, status: { in: ['PENDING', 'FAILED'] } } });
+        if (audience && audience.targets.length > 0) {
+          await tx.campaignTarget.createMany({ data: targetRows(id, audience.targets) });
         }
       }
 

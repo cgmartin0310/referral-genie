@@ -27,6 +27,7 @@ interface Campaign {
   includeCoverSheet?: boolean;
   _count: {
     referralSources: number;
+    targets?: number;
   };
 }
 
@@ -168,7 +169,7 @@ export default function CampaignsPage() {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {campaign._count.referralSources}
+                        {campaign._count.referralSources + (campaign._count.targets ?? 0)}
                       </td>
                       <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
                         <div className="flex items-center justify-end space-x-3">

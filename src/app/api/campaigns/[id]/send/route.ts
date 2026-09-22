@@ -24,7 +24,8 @@ export async function POST(
             include: {
               referralSource: true
             }
-          }
+          },
+          targets: { where: { status: { in: ['PENDING', 'FAILED'] } } },
         }
       })
     );
@@ -309,6 +310,51 @@ export async function POST(
           name: referralSource.name,
           error: error instanceof Error ? error.message : 'Unknown error'
         });
+      }
+    }
+
+    // Targets built from a clinic's referral list: one page per fax machine,
+    // addressed to the practice or, on their own line, to the provider.
+    for (const target of campaign.targets) {
+      const toFaxNumber = formatPhoneNumber(target.faxNumber);
+      const fromFaxNumber = campaign.coverSheetFromNumber || process.env.DEFAULT_FAX_NUMBER || '19103974373';
+      try {
+        await prisma.campaignTarget.update({ where: { id: target.id }, data: { status: 'SENDING' } });
+        const result = await humbleFaxClient.sendFax({
+          to: toFaxNumber || target.faxNumber,
+          documentUrl,
+          metadata: { campaignId: campaign.id.substring(0, 10), targetId: target.id, campaignName: campaign.name },
+          coverSheet: campaign.includeCoverSheet ? {
+            includeCoversheet: true,
+            fromName: campaign.coverSheetFromName || "Referral Genie",
+            fromNumber: fromFaxNumber,
+            companyInfo: campaign.coverSheetCompanyInfo || "",
+            toName: target.toName,
+            subject: campaign.coverSheetSubject || "Referral Information",
+            message: campaign.coverSheetMessage || "Please see the attached referral information.",
+          } : { includeCoversheet: false },
+        });
+        if (result.success) {
+          const faxId = result.faxId || (result.data && result.data.id) || 'unknown-' + Date.now();
+          await prisma.campaignTarget.update({
+            where: { id: target.id },
+            data: { status: 'SENT', sentAt: new Date(), response: JSON.stringify({ faxId, status: result.status || 'sent' }) },
+          });
+          results.push({ targetId: target.id, name: target.toName, faxId, status: 'SENT' });
+        } else {
+          await prisma.campaignTarget.update({
+            where: { id: target.id },
+            data: { status: 'FAILED', response: JSON.stringify({ error: result.error || 'Unknown error', status: result.status }) },
+          });
+          errors.push({ targetId: target.id, name: target.toName, error: result.error || 'Unknown error' });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        await prisma.campaignTarget.update({
+          where: { id: target.id },
+          data: { status: 'FAILED', response: JSON.stringify({ error: message }) },
+        });
+        errors.push({ targetId: target.id, name: target.toName, error: message });
       }
     }
 

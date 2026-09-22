@@ -7,6 +7,13 @@ import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { CAMPAIGN_TYPES } from '../lib/constants';
 import { formatDateForInput } from '../lib/utils';
+import type { Audience } from '../lib/campaigns/audience';
+
+function formatFax(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(-10);
+  if (digits.length !== 10) return value;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
 
 interface ReferralSource {
   id: string;
@@ -34,12 +41,15 @@ interface CampaignFormProps {
     documentName: string | null;
   };
   selectedReferralSources?: ReferralSource[];
+  /** Clinic whose referral list is the audience. */
+  audienceClinicId?: string | null;
 }
 
 export default function CampaignForm({ 
   campaignId, 
   defaultValues,
-  selectedReferralSources = []
+  selectedReferralSources = [],
+  audienceClinicId: initialAudienceClinicId = null,
 }: CampaignFormProps) {
   const router = useRouter();
   const isEditMode = !!campaignId;
@@ -61,6 +71,42 @@ export default function CampaignForm({
   
   const [filterClinicLocation, setFilterClinicLocation] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Audience: a clinic's referral list, previewed as the pages it will send.
+  const [clinics, setClinics] = useState<{ id: string; name: string }[]>([]);
+  const [audienceClinicId, setAudienceClinicId] = useState<string>(initialAudienceClinicId ?? '');
+  const [audience, setAudience] = useState<Audience | null>(null);
+  const [audienceLoading, setAudienceLoading] = useState(false);
+  // The per-source picker stays for campaigns that were built with it.
+  const showLegacySources = isEditMode && selectedReferralSources.length > 0;
+
+  useEffect(() => {
+    axios
+      .get('/api/clinic-locations')
+      .then(({ data }) => setClinics(data.map((clinic: { id: string; name: string }) => ({ id: clinic.id, name: clinic.name }))))
+      .catch(() => toast.error('Failed to load clinics'));
+  }, []);
+
+  useEffect(() => {
+    if (!audienceClinicId) {
+      setAudience(null);
+      return;
+    }
+    let cancelled = false;
+    setAudienceLoading(true);
+    axios
+      .get<Audience>(`/api/campaigns/audience?clinicId=${encodeURIComponent(audienceClinicId)}`)
+      .then(({ data }) => {
+        if (!cancelled) setAudience(data);
+      })
+      .catch(() => toast.error('Failed to load the audience'))
+      .finally(() => {
+        if (!cancelled) setAudienceLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [audienceClinicId]);
   
   const {
     register,
@@ -173,8 +219,8 @@ export default function CampaignForm({
       return;
     }
     
-    if (selectedSourceIds.length === 0) {
-      toast.error('Please select at least one referral source');
+    if (!audienceClinicId && selectedSourceIds.length === 0) {
+      toast.error('Choose the clinic whose referral list this campaign goes to');
       return;
     }
     
@@ -182,7 +228,8 @@ export default function CampaignForm({
       ...data,
       documentUrl: uploadedDocument?.url || null,
       documentName: uploadedDocument?.name || null,
-      referralSourceIds: selectedSourceIds
+      referralSourceIds: selectedSourceIds,
+      audienceClinicId: audienceClinicId || null,
     };
     
     setIsLoading(true);
@@ -378,9 +425,101 @@ export default function CampaignForm({
 
       <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl md:col-span-2">
         <div className="px-4 py-6 sm:p-8">
+          <h3 className="text-base font-semibold leading-6 text-gray-900">Audience</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            This campaign goes to a clinic’s referral list. Everyone at a practice who shares a fax machine gets one
+            page; a provider with their own line gets their own.
+          </p>
+          <div className="mt-4 max-w-sm">
+            <label htmlFor="audienceClinicId" className="block text-sm font-medium text-gray-700">
+              Clinic
+            </label>
+            <select
+              id="audienceClinicId"
+              value={audienceClinicId}
+              onChange={(e) => setAudienceClinicId(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 sm:text-sm"
+            >
+              <option value="">Choose a clinic…</option>
+              {clinics.map((clinic) => (
+                <option key={clinic.id} value={clinic.id}>
+                  {clinic.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {audienceClinicId && (audienceLoading ? (
+            <p className="mt-4 text-sm text-gray-500">Building the send list…</p>
+          ) : audience && (
+            <div className="mt-5">
+              <dl className="grid grid-cols-3 gap-4">
+                {[
+                  ['Practices', audience.practices],
+                  ['Providers', audience.providers],
+                  ['Pages to send', audience.targets.length],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="rounded-lg border border-gray-200 px-4 py-3">
+                    <dt className="text-xs font-medium text-gray-500">{label}</dt>
+                    <dd className="mt-1 text-xl font-semibold text-gray-900">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+
+              {audience.fellBack > 0 && (
+                <p className="mt-3 text-sm text-amber-700">
+                  {audience.fellBack} provider{audience.fellBack === 1 ? ' was' : 's were'} set to their own fax line but
+                  have none on file, so their page goes to the office.
+                </p>
+              )}
+              {audience.unreachable.length > 0 && (
+                <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  <p className="font-medium">No fax on file — will be skipped</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {audience.unreachable.map((row) => (
+                      <li key={row.practiceId}>
+                        {row.practiceName}
+                        {row.providerNames.length > 0 && ` (${row.providerNames.join(', ')})`}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {audience.targets.length === 0 ? (
+                <p className="mt-4 text-sm text-gray-600">
+                  This clinic has no practices with a fax on its referral list yet. Add practices under Our Clinics.
+                </p>
+              ) : (
+                <ul className="mt-4 max-h-72 divide-y divide-gray-100 overflow-y-auto rounded-md border border-gray-200">
+                  {audience.targets.map((target) => (
+                    <li key={`${target.practiceId}-${target.faxNumber}`} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-gray-900">{target.toName}</p>
+                        <p className="truncate text-xs text-gray-500">
+                          {target.level === 'provider'
+                            ? `Own line · ${target.practiceName}`
+                            : target.providerNames.length > 0
+                              ? `${target.providerNames.length} provider${target.providerNames.length === 1 ? '' : 's'} · ${target.providerNames.join(', ')}`
+                              : 'Practice office'}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-mono text-gray-700">{formatFax(target.faxNumber)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {showLegacySources && (
+      <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl md:col-span-2">
+        <div className="px-4 py-6 sm:p-8">
           <div>
             <h3 className="text-base font-semibold leading-6 text-gray-900 mb-4">
-              Select Referral Sources
+              Individual sources
             </h3>
             
             <div className="flex flex-col sm:flex-row gap-4 mb-4">
@@ -492,6 +631,7 @@ export default function CampaignForm({
           </div>
         </div>
       </div>
+      )}
 
       <div className="flex items-center justify-end gap-x-6">
         <button

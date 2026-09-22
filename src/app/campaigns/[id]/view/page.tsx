@@ -152,8 +152,67 @@ export default function ViewCampaignPage() {
           </div>
         </div>
 
+        {campaign.targets && campaign.targets.length > 0 && (
+          <div className="mt-8">
+            <h3 className="text-lg font-medium text-gray-900">
+              Faxes
+              {campaign.audienceClinic && (
+                <span className="ml-2 text-sm font-normal text-gray-500">to {campaign.audienceClinic.name}’s referral list</span>
+              )}
+            </h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {campaign.targets.length} page{campaign.targets.length === 1 ? '' : 's'} · one per fax machine
+            </p>
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-300">
+                <thead>
+                  <tr>
+                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900">To</th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Fax</th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Sent</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {campaign.targets.map((target: any) => (
+                    <tr key={target.id}>
+                      <td className="py-3 pl-4 pr-3 text-sm">
+                        <div className="font-medium text-gray-900">{target.toName}</div>
+                        <div className="text-xs text-gray-500">
+                          {target.level === 'provider'
+                            ? `Own line · ${target.practiceName}`
+                            : target.providerNames.length > 0
+                              ? `${target.providerNames.length} provider${target.providerNames.length === 1 ? '' : 's'}: ${target.providerNames.join(', ')}`
+                              : 'Practice office'}
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 font-mono text-sm text-gray-700">{target.faxNumber}</td>
+                      <td className="whitespace-nowrap px-3 py-3 text-sm">
+                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${
+                          target.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                          target.status === 'SENT' ? 'bg-green-100 text-green-800' :
+                          target.status === 'FAILED' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {target.status}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-500">
+                        {target.sentAt ? formatDate(target.sentAt) : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {(campaign.referralSources.length > 0 || !campaign.targets?.length) && (
         <div className="mt-8">
-        <h3 className="text-lg font-medium text-gray-900">Referral Sources</h3>
+        <h3 className="text-lg font-medium text-gray-900">
+          {campaign.targets?.length ? 'Individual sources' : 'Referral Sources'}
+        </h3>
         {campaign.referralSources.length === 0 ? (
           <p className="mt-2 text-gray-500">No referral sources added to this campaign.</p>
           ) : (
@@ -203,6 +262,7 @@ export default function ViewCampaignPage() {
           </div>
         )}
       </div>
+        )}
       
       {results && (
         <div className="mt-8">

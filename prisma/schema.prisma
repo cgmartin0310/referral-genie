@@ -22,6 +22,7 @@ model Organization {
   interactions       Interaction[]
   campaigns          Campaign[]
   campaignSources    CampaignToReferralSource[]
+  campaignTargets    CampaignTarget[]
   countyIngestRuns   CountyIngestRun[]
   researchRuns       ResearchRun[]
   practices          Practice[]
@@ -46,6 +47,7 @@ model ClinicLocation {
   referralSources ReferralSource[]
   marketCounties  ClinicMarketCounty[]
   clinicPractices ClinicPractice[]
+  campaigns       Campaign[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -170,8 +172,13 @@ model Campaign {
   organizationId        String
   organization          Organization               @relation(fields: [organizationId], references: [id])
   referralSources       CampaignToReferralSource[]
+  /// The clinic whose referral list is this campaign's audience.
+  audienceClinicId      String?
+  audienceClinic        ClinicLocation?            @relation(fields: [audienceClinicId], references: [id], onDelete: SetNull)
+  targets               CampaignTarget[]
 
   @@index([organizationId])
+  @@index([audienceClinicId])
 }
 
 model CampaignToReferralSource {
@@ -271,6 +278,7 @@ model Practice {
   organization   Organization @relation(fields: [organizationId], references: [id])
   providers      Provider[]
   clinicPractices ClinicPractice[]
+  campaignTargets CampaignTarget[]
 
   @@unique([organizationId, practiceKey])
   @@index([organizationId, countyFips])
@@ -321,5 +329,36 @@ model ClinicPractice {
 
   @@unique([clinicLocationId, practiceId])
   @@index([practiceId])
+  @@index([organizationId])
+}
+
+/// One fax in a campaign. Built from a clinic's referral list: everyone at a
+/// practice who resolves to the same machine shares one target, so 24
+/// providers at one office is one page, not 24. The number is snapshotted
+/// here so what was sent, and to whom, can be shown later.
+model CampaignTarget {
+  id             String    @id @default(cuid())
+  campaignId     String
+  practiceId     String?
+  practiceName   String
+  providerIds    String[]  @default([])
+  providerNames  String[]  @default([])
+  /// Name on the cover sheet.
+  toName         String
+  faxNumber      String
+  /// "practice" or "provider" (the provider's own line).
+  level          String
+  status         String    @default("PENDING")
+  sentAt         DateTime?
+  responseAt     DateTime?
+  response       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  organizationId String
+  campaign       Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  practice       Practice?    @relation(fields: [practiceId], references: [id], onDelete: SetNull)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([campaignId])
   @@index([organizationId])
 }

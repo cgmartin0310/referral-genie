@@ -47,12 +47,8 @@ Inbound referrals, attribution, and fax campaigns are out of scope.
 
 ## Click path
 
-1. Sign in.
-2. **Add a clinic** (home, or **Clinics** in the nav). Save name, address, phone, and fax.
-3. **Pick counties**. Save the market.
-4. **Pull referral sources** for a county that is ready (Lenoir County, NC today).
-5. **Enrich with Google Places**.
-6. **Research missing info**. Set `XAI_API_KEY` (optional `XAI_MODEL`, default `grok-4`) or the `OPENAI_COMPAT_*` variables, then press the button. Open a referral source to research that practice alone.
-7. Open **Referral sources**.
-
-**Pull sources** in the nav is the same pull and enrich steps when you already have a clinic and counties.
+1. Sign in. Home is a dashboard of your clinics.
+2. **Our Clinics** → add a clinic. Under **Market & data**, pick its counties, then pull referral sources, enrich with Google Places, and research missing details. That fills the shared catalog.
+3. **Referral Sources** lists the catalog as practices (with providers nested, fax, provider count, and a referral estimate) and as providers (with the own-fax switch). Check practices and **Add to clinic**. "Add practice" covers a school, program, or office without an NPI, and links to Google keyword search.
+4. Back on the clinic, **Referral list** shows what was added, with the estimate rolled up.
+5. **Campaigns** → new campaign → choose the clinic. The audience is that clinic's list, previewed as pages to send: everyone at a practice who shares a fax machine gets one page, a provider on their own line gets their own, and anyone unreachable is listed rather than dropped.

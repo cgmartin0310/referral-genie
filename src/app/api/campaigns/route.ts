@@ -3,6 +3,7 @@ import prisma from '../../../lib/prisma';
 import { executeWithRetry } from '../../../lib/db-helpers';
 import { parseLocalDate } from '../../../lib/utils';
 import { DEFAULT_ORGANIZATION_ID } from '../../../lib/org';
+import { audienceForClinic, targetRows } from '@/lib/campaigns/audience-db';
 
 export async function GET() {
   try {
@@ -15,7 +16,8 @@ export async function GET() {
         include: {
           _count: {
             select: {
-              referralSources: true
+              referralSources: true,
+              targets: true,
             }
           }
         }
@@ -44,6 +46,7 @@ export async function POST(request: Request) {
     documentUrl?: string | null;
     documentName?: string | null;
     referralSourceIds?: string[];
+    audienceClinicId?: string | null;
   } = { name: '', type: '' };
   
   try {
@@ -61,6 +64,15 @@ export async function POST(request: Request) {
         { error: 'Campaign type is required' },
         { status: 400 }
       );
+    }
+
+    // Audience: a clinic's referral list, resolved to one fax per machine.
+    const audienceClinicId = typeof data.audienceClinicId === 'string' && data.audienceClinicId.trim()
+      ? data.audienceClinicId.trim()
+      : null;
+    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId) : null;
+    if (audienceClinicId && !audience) {
+      return NextResponse.json({ error: 'Clinic not found' }, { status: 400 });
     }
     
     // Use transaction to create campaign and relationships
@@ -83,6 +95,7 @@ export async function POST(request: Request) {
         status: data.status || 'DRAFT',
         type: data.type,
         content: data.content || null,
+        audienceClinicId,
       };
 
       // Add the document fields if available
@@ -120,6 +133,10 @@ export async function POST(request: Request) {
         );
       }
       
+      if (audience && audience.targets.length > 0) {
+        await tx.campaignTarget.createMany({ data: targetRows(newCampaign.id, audience.targets) });
+      }
+
       return newCampaign;
     });
     

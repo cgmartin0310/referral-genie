@@ -1,6 +1,6 @@
 # Lenoir County ZIP list
 
-The product path is in [market-setup.md](./market-setup.md): add a clinic, pick counties, pull referral sources, enrich with Google Places. This note is the practice-location ZIP list for **Lenoir County, North Carolina** (FIPS `37107`), the county the NPI pull can query today.
+The product path is in [market-setup.md](./market-setup.md): add a clinic, pick counties, pull referral sources, enrich with Google Places. This note is the hand-checked practice-location ZIP list for **Lenoir County, North Carolina** (FIPS `37107`). Every other county is pulled the same way from the Census ZCTA-to-county crosswalk; Lenoir is the one whose ZIPs were checked by hand and reproduces exactly from that crosswalk at the 15% land-share cutoff.
 
 The pull loads pediatricians and primary care physicians from the NPPES Read API, upserts them onto `ReferralSource` by NPI, then matches Google Places by phone and address. Keyword Nearby Search is no longer the way the source list is built. It remains at **Non-NPI search** for partners that do not have an NPI.
 

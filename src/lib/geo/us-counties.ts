@@ -1,5 +1,5 @@
 import rawCounties from '../../data/us-counties.json';
-import { listCounties } from '../nppes/counties';
+import { countyMarketForFips, listCounties } from '../nppes/counties';
 
 export interface UsCounty {
   fips: string;
@@ -108,9 +108,14 @@ export function normalizeCountyFips(value: string | null | undefined): string | 
   return digits.padStart(5, '0');
 }
 
-/** County id for the existing NPI pull, when a practice-location ZIP list exists. */
+/**
+ * County id for the NPI pull. A hand-checked county keeps its id; any other
+ * county with ZIPs in the Census crosswalk is pulled by its FIPS.
+ */
 export function seedCountyIdForFips(fips: string): string | null {
   const normalized = normalizeCountyFips(fips);
   if (!normalized) return null;
-  return SEED_ID_BY_FIPS.get(normalized) ?? null;
+  const curated = SEED_ID_BY_FIPS.get(normalized);
+  if (curated) return curated;
+  return countyMarketForFips(normalized) ? normalized : null;
 }

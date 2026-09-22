@@ -40,9 +40,9 @@ describe('research source counties', () => {
   });
 
   it('does not pull Lenoir sources for a county the pull cannot run', () => {
-    assert.deepEqual(seedIdsForMarket(['06037']), []);
+    assert.deepEqual(seedIdsForMarket(['99999']), []);
     assert.deepEqual(
-      sourceIdsMatchingFips([{ id: 'lenoir', countyFips: '37107' }], researchCountyFips(['06037'])),
+      sourceIdsMatchingFips([{ id: 'lenoir', countyFips: '37107' }], researchCountyFips(['99999'])),
       [],
     );
   });

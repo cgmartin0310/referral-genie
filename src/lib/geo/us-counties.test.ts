@@ -17,11 +17,13 @@ describe('US county catalog', () => {
     assert.equal(countiesInState('VA').some((county) => county.name === 'Richmond city'), true);
   });
 
-  it('marks ZIP-backed counties ready to pull and leaves the rest saved-only', () => {
+  it('marks a hand-checked county by its id and any other county by its FIPS', () => {
     assert.equal(seedCountyIdForFips('37107'), 'lenoir-nc');
     assert.equal(seedCountyIdForFips(' 37-107 '), 'lenoir-nc');
     assert.equal(normalizeCountyFips('37107 '), '37107');
-    assert.equal(seedCountyIdForFips('06037'), null);
+    // Any county with ZIPs in the Census crosswalk is pullable by FIPS.
+    assert.equal(seedCountyIdForFips('06037'), '06037');
+    assert.equal(seedCountyIdForFips('99999'), null);
     assert.equal(seedCountyIdForFips('lenoir-nc'), null);
   });
 

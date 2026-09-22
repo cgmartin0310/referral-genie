@@ -18,7 +18,7 @@ Counties are stored on the clinic in `ClinicMarketCounty` (clinic, FIPS, county 
 
 Pediatricians and primary care physicians come from the NPPES Read API. The pull is the existing county ingest job, NPPES phase only, started from the clinic page or from **Pull sources** (`/county-seed`).
 
-NPPES has no county parameter. A pull runs only when that county has a practice-location ZIP list. Today that list is Lenoir County, NC. Any other saved county stays on the market and waits until a ZIP list is added. This bite does not download the national NPPES file and does not rebuild the ingest job.
+NPPES has no county parameter, so a county is pulled by its practice-location ZIPs. Any US county can be pulled: its ZIP list comes from the Census 2020 ZCTA-to-county relationship file (`src/data/zcta-county.json`, rebuilt with `node scripts/build-zcta-county.mjs`), keeping ZCTAs with at least 15% of their land inside the county. Lenoir County, NC keeps a hand-checked list with place names. The national NPPES file is not downloaded.
 
 ### 4. Enrich with Google Places — partial
 

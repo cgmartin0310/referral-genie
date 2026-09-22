@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { countiesInState, listStateOptions, seedCountyIdForFips } from '@/lib/geo/us-counties';
+import { countyMarketForFips } from '@/lib/nppes/counties';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
         state: county.state,
         pullReady: seedCountyId !== null,
         seedCountyId,
+        zipCount: countyMarketForFips(county.fips)?.zips.length ?? 0,
       };
     }),
   });

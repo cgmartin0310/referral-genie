@@ -7,37 +7,51 @@ import PullEnrichPanel from './PullEnrichPanel';
 import ResearchPanel from './ResearchPanel';
 import type { MarketCountyView } from '@/lib/geo/market-view';
 
-interface SeedCounty {
-  id: string;
+interface StateOption {
+  code: string;
+  name: string;
+}
+
+interface CountyOption {
+  fips: string;
   name: string;
   state: string;
-  fips: string;
+  pullReady: boolean;
+  seedCountyId: string | null;
   zipCount: number;
 }
 
 /**
- * Pull one county's referral sources without going through a clinic:
- * NPI pull, then Google Places, then website research. The result lands in
- * the shared catalog as practices and providers.
+ * Pull one county's referral sources: NPI pull, then Google Places, then
+ * website research. Any US county can be chosen; its ZIP list comes from the
+ * Census crosswalk. The result lands in the catalog as practices and
+ * providers. No clinic is involved.
  */
 export default function CountyPullPanel() {
   const queryClient = useQueryClient();
-  const [countyId, setCountyId] = useState('');
+  const [stateCode, setStateCode] = useState('');
+  const [fips, setFips] = useState('');
   const [pullProgress, setPullProgress] = useState({ anyPastNppes: false, anyCompleted: false });
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['seed-counties'],
-    queryFn: async () => (await axios.get<{ counties: SeedCounty[] }>('/api/county-seed')).data.counties,
+  const { data: states } = useQuery({
+    queryKey: ['counties', 'states'],
+    queryFn: async () => (await axios.get<{ states: StateOption[] }>('/api/counties')).data.states,
   });
-  const counties = data ?? [];
+  const { data: counties, isLoading: countiesLoading } = useQuery({
+    queryKey: ['counties', stateCode],
+    queryFn: async () =>
+      (await axios.get<{ counties: CountyOption[] }>(`/api/counties?state=${encodeURIComponent(stateCode)}`)).data.counties,
+    enabled: Boolean(stateCode),
+  });
 
+  // Changing state clears the county.
   useEffect(() => {
-    if (!countyId && counties.length > 0) setCountyId(counties[0].id);
-  }, [counties, countyId]);
+    setFips('');
+  }, [stateCode]);
 
-  const county = counties.find((row) => row.id === countyId) ?? null;
-  const view: MarketCountyView | null = county
-    ? { fips: county.fips, name: county.name, state: county.state, pullReady: true, seedCountyId: county.id }
+  const county = counties?.find((row) => row.fips === fips) ?? null;
+  const view: MarketCountyView | null = county && county.pullReady
+    ? { fips: county.fips, name: county.name, state: county.state, pullReady: true, seedCountyId: county.seedCountyId }
     : null;
 
   const refreshCatalog = () => {
@@ -47,29 +61,50 @@ export default function CountyPullPanel() {
 
   return (
     <div className="space-y-5">
-      <div className="max-w-sm">
-        <label htmlFor="pull-county-select" className="block text-sm font-medium text-gray-700">
-          County
-        </label>
-        <select
-          id="pull-county-select"
-          value={countyId}
-          onChange={(event) => setCountyId(event.target.value)}
-          disabled={isLoading || counties.length === 0}
-          className="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-green-600 focus:ring-green-600"
-        >
-          {counties.length === 0 && <option value="">{isLoading ? 'Loading…' : 'No counties are set up yet'}</option>}
-          {counties.map((row) => (
-            <option key={row.id} value={row.id}>
-              {row.name}, {row.state} · {row.zipCount} ZIPs
-            </option>
-          ))}
-        </select>
-        <p className="mt-1 text-xs text-gray-500">
-          NPI has no county field, so a county is pulled by its practice ZIP codes. Only counties with a ZIP list appear
-          here.
-        </p>
+      <div className="grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label htmlFor="pull-state" className="block text-sm font-medium text-gray-700">
+            State
+          </label>
+          <select
+            id="pull-state"
+            value={stateCode}
+            onChange={(event) => setStateCode(event.target.value)}
+            className="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-green-600 focus:ring-green-600"
+          >
+            <option value="">Choose a state…</option>
+            {(states ?? []).map((state) => (
+              <option key={state.code} value={state.code}>
+                {state.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="pull-county" className="block text-sm font-medium text-gray-700">
+            County
+          </label>
+          <select
+            id="pull-county"
+            value={fips}
+            onChange={(event) => setFips(event.target.value)}
+            disabled={!stateCode || countiesLoading}
+            className="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-green-600 focus:ring-green-600 disabled:bg-gray-50 disabled:text-gray-400"
+          >
+            <option value="">{!stateCode ? 'Choose a state first' : countiesLoading ? 'Loading…' : 'Choose a county…'}</option>
+            {(counties ?? []).map((row) => (
+              <option key={row.fips} value={row.fips} disabled={!row.pullReady}>
+                {row.name}
+                {row.zipCount > 0 ? ` · ${row.zipCount} ZIP${row.zipCount === 1 ? '' : 's'}` : ' · no ZIPs on file'}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
+      <p className="text-xs text-gray-500">
+        NPI has no county field, so a county is pulled by the ZIP codes that lie mostly inside it. Practices in a ZIP
+        that crosses the county line are kept and flagged.
+      </p>
 
       {view && (
         <>

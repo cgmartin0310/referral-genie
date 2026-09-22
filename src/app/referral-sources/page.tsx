@@ -1,19 +1,22 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
-import { Switch } from '@headlessui/react';
+import { Menu, Switch } from '@headlessui/react';
 import {
   BuildingOffice2Icon,
+  ChevronDownIcon,
   ChevronRightIcon,
   MagnifyingGlassIcon,
+  PlusIcon,
   PrinterIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
 import MainLayout from '../../components/layout/MainLayout';
+import AddPracticeModal from '../../components/AddPracticeModal';
 import type { PracticeView, ProviderView } from '@/lib/practices/present';
 
 type Tab = 'practices' | 'providers';
@@ -138,7 +141,7 @@ function PracticeRow({
   return (
     <li className={classNames('bg-white', selected && 'bg-green-50/40')}>
       <div className="grid grid-cols-12 items-center gap-x-4 px-4 py-3 sm:px-6">
-        <div className="col-span-12 flex items-center gap-3 sm:col-span-4">
+        <div className="col-span-12 flex items-center gap-3 lg:col-span-4">
           <input
             type="checkbox"
             checked={selected}
@@ -174,7 +177,7 @@ function PracticeRow({
           </div>
         </div>
 
-        <div className="col-span-6 mt-2 whitespace-nowrap sm:col-span-2 sm:mt-0">
+        <div className="col-span-6 mt-2 whitespace-nowrap lg:col-span-2 lg:mt-0">
           {practice.faxNumber ? (
             <p className="flex items-center gap-1.5 font-mono text-sm text-gray-800">
               <PrinterIcon className="h-4 w-4 text-gray-400" />
@@ -185,7 +188,7 @@ function PracticeRow({
           )}
         </div>
 
-        <div className="col-span-6 mt-2 sm:col-span-3 sm:mt-0">
+        <div className="col-span-6 mt-2 lg:col-span-3 lg:mt-0">
           <p className="text-sm font-medium text-gray-900">
             {practice.providerCount === 0
               ? 'Providers unknown'
@@ -196,12 +199,12 @@ function PracticeRow({
           )}
         </div>
 
-        <div className="col-span-6 mt-2 whitespace-nowrap sm:col-span-2 sm:mt-0 sm:text-right">
+        <div className="col-span-6 mt-2 whitespace-nowrap lg:col-span-2 lg:mt-0 lg:text-right">
           <p className="text-sm font-semibold text-gray-900">{estimateText(practice.estimate)}</p>
           <p className="text-xs text-gray-500">est. referrals / mo</p>
         </div>
 
-        <div className="col-span-6 mt-2 flex flex-wrap justify-end gap-1 sm:col-span-1 sm:mt-0">
+        <div className="col-span-6 mt-2 flex flex-wrap justify-end gap-1 lg:col-span-1 lg:mt-0">
           {practice.clinics.map((clinic) => (
             <span
               key={clinic.id}
@@ -219,17 +222,17 @@ function PracticeRow({
           {practice.providers.map((provider) => (
             <li
               key={provider.id}
-              className="grid grid-cols-12 items-center gap-x-4 px-4 py-2 pl-[4.25rem] text-sm sm:px-6 sm:pl-[4.75rem]"
+              className="grid grid-cols-12 items-center gap-x-4 px-4 py-2 pl-[4.25rem] text-sm sm:px-6 lg:pl-[4.75rem]"
             >
-              <div className="col-span-12 sm:col-span-4">
+              <div className="col-span-12 lg:col-span-4">
                 <span className="font-medium text-gray-900">{provider.name}</span>
                 <span className="ml-2 text-xs text-gray-500">NPI {provider.npiNumber}</span>
               </div>
-              <div className="col-span-6 text-gray-600 sm:col-span-2">{provider.sourceTypeLabel}</div>
-              <div className="col-span-6 sm:col-span-5">
+              <div className="col-span-6 text-gray-600 lg:col-span-2">{provider.sourceTypeLabel}</div>
+              <div className="col-span-6 lg:col-span-5">
                 <SendsTo provider={provider} />
               </div>
-              <div className="col-span-12 mt-1 flex items-center justify-end gap-2 sm:col-span-1 sm:mt-0">
+              <div className="col-span-12 mt-1 flex items-center justify-end gap-2 lg:col-span-1 lg:mt-0">
                 <span className="text-xs text-gray-500">Own fax</span>
                 <OwnFaxToggle provider={provider} />
               </div>
@@ -251,6 +254,15 @@ function PracticesTab({ clinics }: { clinics: Clinic[] }) {
   const [clinicId, setClinicId] = useState('');
   const [hideListed, setHideListed] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Arriving from a clinic page: preselect that clinic and hide what it already has.
+  useEffect(() => {
+    const fromClinic = new URLSearchParams(window.location.search).get('clinic');
+    if (fromClinic) {
+      setClinicId(fromClinic);
+      setHideListed(true);
+    }
+  }, []);
 
   const params = useMemo(() => {
     const search = new URLSearchParams();
@@ -501,6 +513,7 @@ function ProvidersTab() {
 
 export default function ReferralSourcesPage() {
   const [tab, setTab] = useState<Tab>('practices');
+  const [adding, setAdding] = useState(false);
 
   const { data: clinics } = useQuery({
     queryKey: ['clinic-locations'],
@@ -523,7 +536,38 @@ export default function ReferralSourcesPage() {
             clinic’s referral list.
           </p>
         </div>
+        <Menu as="div" className="relative mt-4 lg:mt-0">
+          <Menu.Button className="inline-flex items-center gap-1 rounded-md bg-[#0B2A5B] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#123a7a]">
+            <PlusIcon className="h-4 w-4" /> Add practice <ChevronDownIcon className="h-4 w-4" />
+          </Menu.Button>
+          <Menu.Items className="absolute right-0 z-10 mt-2 w-64 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 focus:outline-none">
+            <Menu.Item>
+              {({ active }) => (
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  className={classNames(active && 'bg-gray-50', 'block w-full px-4 py-2 text-left text-sm text-gray-700')}
+                >
+                  Add manually
+                  <span className="block text-xs text-gray-500">A school, program, or office without an NPI</span>
+                </button>
+              )}
+            </Menu.Item>
+            <Menu.Item>
+              {({ active }) => (
+                <Link
+                  href="/prospecting"
+                  className={classNames(active && 'bg-gray-50', 'block px-4 py-2 text-sm text-gray-700')}
+                >
+                  Search Google listings
+                  <span className="block text-xs text-gray-500">Find businesses by type near an address</span>
+                </Link>
+              )}
+            </Menu.Item>
+          </Menu.Items>
+        </Menu>
       </div>
+      <AddPracticeModal open={adding} onClose={() => setAdding(false)} />
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatTile label="Practices" value={stats?.practices ?? '—'} />

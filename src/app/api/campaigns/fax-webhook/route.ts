@@ -4,11 +4,19 @@ import prisma from '../../../../lib/prisma';
 // Webhook endpoint for HumbleFax status updates
 export async function POST(request: NextRequest) {
   try {
+    // This route is exempt from the session check in middleware. When
+    // HUMBLE_FAX_WEBHOOK_SECRET is set, the caller must present it; append
+    // ?secret=<value> to the URL registered with HumbleFax.
+    const expected = process.env.HUMBLE_FAX_WEBHOOK_SECRET?.trim();
+    if (expected) {
+      const given = request.nextUrl.searchParams.get('secret') ?? request.headers.get('x-webhook-secret');
+      if (given !== expected) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
+
     // Parse the webhook data
     const data = await request.json();
-    
-    // Validate the webhook signature/auth if needed
-    // This would depend on how HumbleFax verifies webhooks
     
     // Extract data from the webhook
     const { 

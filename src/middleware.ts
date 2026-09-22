@@ -9,8 +9,13 @@ export default withAuth(
     callbacks: {
       authorized: ({ req, token }) => {
         // Allow access to login page and API auth routes
-        if (req.nextUrl.pathname.startsWith('/login') || 
+        if (req.nextUrl.pathname.startsWith('/login') ||
             req.nextUrl.pathname.startsWith('/api/auth')) {
+          return true;
+        }
+        // HumbleFax delivery callbacks carry no session. The route checks
+        // its own shared secret when HUMBLE_FAX_WEBHOOK_SECRET is set.
+        if (req.nextUrl.pathname === '/api/campaigns/fax-webhook') {
           return true;
         }
         

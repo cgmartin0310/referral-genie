@@ -2,23 +2,40 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 import { presentMarketCounty } from '@/lib/geo/market';
+import { estimateMonthlyReferrals, sumEstimates } from '@/lib/practices/estimate';
 
 const clinicInclude = {
   _count: {
-    select: { referralSources: true },
+    select: { referralSources: true, clinicPractices: true },
   },
   marketCounties: {
     orderBy: [{ state: 'asc' as const }, { countyName: 'asc' as const }],
   },
+  clinicPractices: {
+    select: { practice: { select: { providerCount: true, taxonomyMix: true } } },
+  },
 };
 
-function serializeClinic<T extends { marketCounties: { id: string; countyFips: string; countyName: string; state: string }[] }>(
-  clinic: T,
-) {
-  const { marketCounties, ...rest } = clinic;
+type ListedPractice = { practice: { providerCount: number; taxonomyMix: unknown } };
+
+function serializeClinic<
+  T extends {
+    marketCounties: { id: string; countyFips: string; countyName: string; state: string }[];
+    clinicPractices?: ListedPractice[];
+  },
+>(clinic: T) {
+  const { marketCounties, clinicPractices = [], ...rest } = clinic;
+  const estimates = clinicPractices.map((row) =>
+    estimateMonthlyReferrals(row.practice.taxonomyMix as Record<string, number> | null),
+  );
   return {
     ...rest,
     marketCounties: marketCounties.map((row) => presentMarketCounty(row)),
+    referralList: {
+      practices: clinicPractices.length,
+      providers: clinicPractices.reduce((sum, row) => sum + row.practice.providerCount, 0),
+      estimate: sumEstimates(estimates),
+    },
   };
 }
 

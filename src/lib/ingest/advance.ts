@@ -348,14 +348,14 @@ export async function createOrResumeRun(input: {
   const county = getCounty(input.countyId);
   const organization = await prisma.organization.findUnique({ where: { id: DEFAULT_ORGANIZATION_ID } });
   if (!organization) {
-    throw new Error('Default organization is missing. Run prisma migrate deploy before seeding.');
+    throw new Error('Default organization is missing. Run prisma migrate deploy before pulling referral sources.');
   }
 
   if (input.mode === 'continue' && input.runId) {
     const run = await prisma.countyIngestRun.findFirst({
       where: { id: input.runId, organizationId: DEFAULT_ORGANIZATION_ID, countyId: county.id },
     });
-    if (!run) throw new Error('Seed run not found');
+    if (!run) throw new Error('Pull not found');
     return run;
   }
 
@@ -392,7 +392,7 @@ export async function createOrResumeRun(input: {
       },
       data: {
         status: 'FAILED',
-        error: 'Replaced by a newer seed run.',
+        error: 'Replaced by a newer pull.',
         lockedAt: null,
         finishedAt: new Date(),
       },
@@ -418,7 +418,7 @@ export async function advanceCountyIngest(runId: string, options?: { budgetMs?: 
   const existing = await prisma.countyIngestRun.findFirst({
     where: { id: runId, organizationId: DEFAULT_ORGANIZATION_ID },
   });
-  if (!existing) throw new Error('Seed run not found');
+  if (!existing) throw new Error('Pull not found');
   if (existing.status === 'COMPLETED') return finish(existing, false);
 
   const staleBefore = new Date(Date.now() - LOCK_MS);
@@ -463,7 +463,7 @@ export async function advanceCountyIngest(runId: string, options?: { budgetMs?: 
 
     return finish(run, false);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'County seed failed';
+    const message = error instanceof Error ? error.message : 'Referral source pull failed';
     const failed = await prisma.countyIngestRun.update({
       where: { id: runId },
       data: {

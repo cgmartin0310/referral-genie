@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
+import { presentMarketCounty } from '@/lib/geo/market';
 
 // GET single clinic location
 export async function GET(
@@ -19,7 +20,10 @@ export async function GET(
             contactPerson: true,
             contactPhone: true,
           }
-        }
+        },
+        marketCounties: {
+          orderBy: [{ state: 'asc' as const }, { countyName: 'asc' as const }],
+        },
       }
     });
 
@@ -30,7 +34,11 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(clinicLocation);
+    const { marketCounties, ...rest } = clinicLocation;
+    return NextResponse.json({
+      ...rest,
+      marketCounties: marketCounties.map((row) => presentMarketCounty(row)),
+    });
   } catch (error) {
     console.error('Error fetching clinic location:', error);
     return NextResponse.json(

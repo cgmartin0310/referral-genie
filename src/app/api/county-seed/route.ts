@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       placesPending,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to load county seed';
+    const message = error instanceof Error ? error.message : 'Failed to load the referral source pull';
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const step = await advanceCountyIngest(run.id);
     return NextResponse.json(step);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'County seed failed';
+    const message = error instanceof Error ? error.message : 'Referral source pull failed';
     const status = message.startsWith('Unknown county') || message.includes('not found') ? 400 : 500;
     return NextResponse.json({ error: message }, { status });
   }

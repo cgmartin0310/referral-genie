@@ -46,7 +46,7 @@ export async function fetchNppesPage(input: {
       response = await fetch(url, {
         headers: {
           Accept: 'application/json',
-          'User-Agent': 'referral-genie-county-seed/1.0 (Lenoir County pilot; NPI upsert)',
+          'User-Agent': 'referral-genie/1.0 (NPI referral source pull)',
         },
         signal: AbortSignal.timeout(input.timeoutMs ?? 20_000),
       });

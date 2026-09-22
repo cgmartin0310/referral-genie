@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
+import { presentMarketCounty } from '@/lib/geo/market';
+
+const clinicInclude = {
+  _count: {
+    select: { referralSources: true },
+  },
+  marketCounties: {
+    orderBy: [{ state: 'asc' as const }, { countyName: 'asc' as const }],
+  },
+};
+
+function serializeClinic<T extends { marketCounties: { id: string; countyFips: string; countyName: string; state: string }[] }>(
+  clinic: T,
+) {
+  const { marketCounties, ...rest } = clinic;
+  return {
+    ...rest,
+    marketCounties: marketCounties.map((row) => presentMarketCounty(row)),
+  };
+}
 
 // GET all clinic locations
 export async function GET() {
@@ -10,14 +30,10 @@ export async function GET() {
       orderBy: {
         name: 'asc',
       },
-      include: {
-        _count: {
-          select: { referralSources: true }
-        }
-      }
+      include: clinicInclude,
     });
 
-    return NextResponse.json(clinicLocations);
+    return NextResponse.json(clinicLocations.map((clinic) => serializeClinic(clinic)));
   } catch (error) {
     console.error('Error fetching clinic locations:', error);
     return NextResponse.json(

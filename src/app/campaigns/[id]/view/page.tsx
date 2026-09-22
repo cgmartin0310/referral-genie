@@ -155,7 +155,7 @@ export default function ViewCampaignPage() {
         {campaign.targets && campaign.targets.length > 0 && (
           <div className="mt-8">
             <h3 className="text-lg font-medium text-gray-900">
-              Faxes
+              Faxes{' '}
               {campaign.audienceClinic && (
                 <span className="ml-2 text-sm font-normal text-gray-500">to {campaign.audienceClinic.name}’s referral list</span>
               )}

@@ -27,6 +27,7 @@ interface ClinicLocation {
   _count?: {
     referralSources: number;
   };
+  referralList?: { practices: number; providers: number; estimate: { low: number; high: number } };
 }
 
 export default function ClinicLocationsPage() {
@@ -133,7 +134,7 @@ export default function ClinicLocationsPage() {
         <p className="text-sm font-medium text-indigo-600">Get started</p>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Clinics</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Our Clinics</h1>
             <p className="mt-2 max-w-2xl text-sm text-gray-700">
               Step 1. Add a clinic site: name, address, phone, and fax. Then pick the counties that clinic serves.
             </p>
@@ -207,6 +208,9 @@ export default function ClinicLocationsPage() {
                 <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                   Market
                 </th>
+                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                  Referral list
+                </th>
                 <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
                   <span className="sr-only">Actions</span>
                 </th>
@@ -253,6 +257,20 @@ export default function ClinicLocationsPage() {
                       >
                         {market.length === 0 ? 'Pick counties' : marketLabel}
                       </Link>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                      {location.referralList && location.referralList.practices > 0 ? (
+                        <Link href={`/clinic-locations/${location.id}`} className="text-gray-900 hover:text-green-700">
+                          {location.referralList.practices} practice{location.referralList.practices === 1 ? '' : 's'}
+                          <span className="block text-xs text-gray-500">
+                            est. {location.referralList.estimate.low}–{location.referralList.estimate.high} / mo
+                          </span>
+                        </Link>
+                      ) : (
+                        <Link href={`/referral-sources?clinic=${location.id}`} className="text-green-700 hover:text-green-600">
+                          Add practices
+                        </Link>
+                      )}
                     </td>
                     <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                       <button

@@ -153,6 +153,7 @@ export function classifyHit(hit: RawHit, county: CountyMarket): KeepDecision {
       state: location?.state.trim().toUpperCase() ?? '',
       zipCode: postal.valid ? postal.zip5 : '',
       phone: location?.phone ?? '',
+      fax: location?.fax ?? '',
       addressFlags,
       quarantined: isQuarantined(addressFlags),
     },

@@ -1,4 +1,4 @@
-export type IngestPhase = 'nppes' | 'places' | 'duplicates' | 'done';
+export type IngestPhase = 'nppes' | 'places' | 'duplicates' | 'practices' | 'done';
 
 export interface IngestCursor {
   phase: IngestPhase;
@@ -16,6 +16,8 @@ export interface IngestSummary {
   quarantined: number;
   duplicatesFlagged: number;
   duplicateClusters: number;
+  practicesFormed: number;
+  providersLinked: number;
   droppedNotAllowList: number;
   excludedSecondaryOnly: number;
   nppesQueries: number;
@@ -39,6 +41,8 @@ export function emptySummary(nppesQueryTotal: number): IngestSummary {
     quarantined: 0,
     duplicatesFlagged: 0,
     duplicateClusters: 0,
+    practicesFormed: 0,
+    providersLinked: 0,
     droppedNotAllowList: 0,
     excludedSecondaryOnly: 0,
     nppesQueries: 0,
@@ -56,7 +60,7 @@ function numberField(value: unknown, fallback = 0): number {
 export function parseCursor(value: unknown): IngestCursor {
   const row = value && typeof value === 'object' ? (value as Partial<IngestCursor>) : {};
   const phase = row.phase;
-  const allowed: IngestPhase[] = ['nppes', 'places', 'duplicates', 'done'];
+  const allowed: IngestPhase[] = ['nppes', 'places', 'duplicates', 'practices', 'done'];
   return {
     phase: allowed.includes(phase as IngestPhase) ? (phase as IngestPhase) : 'nppes',
     zipIndex: numberField(row.zipIndex),
@@ -78,6 +82,8 @@ export function parseSummary(value: unknown): IngestSummary {
     quarantined: numberField(row.quarantined),
     duplicatesFlagged: numberField(row.duplicatesFlagged),
     duplicateClusters: numberField(row.duplicateClusters),
+    practicesFormed: numberField(row.practicesFormed),
+    providersLinked: numberField(row.providersLinked),
     droppedNotAllowList: numberField(row.droppedNotAllowList),
     excludedSecondaryOnly: numberField(row.excludedSecondaryOnly),
     nppesQueries: numberField(row.nppesQueries),

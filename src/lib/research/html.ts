@@ -16,7 +16,8 @@ export function practiceUrl(website: string | null | undefined): string | null {
   if (!website) return null;
   const trimmed = website.trim();
   if (!trimmed) return null;
-  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  // Only add a scheme when none is written; another scheme (ftp:, mailto:) is rejected below.
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   return publicHttpUrl(withScheme);
 }
 
@@ -42,7 +43,10 @@ export function isBlockedHost(hostname: string): boolean {
   ) {
     return true;
   }
-  if (host === '::1' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) return true;
+  // IPv6 literals only: loopback, link-local, and unique-local (fc00::/7).
+  if (host.includes(':')) {
+    if (host === '::1' || host.startsWith('fe80:') || /^f[cd]/.test(host)) return true;
+  }
   const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
   if (!ipv4) return false;
   const a = Number(ipv4[1]);

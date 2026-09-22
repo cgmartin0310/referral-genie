@@ -9,7 +9,7 @@ services:
     name: referral-genie
     runtime: node
     region: oregon # should match your database region
-    buildCommand: npm install && npm run build && npx prisma migrate deploy
+    buildCommand: npm install && npm test && npm run build && npx prisma migrate deploy
     startCommand: npm start
     envVars:
       - key: DATABASE_URL
@@ -26,6 +26,8 @@ services:
         value: https://api.humblefax.com
       - key: HUMBLE_FAX_WEBHOOK_URL
         sync: false # You'll set this after deployment
+      - key: HUMBLE_FAX_WEBHOOK_SECRET
+        sync: false # Optional. When set, the fax webhook requires ?secret=<value> or X-Webhook-Secret.
       - key: GOOGLE_PLACES_API_KEY
         sync: false # You'll set this in Render dashboard
       - key: DEFAULT_FAX_NUMBER

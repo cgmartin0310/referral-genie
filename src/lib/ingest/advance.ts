@@ -7,6 +7,7 @@ import { classifyHit } from '../nppes/normalize';
 import { fetchNppesPage, NPPES_MAX_SKIP, NPPES_PAGE_SIZE } from '../nppes/api';
 import { googlePlacesClient, matchPractice, PlacesConfigError, PlacesQuotaError } from '../places/match';
 import { assignDuplicateClusters } from './duplicates';
+import { buildPractices, type PracticeSourceRow } from '../practices/build';
 import { normalizeNpiNumber } from '../npi';
 import { buildNppesUpsert, buildPlacesWrite, type SourceWrite } from './source-write';
 import {
@@ -331,6 +332,96 @@ async function stepDuplicates(
 
   summary.duplicatesFlagged = flagged.length;
   summary.duplicateClusters = new Set(flagged.map((row) => row.duplicateClusterKey)).size;
+  cursor.phase = 'practices';
+  return saveRun(run.id, { status: 'RUNNING', phase: 'practices', cursor, summary, clearLock: true });
+}
+
+/**
+ * Form practices from the county's referral sources and nest providers under
+ * them. Runs after Places so a place id can anchor identity, and after the
+ * duplicate pass so the clusters are already settled.
+ */
+async function stepPractices(
+  run: CountyIngestRun,
+  summary: IngestSummary,
+  cursor: IngestCursor,
+): Promise<CountyIngestRun> {
+  const sources = await prisma.referralSource.findMany({
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: run.countyFips },
+    select: {
+      id: true, npiNumber: true, name: true, enumerationType: true,
+      primaryTaxonomyCode: true, taxonomyCodes: true, sourceType: true,
+      address: true, city: true, state: true, zipCode: true,
+      countyName: true, countyFips: true, contactPhone: true,
+      faxNumber: true, placeId: true,
+    },
+  });
+
+  const practices = buildPractices(sources as PracticeSourceRow[]);
+  let providersLinked = 0;
+
+  for (const built of practices) {
+    const shape = {
+      placeId: built.placeId,
+      name: built.name,
+      nameAmbiguous: built.nameAmbiguous,
+      address: built.address,
+      city: built.city,
+      state: built.state,
+      zipCode: built.zipCode,
+      countyName: built.countyName,
+      countyFips: built.countyFips,
+      phone: built.phone,
+      faxNumber: built.faxNumber,
+      orgNpis: built.orgNpis,
+      providerCount: built.providerCount,
+      taxonomyMix: asJson(built.taxonomyMix),
+    };
+    const practice = await prisma.practice.upsert({
+      where: {
+        organizationId_practiceKey: {
+          organizationId: DEFAULT_ORGANIZATION_ID,
+          practiceKey: built.practiceKey,
+        },
+      },
+      create: {
+        organizationId: DEFAULT_ORGANIZATION_ID,
+        practiceKey: built.practiceKey,
+        ...shape,
+      },
+      update: shape,
+      select: { id: true },
+    });
+
+    for (const provider of built.providers) {
+      if (!provider.npiNumber) continue;
+      const fields = {
+        name: provider.name,
+        primaryTaxonomyCode: provider.primaryTaxonomyCode,
+        taxonomyCodes: provider.taxonomyCodes,
+        sourceType: provider.sourceType,
+        countyFips: built.countyFips,
+        faxNumber: provider.faxNumber,
+        practiceId: practice.id,
+      };
+      await prisma.provider.upsert({
+        where: {
+          organizationId_npiNumber: {
+            organizationId: DEFAULT_ORGANIZATION_ID,
+            npiNumber: provider.npiNumber,
+          },
+        },
+        // useOwnFax is a person's setting and is never written by the pull.
+        create: { organizationId: DEFAULT_ORGANIZATION_ID, npiNumber: provider.npiNumber, ...fields },
+        update: fields,
+        select: { id: true },
+      });
+      providersLinked += 1;
+    }
+  }
+
+  summary.practicesFormed = practices.length;
+  summary.providersLinked = providersLinked;
   cursor.phase = 'done';
   return saveRun(run.id, {
     status: 'COMPLETED',
@@ -453,6 +544,8 @@ export async function advanceCountyIngest(runId: string, options?: { budgetMs?: 
       run = await stepPlaces(run, summary, cursor, started, budgetMs);
     } else if (cursor.phase === 'duplicates') {
       run = await stepDuplicates(run, summary, cursor);
+    } else if (cursor.phase === 'practices') {
+      run = await stepPractices(run, summary, cursor);
     } else {
       run = await saveRun(run.id, {
         status: 'COMPLETED',

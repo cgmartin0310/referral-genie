@@ -88,6 +88,7 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
           documentName: campaignData.documentName
         }}
         selectedReferralSources={selectedReferralSources}
+        audienceClinicId={campaignData.audienceClinicId ?? null}
       />
     </MainLayout>
   );

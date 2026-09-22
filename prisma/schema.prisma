@@ -22,8 +22,12 @@ model Organization {
   interactions       Interaction[]
   campaigns          Campaign[]
   campaignSources    CampaignToReferralSource[]
+  campaignTargets    CampaignTarget[]
   countyIngestRuns   CountyIngestRun[]
   researchRuns       ResearchRun[]
+  practices          Practice[]
+  providers          Provider[]
+  clinicPractices    ClinicPractice[]
 }
 
 model ClinicLocation {
@@ -42,6 +46,8 @@ model ClinicLocation {
   organization    Organization     @relation(fields: [organizationId], references: [id])
   referralSources ReferralSource[]
   marketCounties  ClinicMarketCounty[]
+  clinicPractices ClinicPractice[]
+  campaigns       Campaign[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -166,8 +172,13 @@ model Campaign {
   organizationId        String
   organization          Organization               @relation(fields: [organizationId], references: [id])
   referralSources       CampaignToReferralSource[]
+  /// The clinic whose referral list is this campaign's audience.
+  audienceClinicId      String?
+  audienceClinic        ClinicLocation?            @relation(fields: [audienceClinicId], references: [id], onDelete: SetNull)
+  targets               CampaignTarget[]
 
   @@index([organizationId])
+  @@index([audienceClinicId])
 }
 
 model CampaignToReferralSource {
@@ -229,4 +240,125 @@ model ResearchRun {
   updatedAt      DateTime     @updatedAt
 
   @@index([organizationId, scopeKey, createdAt])
+}
+
+
+/// A referral source: one practice location.
+///
+/// Identity is the location, not the organization. NPPES does not link an
+/// individual to an employer org NPI, most locations in a county pull have no
+/// NPI-2 at all, one org NPI can span several addresses, and one address can
+/// host several org NPIs. Org NPIs are recorded on `orgNpis`.
+model Practice {
+  id             String   @id @default(cuid())
+  /// Cluster identity: a Places id when matched, else normalized street+suite+ZIP.
+  practiceKey    String
+  placeId        String?
+  name           String
+  /// Several org NPIs sit here and the name had to be chosen.
+  nameAmbiguous  Boolean  @default(false)
+  address        String?
+  city           String?
+  state          String?
+  zipCode        String?
+  countyName     String?
+  countyFips     String?
+  phone          String?
+  /// Default fax target for every provider here.
+  faxNumber      String?
+  /// Org (NPI-2) numbers registered at this location. Often empty.
+  orgNpis        String[] @default([])
+  /// NPI-1 members. Zero means unknown, not an estimate of zero.
+  providerCount  Int      @default(0)
+  /// Source type to count, for the referral estimate's drivers.
+  taxonomyMix    Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  providers      Provider[]
+  clinicPractices ClinicPractice[]
+  campaignTargets CampaignTarget[]
+
+  @@unique([organizationId, practiceKey])
+  @@index([organizationId, countyFips])
+}
+
+/// An individual (NPI-1) practising at a Practice. Drives the provider count
+/// the referral estimate is built on.
+model Provider {
+  id                  String   @id @default(cuid())
+  npiNumber           String
+  name                String
+  primaryTaxonomyCode String?
+  taxonomyCodes       String[] @default([])
+  sourceType          String?
+  countyFips          String?
+  /// The provider's own fax, when NPPES lists one.
+  faxNumber           String?
+  /// Send to `faxNumber` instead of the practice fax.
+  useOwnFax           Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  practiceId          String?
+  practice            Practice? @relation(fields: [practiceId], references: [id], onDelete: SetNull)
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, npiNumber])
+  @@index([practiceId])
+  @@index([organizationId, countyFips])
+}
+
+/// A practice on a clinic's referral list. This is the association a user
+/// makes after sources are pulled and enriched: "these practices refer to
+/// this clinic." Relationship data lives here, not on the shared practice.
+model ClinicPractice {
+  id                       String   @id @default(cuid())
+  clinicLocationId         String
+  practiceId               String
+  /// Optional override of the estimate for this relationship.
+  expectedMonthlyReferrals Int?
+  notes                    String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  organizationId           String
+  clinicLocation           ClinicLocation @relation(fields: [clinicLocationId], references: [id], onDelete: Cascade)
+  practice                 Practice       @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  organization             Organization   @relation(fields: [organizationId], references: [id])
+
+  @@unique([clinicLocationId, practiceId])
+  @@index([practiceId])
+  @@index([organizationId])
+}
+
+/// One fax in a campaign. Built from a clinic's referral list: everyone at a
+/// practice who resolves to the same machine shares one target, so 24
+/// providers at one office is one page, not 24. The number is snapshotted
+/// here so what was sent, and to whom, can be shown later.
+model CampaignTarget {
+  id             String    @id @default(cuid())
+  campaignId     String
+  practiceId     String?
+  practiceName   String
+  providerIds    String[]  @default([])
+  providerNames  String[]  @default([])
+  /// Name on the cover sheet.
+  toName         String
+  faxNumber      String
+  /// "practice" or "provider" (the provider's own line).
+  level          String
+  status         String    @default("PENDING")
+  sentAt         DateTime?
+  responseAt     DateTime?
+  response       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  organizationId String
+  campaign       Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  practice       Practice?    @relation(fields: [practiceId], references: [id], onDelete: SetNull)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([campaignId])
+  @@index([organizationId])
 }

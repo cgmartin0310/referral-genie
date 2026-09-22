@@ -5,6 +5,7 @@ export interface AddressParts {
   state: string;
   postalCode: string;
   phone: string;
+  fax: string;
 }
 
 export interface TaxonomyHit {
@@ -36,6 +37,7 @@ export interface KeptProvider {
   state: string;
   zipCode: string;
   phone: string;
+  fax: string;
   addressFlags: string[];
   quarantined: boolean;
 }

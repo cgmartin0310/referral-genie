@@ -11,11 +11,12 @@ This does not add inbound referrals, attribution, or fax changes.
 Each kept NPI is one referral source in the default organization (`org_default`):
 
 - Taxonomy codes, primary taxonomy, enumeration type (`NPI-1` or `NPI-2`)
+- Fax number when NPPES lists one on the practice location (about 70% of kept Lenoir rows). An absent NPPES fax never clears a fax that research or a person already found.
 - County name and FIPS
 - Source type and a seeded category: Pediatrician, Primary Care - Family Medicine, Primary Care - Internal Medicine, Primary Care - General Practice
 - When Places matches: `placeId`, phone, website, rating, review count, business status, latitude, longitude, and match confidence
 - Provenance: origin (`nppes`, `places`, `user`, or `mixed`), confidence, and who overrode which fields
-- `likelyDuplicate` when two sources in the county share a place id, a 10-digit phone, or a normalized street and ZIP. Rows are flagged, not merged.
+- `likelyDuplicate` when two sources in the county resolve to one practice: the same place id, or the same normalized street, suite, and ZIP. A shared phone alone does not merge rows, because a multi-site group publishes one main number; it is reported as `phoneOnlyMatch` instead. Rows that differ only by suite or floor at one street address are rejoined when the phone also matches. Rows are flagged, not merged.
 
 A row is quarantined (stored, not sent to Places) when the practice location is deactivated, a PO Box, missing a street or phone, or has an unusable city, state, or ZIP. Boundary ZIPs are still matched and flagged `boundary_zip`.
 
@@ -103,6 +104,7 @@ npx tsx scripts/seed-county.ts --county lenoir-nc
 - Places matches are sequential and use the existing Google key. Quota or a denied key stops the run at the Places phase. NPPES rows are already saved.
 - Boundary ZIPs can include practices whose ZCTA also covers Pitt, Wayne, Duplin, or Greene. Those rows are flagged, not dropped.
 - Duplicate clusters are flagged inside the seeded county. They are not merged.
+- Practice identity is strongest after Places has run: a place id rejoins addresses a person typed differently (a facility name inside the street line, for example).
 - Providers who disappear from a later NPPES pull are left in the CRM. The upsert does not delete.
 - This path does not download the national NPPES file.
 

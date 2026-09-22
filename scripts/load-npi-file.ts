@@ -26,7 +26,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 // batch here is a 1,000-row INSERT.
 const prisma = new PrismaClient({ log: ['error', 'warn'] });
 import { parseCsvLine, headerIndex } from '../src/lib/npi/csv';
-import { CityCountyMap, countyForZcta, zip5 } from '../src/lib/npi/county-map';
+import { CityCountyMap, countyForZip, zip5 } from '../src/lib/npi/county-map';
 import { allowListCodes } from '../src/lib/nppes/taxonomies';
 
 const FILES_PAGE = 'https://download.cms.gov/nppes/NPI_Files.html';
@@ -57,7 +57,8 @@ async function download(url: string, name: string): Promise<string> {
 
 function openCsv(path: string): NodeJS.ReadableStream {
   if (path.endsWith('.csv')) return createReadStream(path);
-  const child = spawn('unzip', ['-p', path, 'npidata_pfile_*.csv', '-x', '*FileHeader*'], { stdio: ['ignore', 'pipe', 'inherit'] });
+  // The zip also holds npidata_pfile_..._fileheader.csv; its one header line would be read as a row.
+  const child = spawn('unzip', ['-p', path, 'npidata_pfile_*.csv', '-x', '*FileHeader*', '*fileheader*'], { stdio: ['ignore', 'pipe', 'inherit'] });
   child.on('exit', (code) => {
     if (code && code !== 0) console.error(`unzip exited with code ${code}`);
   });
@@ -190,10 +191,10 @@ async function main() {
     const city = text(fields[cols.city]);
     const postalCode = text(fields[cols.postal]);
     const zip = zip5(postalCode);
-    const zcta = zip ? countyForZcta(zip) : null;
-    if (zcta) {
+    const placed = zip ? countyForZip(zip) : null;
+    if (placed) {
       mappedByZcta += 1;
-      cities.learn(state, city, zcta.fips);
+      cities.learn(state, city, placed.fips);
     }
 
     const org = text(fields[cols.org]);
@@ -216,8 +217,8 @@ async function main() {
       fax: text(fields[cols.fax]),
       primaryTaxonomyCode: primary,
       taxonomyCodes,
-      countyFips: zcta?.fips ?? null,
-      countyMatch: zcta ? 'zcta' : null,
+      countyFips: placed?.fips ?? null,
+      countyMatch: placed?.match ?? null,
       lastUpdated: text(fields[cols.updated]),
     });
     rowsKept += 1;
@@ -227,7 +228,7 @@ async function main() {
     }
   }
   await upsertBatch(batch, loadedAt, loadId);
-  console.log(`read ${rowsRead.toLocaleString()} rows · kept ${rowsKept.toLocaleString()} · ${mappedByZcta.toLocaleString()} mapped by street ZIP · ${cities.size().toLocaleString()} towns learned`);
+  console.log(`read ${rowsRead.toLocaleString()} rows · kept ${rowsKept.toLocaleString()} · ${mappedByZcta.toLocaleString()} mapped by ZIP · ${cities.size().toLocaleString()} towns learned`);
 
   // PO Box ZIPs: map through the town, using where that town's street ZIPs landed.
   const unresolved = await prisma.npiRecord.findMany({

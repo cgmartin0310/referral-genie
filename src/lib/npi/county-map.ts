@@ -1,14 +1,16 @@
 import zctaCounty from '../../data/zcta-county.json';
+import zipCounty from '../../data/zip-county.json';
 
 /**
  * Practice-location ZIP → county, for rows from the NPI file.
  *
- * Street ZIPs are Census ZCTAs and map through the ZCTA-to-county crosswalk,
- * taking the county that holds the largest share of the ZCTA. PO Box ZIPs
- * are not ZCTAs; a practice registered under one maps through its city and
- * state, using the county that the ZCTA-mapped rows with the same city and
- * state landed in. Kinston 28502 resolves to Lenoir because Kinston 28501
- * and 28504 did.
+ * Three lookups, in order:
+ * 1. The HUD USPS ZIP-County crosswalk (src/data/zip-county.json): the county
+ *    holding most of the ZIP's addresses. Covers most street and PO Box ZIPs.
+ * 2. The Census ZCTA-to-county crosswalk by land share, for ZCTAs HUD lacks.
+ * 3. City and state, for ZIPs in neither: the county that rows with the same
+ *    city and state landed in through 1 or 2. Kinston 28502 is in neither
+ *    file and resolves to Lenoir because Kinston 28501 and 28504 did.
  */
 
 type ZctaRows = Record<string, [string, number][]>;
@@ -31,6 +33,18 @@ function index(): Map<string, { fips: string; share: number }> {
 /** The county holding most of this ZCTA, or null when the ZIP is not a ZCTA. */
 export function countyForZcta(zip: string): { fips: string; share: number } | null {
   return index().get(zip) ?? null;
+}
+
+const HUD = zipCounty as unknown as Record<string, string>;
+
+export type CountyMatch = 'hud' | 'zcta';
+
+/** County for a ZIP from the crosswalk files, and which one answered. */
+export function countyForZip(zip: string): { fips: string; match: CountyMatch } | null {
+  const hud = HUD[zip];
+  if (hud) return { fips: hud, match: 'hud' };
+  const zcta = countyForZcta(zip);
+  return zcta ? { fips: zcta.fips, match: 'zcta' } : null;
 }
 
 export function zip5(postal: string | null | undefined): string | null {

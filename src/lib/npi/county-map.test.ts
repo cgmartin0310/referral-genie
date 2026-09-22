@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { CityCountyMap, countyForZcta, zip5 } from './county-map';
+import { CityCountyMap, countyForZcta, countyForZip, zip5 } from './county-map';
 
 describe('practice ZIP to county', () => {
   it('maps a street ZIP to the county holding most of it', () => {
     assert.equal(countyForZcta('28504')?.fips, '37107'); // Kinston → Lenoir
     assert.equal(countyForZcta('28530')?.fips, '37147'); // Grifton is mostly Pitt
     assert.equal(countyForZcta('28502'), null); // PO Box ZIP, not a ZCTA
+  });
+
+  it('prefers the HUD address-based crosswalk and falls back to the ZCTA one', () => {
+    assert.deepEqual(countyForZip('28501'), { fips: '37107', match: 'hud' });
+    assert.equal(countyForZip('28502'), null); // PO Box ZIP in neither file; the town resolves it
+    assert.equal(countyForZip('00000'), null);
   });
 
   it('reads a 5-digit ZIP out of a 9-digit postal code', () => {

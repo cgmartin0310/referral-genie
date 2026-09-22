@@ -384,7 +384,7 @@ model NpiRecord {
   primaryTaxonomyCode String
   taxonomyCodes       String[] @default([])
   countyFips          String?
-  /// How the county was found: "zcta" (street ZIP) or "city" (PO Box ZIP via city and state).
+  /// How the county was found: "hud" (HUD USPS crosswalk), "zcta" (Census land share), or "city" (via city and state).
   countyMatch         String?
   lastUpdated         String?
   loadedAt            DateTime

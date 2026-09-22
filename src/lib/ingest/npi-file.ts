@@ -49,7 +49,7 @@ export function withRecordZips(county: CountyMarket, records: Pick<NpiRecord, 'z
       role: 'boundary',
       note: record.countyMatch === 'city'
         ? 'PO Box ZIP placed in this county through its town (NPI file)'
-        : 'ZIP mapped to this county by the NPI file',
+        : `ZIP mapped to this county by the ${record.countyMatch === 'hud' ? 'HUD USPS' : 'Census ZCTA'} crosswalk`,
     });
   }
   return extra.length === 0 ? county : { ...county, zips: [...county.zips, ...extra] };

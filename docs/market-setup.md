@@ -16,7 +16,7 @@ Counties are stored on the clinic in `ClinicMarketCounty` (clinic, FIPS, county 
 
 ### 3. Pull referral sources (NPI) — partial
 
-Pediatricians and primary care physicians come from the NPPES Read API. The pull is the existing county ingest job, NPPES phase only, started from the clinic page or from **Pull sources** (`/county-seed`).
+Pediatricians and primary care physicians come from the NPPES Read API. The pull is the existing county ingest job, NPPES phase only, started from the clinic page (primary) or from **Pull sources** (`/county-seed`). Rows created or updated by that pull are stamped with the clinic so they appear when filtering Referral Sources by clinic.
 
 NPPES has no county parameter. A pull runs only when that county has a practice-location ZIP list. Today that list is Lenoir County, NC. Any other saved county stays on the market and waits until a ZIP list is added. This bite does not download the national NPPES file and does not rebuild the ingest job.
 

@@ -20,6 +20,7 @@ export interface SourceWrite {
   enumerationType?: string | null;
   countyName?: string | null;
   countyFips?: string | null;
+  clinicLocationId?: string | null;
   placeId?: string | null;
   latitude?: number | null;
   longitude?: number | null;
@@ -45,8 +46,14 @@ export function buildNppesUpsert(
   county: CountyMarket,
   organizationId: string,
   existingProvenance: unknown,
+  options?: {
+    clinicLocationId?: string | null;
+    /** When set, fill clinicLocationId on update only if the row is still unassigned. */
+    existingClinicLocationId?: string | null;
+  },
 ): { create: SourceWrite; update: SourceWrite } {
   const provenance = nextIngestProvenance(existingProvenance, null, 'nppes');
+  const clinicLocationId = options?.clinicLocationId?.trim() || null;
   const create: SourceWrite = {
     organizationId,
     npiNumber: normalizeNpiNumber(kept.npi),
@@ -67,11 +74,15 @@ export function buildNppesUpsert(
     placesMatchStatus: kept.quarantined ? 'quarantined' : 'pending',
     provenance,
   };
+  if (clinicLocationId) {
+    create.clinicLocationId = clinicLocationId;
+  }
 
   const rest: Record<string, unknown> = { ...create };
   delete rest.organizationId;
   delete rest.npiNumber;
-  const update = {
+  delete rest.clinicLocationId;
+  const update: SourceWrite = {
     ...stripOverriddenFields(rest, provenance.overriddenFields),
     taxonomyCodes: kept.taxonomyCodes,
     primaryTaxonomyCode: kept.primaryTaxonomyCode,
@@ -83,6 +94,11 @@ export function buildNppesUpsert(
     placesMatchStatus: kept.quarantined ? 'quarantined' : 'pending',
     provenance,
   };
+  // Stamp the pulling clinic when the row has no clinic yet (e.g. older market pulls).
+  // Do not move a source that already belongs to another clinic.
+  if (clinicLocationId && !options?.existingClinicLocationId) {
+    update.clinicLocationId = clinicLocationId;
+  }
 
   return { create, update };
 }

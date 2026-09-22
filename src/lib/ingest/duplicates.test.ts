@@ -57,6 +57,27 @@ describe('source writes', () => {
     assert.equal(update.primaryTaxonomyCode, '208000000X');
     assert.equal(update.provenance?.origin, 'mixed');
     assert.equal(update.provenance?.overriddenBy, 'casey');
+    assert.equal(create.clinicLocationId, undefined);
+    assert.equal(update.clinicLocationId, undefined);
+  });
+
+  it('stamps clinicLocationId on create and fills null on update', () => {
+    const clinicId = 'clinic_kinston';
+    const { create, update } = buildNppesUpsert(kept, LENOIR_NC, 'org_default', null, {
+      clinicLocationId: clinicId,
+      existingClinicLocationId: null,
+    });
+    assert.equal(create.clinicLocationId, clinicId);
+    assert.equal(update.clinicLocationId, clinicId);
+  });
+
+  it('does not move a source already linked to another clinic', () => {
+    const { create, update } = buildNppesUpsert(kept, LENOIR_NC, 'org_default', null, {
+      clinicLocationId: 'clinic_kinston',
+      existingClinicLocationId: 'clinic_other',
+    });
+    assert.equal(create.clinicLocationId, 'clinic_kinston');
+    assert.equal(update.clinicLocationId, undefined);
   });
 
   it('stores a missing NPI as null on create', () => {

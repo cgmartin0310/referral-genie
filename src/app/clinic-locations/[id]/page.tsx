@@ -152,7 +152,7 @@ export default function ClinicSetupPage() {
             }}
           />
 
-          <PullEnrichPanel counties={counties} onProgress={setPullProgress} />
+          <PullEnrichPanel clinicId={clinic.id} counties={counties} onProgress={setPullProgress} />
           {counties.length > 0 && (
             <ResearchPanel
               clinicId={clinic.id}

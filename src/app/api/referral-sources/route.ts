@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '../../../lib/prisma';
 import { executeWithRetry } from '../../../lib/db-helpers';
+import { normalizeNpiNumber } from '../../../lib/npi';
 import { DEFAULT_ORGANIZATION_ID } from '../../../lib/org';
 import { emptyProvenance } from '../../../lib/provenance';
 
@@ -77,7 +78,7 @@ export async function POST(request: Request) {
           contactPhone: data.contactPhone || null,
           contactEmail: data.contactEmail || null,
           ...(data.faxNumber !== undefined ? { faxNumber: data.faxNumber } : {}),
-          ...(data.npiNumber !== undefined ? { npiNumber: data.npiNumber } : {}),
+          ...(data.npiNumber !== undefined ? { npiNumber: normalizeNpiNumber(data.npiNumber) } : {}),
           website: data.website || null,
           notes: data.notes || null,
           rating: data.rating || null,
@@ -107,7 +108,7 @@ export async function POST(request: Request) {
       // Check for Prisma-specific errors
       if (error.message.includes('Unique constraint')) {
         return NextResponse.json(
-          { error: 'A referral source with this name already exists' },
+          { error: 'A referral source with this NPI already exists' },
           { status: 409 }
         );
       }

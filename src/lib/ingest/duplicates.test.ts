@@ -49,13 +49,19 @@ describe('source writes', () => {
       overriddenAt: '2026-09-21T00:00:00.000Z',
       overriddenFields: ['contactPhone'],
     };
-    const { update } = buildNppesUpsert(kept, LENOIR_NC, 'org_default', existing);
+    const { create, update } = buildNppesUpsert(kept, LENOIR_NC, 'org_default', existing);
+    assert.equal(create.npiNumber, '1234567893');
     assert.equal(update.npiNumber, undefined);
     assert.equal(update.contactPhone, undefined);
     assert.equal(update.countyFips, '37107');
     assert.equal(update.primaryTaxonomyCode, '208000000X');
     assert.equal(update.provenance?.origin, 'mixed');
     assert.equal(update.provenance?.overriddenBy, 'casey');
+  });
+
+  it('stores a missing NPI as null on create', () => {
+    const { create } = buildNppesUpsert({ ...kept, npi: '   ' }, LENOIR_NC, 'org_default', null);
+    assert.equal(create.npiNumber, null);
   });
 
   it('writes Places fields and skips an overridden rating', () => {

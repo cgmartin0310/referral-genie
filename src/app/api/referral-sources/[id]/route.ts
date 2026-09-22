@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../../../../lib/prisma';
 import { executeWithRetry } from '../../../../lib/db-helpers';
 import { authOptions } from '../../../../lib/auth';
+import { normalizeNpiNumber } from '../../../../lib/npi';
 import { DEFAULT_ORGANIZATION_ID } from '../../../../lib/org';
 import { changedOverridableFields, userEditProvenance } from '../../../../lib/provenance';
 
@@ -109,7 +110,7 @@ export async function PUT(
       ...(data.contactPhone !== undefined && { contactPhone: data.contactPhone }),
       ...(data.contactEmail !== undefined && { contactEmail: data.contactEmail }),
       ...(data.faxNumber !== undefined && { faxNumber: data.faxNumber }),
-      ...(data.npiNumber !== undefined && { npiNumber: data.npiNumber }),
+      ...(data.npiNumber !== undefined && { npiNumber: normalizeNpiNumber(data.npiNumber) }),
       ...(data.website !== undefined && { website: data.website }),
       ...(data.notes !== undefined && { notes: data.notes }),
       ...(data.rating !== undefined && { rating: data.rating }),
@@ -146,6 +147,13 @@ export async function PUT(
 
     if (error instanceof Error) {
       console.error('Error message:', error.message);
+
+      if (error.message.includes('Unique constraint')) {
+        return NextResponse.json(
+          { error: 'A referral source with this NPI already exists' },
+          { status: 409 }
+        );
+      }
     }
 
     return NextResponse.json(

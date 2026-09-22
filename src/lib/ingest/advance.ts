@@ -7,6 +7,7 @@ import { classifyHit } from '../nppes/normalize';
 import { fetchNppesPage, NPPES_MAX_SKIP, NPPES_PAGE_SIZE } from '../nppes/api';
 import { googlePlacesClient, matchPractice, PlacesConfigError, PlacesQuotaError } from '../places/match';
 import { assignDuplicateClusters } from './duplicates';
+import { normalizeNpiNumber } from '../npi';
 import { buildNppesUpsert, buildPlacesWrite, type SourceWrite } from './source-write';
 import {
   emptyCursor,
@@ -168,8 +169,10 @@ async function stepNppes(
     }
 
     const kept = decision.provider;
+    const npiNumber = normalizeNpiNumber(kept.npi);
+    if (!npiNumber) continue;
     const existing = await prisma.referralSource.findFirst({
-      where: { organizationId: DEFAULT_ORGANIZATION_ID, npiNumber: kept.npi },
+      where: { organizationId: DEFAULT_ORGANIZATION_ID, npiNumber },
     });
     const built = buildNppesUpsert(kept, county, DEFAULT_ORGANIZATION_ID, existing?.provenance ?? null);
     blankCategory(built.create, ids);

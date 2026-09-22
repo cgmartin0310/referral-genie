@@ -24,6 +24,8 @@ model Organization {
   campaignSources    CampaignToReferralSource[]
   countyIngestRuns   CountyIngestRun[]
   researchRuns       ResearchRun[]
+  practices          Practice[]
+  providers          Provider[]
 }
 
 model ClinicLocation {
@@ -229,4 +231,70 @@ model ResearchRun {
   updatedAt      DateTime     @updatedAt
 
   @@index([organizationId, scopeKey, createdAt])
+}
+
+
+/// A referral source: one practice location.
+///
+/// Identity is the location, not the organization. NPPES does not link an
+/// individual to an employer org NPI, most locations in a county pull have no
+/// NPI-2 at all, one org NPI can span several addresses, and one address can
+/// host several org NPIs. Org NPIs are recorded on `orgNpis`.
+model Practice {
+  id             String   @id @default(cuid())
+  /// Cluster identity: a Places id when matched, else normalized street+suite+ZIP.
+  practiceKey    String
+  placeId        String?
+  name           String
+  /// Several org NPIs sit here and the name had to be chosen.
+  nameAmbiguous  Boolean  @default(false)
+  address        String?
+  city           String?
+  state          String?
+  zipCode        String?
+  countyName     String?
+  countyFips     String?
+  phone          String?
+  /// Default fax target for every provider here.
+  faxNumber      String?
+  /// Org (NPI-2) numbers registered at this location. Often empty.
+  orgNpis        String[] @default([])
+  /// NPI-1 members. Zero means unknown, not an estimate of zero.
+  providerCount  Int      @default(0)
+  /// Source type to count, for the referral estimate's drivers.
+  taxonomyMix    Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  providers      Provider[]
+
+  @@unique([organizationId, practiceKey])
+  @@index([organizationId, countyFips])
+}
+
+/// An individual (NPI-1) practising at a Practice. Drives the provider count
+/// the referral estimate is built on.
+model Provider {
+  id                  String   @id @default(cuid())
+  npiNumber           String
+  name                String
+  primaryTaxonomyCode String?
+  taxonomyCodes       String[] @default([])
+  sourceType          String?
+  countyFips          String?
+  /// The provider's own fax, when NPPES lists one.
+  faxNumber           String?
+  /// Send to `faxNumber` instead of the practice fax.
+  useOwnFax           Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  practiceId          String?
+  practice            Practice? @relation(fields: [practiceId], references: [id], onDelete: SetNull)
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, npiNumber])
+  @@index([practiceId])
+  @@index([organizationId, countyFips])
 }

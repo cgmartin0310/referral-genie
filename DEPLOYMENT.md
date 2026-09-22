@@ -37,6 +37,7 @@ After deployment, go to your web service settings and add these environment vari
 4. `AUTH_USERNAME` and `AUTH_PASSWORD` - Required. The app no longer has a built-in login. Requests fail closed until both are set.
 5. `GOOGLE_PLACES_API_KEY` - Required for county Places matching and the non-NPI search page.
 6. `NEXTAUTH_URL` - The public Render URL, for example `https://your-app-name.onrender.com`
+7. Research (Bite 5). Prefer `XAI_API_KEY` or `GROK_API_KEY` for Grok. Optional `XAI_MODEL` or `GROK_MODEL` (default `grok-4`) and `XAI_BASE_URL` (default `https://api.x.ai/v1`). If those keys are unset, set all three of `OPENAI_COMPAT_API_KEY`, `OPENAI_COMPAT_BASE_URL`, and `OPENAI_COMPAT_MODEL`. Research reads public practice websites only. It does not run without one of those key setups.
 
 Market setup is documented in `docs/market-setup.md`. The Lenoir County, NC ZIP list used by the NPI pull is in `docs/kinston-pilot.md`.
 

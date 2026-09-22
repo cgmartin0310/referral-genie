@@ -81,13 +81,14 @@ export default function Dashboard() {
           <p className="text-sm font-medium text-indigo-600">Get started</p>
           <h1 className="mt-1 text-2xl font-semibold text-gray-900">Add a clinic</h1>
           <p className="mt-2 max-w-2xl text-sm text-gray-600">
-            Add the clinic site, pick the counties it serves, pull pediatric and primary care referral sources, then enrich those sources with Google Places.
+            Add the clinic site, pick the counties it serves, pull pediatric and primary care referral sources, enrich those sources with Google Places, then research missing contact details.
           </p>
-          <ol className="mt-4 grid gap-3 sm:grid-cols-4">
+          <ol className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <li className="text-sm text-gray-800"><span className="font-semibold text-indigo-700">1.</span> Add a clinic</li>
             <li className="text-sm text-gray-800"><span className="font-semibold text-indigo-700">2.</span> Pick counties</li>
             <li className="text-sm text-gray-800"><span className="font-semibold text-indigo-700">3.</span> Pull referral sources</li>
             <li className="text-sm text-gray-800"><span className="font-semibold text-indigo-700">4.</span> Enrich with Google Places</li>
+            <li className="text-sm text-gray-800"><span className="font-semibold text-indigo-700">5.</span> Research missing info</li>
           </ol>
           <div className="mt-6">
             <Link

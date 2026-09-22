@@ -1,0 +1,367 @@
+import { Prisma, type ResearchRun } from '@prisma/client';
+import prisma from '../prisma';
+import { DEFAULT_ORGANIZATION_ID } from '../org';
+import { parseProvenance, researchProvenance } from '../provenance';
+import { acceptProposals } from './accept';
+import { fetchPracticePages, practiceUrl } from './html';
+import { createResearchJudge, ResearchConfigError } from './llm';
+
+const LOCK_MS = 90_000;
+
+export interface ResearchSummary {
+  total: number;
+  researched: number;
+  skippedNoUrl: number;
+  fieldsFilled: number;
+  lowConfidence: number;
+  errors: string[];
+}
+
+interface ResearchCursor {
+  sourceIds: string[];
+  index: number;
+}
+
+export interface ResearchRunView {
+  id: string;
+  scopeKey: string;
+  status: string;
+  error: string | null;
+  summary: ResearchSummary;
+  index: number;
+  total: number;
+}
+
+export interface ResearchAdvanceResult {
+  run: ResearchRunView;
+  busy: boolean;
+}
+
+function asJson(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
+}
+
+function emptySummary(total: number): ResearchSummary {
+  return {
+    total,
+    researched: 0,
+    skippedNoUrl: 0,
+    fieldsFilled: 0,
+    lowConfidence: 0,
+    errors: [],
+  };
+}
+
+function parseSummary(value: unknown): ResearchSummary {
+  const row = value && typeof value === 'object' ? value as Partial<ResearchSummary> : {};
+  return {
+    total: numberOr(row.total),
+    researched: numberOr(row.researched),
+    skippedNoUrl: numberOr(row.skippedNoUrl),
+    fieldsFilled: numberOr(row.fieldsFilled),
+    lowConfidence: numberOr(row.lowConfidence),
+    errors: Array.isArray(row.errors) ? row.errors.filter((item): item is string => typeof item === 'string').slice(0, 20) : [],
+  };
+}
+
+function parseCursor(value: unknown): ResearchCursor {
+  const row = value && typeof value === 'object' ? value as Partial<ResearchCursor> : {};
+  const sourceIds = Array.isArray(row.sourceIds)
+    ? row.sourceIds.filter((item): item is string => typeof item === 'string')
+    : [];
+  return { sourceIds, index: numberOr(row.index) };
+}
+
+function numberOr(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+export function presentResearchRun(run: ResearchRun): ResearchRunView {
+  const summary = parseSummary(run.summary);
+  const cursor = parseCursor(run.cursor);
+  return {
+    id: run.id,
+    scopeKey: run.scopeKey,
+    status: run.status,
+    error: run.error,
+    summary,
+    index: cursor.index,
+    total: cursor.sourceIds.length || summary.total,
+  };
+}
+
+export function clinicScope(clinicId: string): string {
+  return `clinic:${clinicId}`;
+}
+
+export function sourceScope(sourceId: string): string {
+  return `source:${sourceId}`;
+}
+
+export async function latestResearchRun(scopeKey: string): Promise<ResearchRun | null> {
+  return prisma.researchRun.findFirst({
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, scopeKey },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function createOrResumeResearchRun(input: {
+  scopeKey: string;
+  mode: 'continue' | 'refresh';
+  runId?: string;
+  sourceIds: string[];
+}): Promise<ResearchRun> {
+  const organization = await prisma.organization.findUnique({ where: { id: DEFAULT_ORGANIZATION_ID } });
+  if (!organization) {
+    throw new Error('Default organization is missing. Run prisma migrate deploy before researching referral sources.');
+  }
+
+  if (input.mode === 'continue' && input.runId) {
+    const run = await prisma.researchRun.findFirst({
+      where: { id: input.runId, organizationId: DEFAULT_ORGANIZATION_ID, scopeKey: input.scopeKey },
+    });
+    if (!run) throw new Error('Research run not found');
+    return run;
+  }
+
+  if (input.mode === 'continue') {
+    const latest = await prisma.researchRun.findFirst({
+      where: {
+        organizationId: DEFAULT_ORGANIZATION_ID,
+        scopeKey: input.scopeKey,
+        status: { in: ['QUEUED', 'RUNNING', 'FAILED'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (latest) return latest;
+  }
+
+  if (input.mode === 'refresh') {
+    const staleBefore = new Date(Date.now() - LOCK_MS);
+    const active = await prisma.researchRun.findFirst({
+      where: {
+        organizationId: DEFAULT_ORGANIZATION_ID,
+        scopeKey: input.scopeKey,
+        status: 'RUNNING',
+        lockedAt: { gt: staleBefore },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (active) return active;
+
+    await prisma.researchRun.updateMany({
+      where: {
+        organizationId: DEFAULT_ORGANIZATION_ID,
+        scopeKey: input.scopeKey,
+        status: { in: ['QUEUED', 'RUNNING', 'FAILED'] },
+      },
+      data: {
+        status: 'FAILED',
+        error: 'Replaced by a newer research run.',
+        lockedAt: null,
+        finishedAt: new Date(),
+      },
+    });
+  }
+
+  return prisma.researchRun.create({
+    data: {
+      organizationId: DEFAULT_ORGANIZATION_ID,
+      scopeKey: input.scopeKey,
+      status: 'QUEUED',
+      cursor: asJson({ sourceIds: input.sourceIds, index: 0 }),
+      summary: asJson(emptySummary(input.sourceIds.length)),
+    },
+  });
+}
+
+export async function advanceResearchRun(runId: string): Promise<ResearchAdvanceResult> {
+  const existing = await prisma.researchRun.findFirst({
+    where: { id: runId, organizationId: DEFAULT_ORGANIZATION_ID },
+  });
+  if (!existing) throw new Error('Research run not found');
+  if (existing.status === 'COMPLETED') {
+    return { run: presentResearchRun(existing), busy: false };
+  }
+
+  const staleBefore = new Date(Date.now() - LOCK_MS);
+  const claim = await prisma.researchRun.updateMany({
+    where: {
+      id: runId,
+      organizationId: DEFAULT_ORGANIZATION_ID,
+      status: { in: ['QUEUED', 'RUNNING', 'FAILED'] },
+      OR: [{ lockedAt: null }, { lockedAt: { lt: staleBefore } }],
+    },
+    data: { status: 'RUNNING', lockedAt: new Date(), error: null, finishedAt: null },
+  });
+  if (claim.count === 0) {
+    const current = await prisma.researchRun.findUnique({ where: { id: runId } });
+    return { run: presentResearchRun(current ?? existing), busy: true };
+  }
+
+  try {
+    const run = await stepResearch(await prisma.researchRun.findUniqueOrThrow({ where: { id: runId } }));
+    return { run: presentResearchRun(run), busy: false };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Research failed';
+    const failed = await prisma.researchRun.update({
+      where: { id: runId },
+      data: {
+        status: 'FAILED',
+        error: message,
+        lockedAt: null,
+        finishedAt: new Date(),
+      },
+    });
+    return { run: presentResearchRun(failed), busy: false };
+  }
+}
+
+async function stepResearch(run: ResearchRun): Promise<ResearchRun> {
+  const summary = parseSummary(run.summary);
+  const cursor = parseCursor(run.cursor);
+  if (cursor.index >= cursor.sourceIds.length) {
+    return finishRun(run.id, summary, cursor);
+  }
+
+  const sourceId = cursor.sourceIds[cursor.index];
+  const source = await prisma.referralSource.findFirst({
+    where: { id: sourceId, organizationId: DEFAULT_ORGANIZATION_ID },
+  });
+  if (!source) {
+    pushError(summary, `Missing referral source ${sourceId}`);
+    cursor.index += 1;
+    return saveProgress(run.id, summary, cursor);
+  }
+
+  const url = practiceUrl(source.website);
+  if (!url) {
+    summary.skippedNoUrl += 1;
+    cursor.index += 1;
+    return cursor.index >= cursor.sourceIds.length
+      ? finishRun(run.id, summary, cursor)
+      : saveProgress(run.id, summary, cursor);
+  }
+
+  let judge;
+  try {
+    judge = createResearchJudge();
+  } catch (error) {
+    if (error instanceof ResearchConfigError) throw error;
+    throw error;
+  }
+
+  const bundle = await fetchPracticePages(url);
+  if (bundle.pages.length === 0) {
+    pushError(summary, `${source.name}: ${bundle.error || 'No page text'}`);
+    cursor.index += 1;
+    return cursor.index >= cursor.sourceIds.length
+      ? finishRun(run.id, summary, cursor)
+      : saveProgress(run.id, summary, cursor);
+  }
+
+  const proposals = await judge.extract({
+    practiceName: source.name,
+    city: source.city,
+    state: source.state,
+    pages: bundle.pages,
+    links: bundle.links,
+  });
+  const provenance = parseProvenance(source.provenance);
+  const decision = acceptProposals({
+    current: {
+      website: source.website,
+      contactPhone: source.contactPhone,
+      faxNumber: source.faxNumber,
+      numberOfProviders: source.numberOfProviders,
+      contactEmail: source.contactEmail,
+      referralFormUrl: source.referralFormUrl,
+      preferredChannel: source.preferredChannel,
+    },
+    overriddenFields: provenance.overriddenFields,
+    pageText: bundle.text,
+    links: bundle.links,
+    fetchedUrls: bundle.pages.map((page) => page.url),
+    proposals,
+  });
+  summary.lowConfidence += decision.rejected;
+  summary.researched += 1;
+  summary.fieldsFilled += decision.accepted.length;
+
+  if (decision.accepted.length > 0) {
+    const updates = decision.updates;
+    await prisma.referralSource.update({
+      where: { id: source.id },
+      data: {
+        ...(typeof updates.website === 'string' ? { website: updates.website } : {}),
+        ...(typeof updates.contactPhone === 'string' ? { contactPhone: updates.contactPhone } : {}),
+        ...(typeof updates.faxNumber === 'string' ? { faxNumber: updates.faxNumber } : {}),
+        ...(typeof updates.contactEmail === 'string' ? { contactEmail: updates.contactEmail } : {}),
+        ...(typeof updates.referralFormUrl === 'string' ? { referralFormUrl: updates.referralFormUrl } : {}),
+        ...(typeof updates.preferredChannel === 'string' ? { preferredChannel: updates.preferredChannel } : {}),
+        ...(typeof updates.numberOfProviders === 'number' ? { numberOfProviders: updates.numberOfProviders } : {}),
+        provenance: asJson(researchProvenance(source.provenance, decision.accepted)),
+      },
+    });
+  }
+
+  cursor.index += 1;
+  return cursor.index >= cursor.sourceIds.length
+    ? finishRun(run.id, summary, cursor)
+    : saveProgress(run.id, summary, cursor);
+}
+
+function pushError(summary: ResearchSummary, message: string) {
+  if (summary.errors.length < 20) summary.errors.push(message);
+}
+
+async function saveProgress(id: string, summary: ResearchSummary, cursor: ResearchCursor): Promise<ResearchRun> {
+  return prisma.researchRun.update({
+    where: { id },
+    data: {
+      status: 'RUNNING',
+      cursor: asJson(cursor),
+      summary: asJson(summary),
+      error: null,
+      lockedAt: null,
+    },
+  });
+}
+
+async function finishRun(id: string, summary: ResearchSummary, cursor: ResearchCursor): Promise<ResearchRun> {
+  return prisma.researchRun.update({
+    where: { id },
+    data: {
+      status: 'COMPLETED',
+      cursor: asJson(cursor),
+      summary: asJson(summary),
+      error: null,
+      lockedAt: null,
+      finishedAt: new Date(),
+    },
+  });
+}
+
+export async function sourceIdsForClinic(clinicId: string): Promise<string[]> {
+  const clinic = await prisma.clinicLocation.findFirst({
+    where: { id: clinicId, organizationId: DEFAULT_ORGANIZATION_ID },
+    include: { marketCounties: true },
+  });
+  if (!clinic) throw new Error('Clinic not found');
+  const fips = clinic.marketCounties.map((county) => county.countyFips);
+  if (fips.length === 0) return [];
+  const sources = await prisma.referralSource.findMany({
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: { in: fips } },
+    select: { id: true },
+    orderBy: { id: 'asc' },
+  });
+  return sources.map((source) => source.id);
+}
+
+export async function assertSource(sourceId: string): Promise<void> {
+  const source = await prisma.referralSource.findFirst({
+    where: { id: sourceId, organizationId: DEFAULT_ORGANIZATION_ID },
+    select: { id: true },
+  });
+  if (!source) throw new Error('Referral source not found');
+}

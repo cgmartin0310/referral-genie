@@ -1,0 +1,91 @@
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
+import { practiceUrl } from '@/lib/research/html';
+import {
+  advanceResearchRun,
+  assertSource,
+  clinicScope,
+  createOrResumeResearchRun,
+  latestResearchRun,
+  presentResearchRun,
+  sourceIdsForClinic,
+  sourceScope,
+} from '@/lib/research/advance';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest) {
+  try {
+    const clinicId = request.nextUrl.searchParams.get('clinicId');
+    const sourceId = request.nextUrl.searchParams.get('sourceId');
+    if (!clinicId && !sourceId) {
+      return NextResponse.json({ error: 'Choose a clinic or a referral source.' }, { status: 400 });
+    }
+    const scopeKey = sourceId ? sourceScope(sourceId) : clinicScope(clinicId as string);
+    if (sourceId) await assertSource(sourceId);
+    const counts = clinicId ? await clinicCounts(clinicId) : await sourceCounts(sourceId as string);
+    const latest = await latestResearchRun(scopeKey);
+    return NextResponse.json({
+      ...counts,
+      latestRun: latest ? presentResearchRun(latest) : null,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load research';
+    const status = message.includes('not found') ? 404 : 400;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json() as {
+      clinicId?: string;
+      sourceId?: string;
+      runId?: string;
+      mode?: 'continue' | 'refresh';
+    };
+    if (!body.clinicId && !body.sourceId) {
+      return NextResponse.json({ error: 'Choose a clinic or a referral source.' }, { status: 400 });
+    }
+    const scopeKey = body.sourceId ? sourceScope(body.sourceId) : clinicScope(body.clinicId as string);
+    const sourceIds = body.sourceId
+      ? [body.sourceId]
+      : await sourceIdsForClinic(body.clinicId as string);
+    if (body.sourceId) await assertSource(body.sourceId);
+    const mode = body.mode === 'continue' ? 'continue' : 'refresh';
+    const run = await createOrResumeResearchRun({
+      scopeKey,
+      mode,
+      runId: body.runId,
+      sourceIds,
+    });
+    const step = await advanceResearchRun(run.id);
+    return NextResponse.json(step);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Research failed';
+    const status = message.includes('not found') ? 404 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+async function clinicCounts(clinicId: string): Promise<{ sourceCount: number; withWebsite: number }> {
+  const ids = await sourceIdsForClinic(clinicId);
+  if (ids.length === 0) return { sourceCount: 0, withWebsite: 0 };
+  const rows = await prisma.referralSource.findMany({
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, id: { in: ids } },
+    select: { website: true },
+  });
+  return {
+    sourceCount: rows.length,
+    withWebsite: rows.filter((row) => practiceUrl(row.website)).length,
+  };
+}
+
+async function sourceCounts(sourceId: string): Promise<{ sourceCount: number; withWebsite: number }> {
+  const row = await prisma.referralSource.findFirst({
+    where: { id: sourceId, organizationId: DEFAULT_ORGANIZATION_ID },
+    select: { website: true },
+  });
+  return { sourceCount: row ? 1 : 0, withWebsite: row && practiceUrl(row.website) ? 1 : 0 };
+}

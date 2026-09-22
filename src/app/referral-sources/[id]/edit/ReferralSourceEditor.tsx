@@ -30,6 +30,8 @@ interface ReferralSourceForm {
   notes: string;
   expectedMonthlyReferrals: number | null;
   numberOfProviders: number | null;
+  referralFormUrl: string;
+  preferredChannel: string;
 }
 
 // Client component that receives the id as a prop
@@ -78,6 +80,8 @@ export default function ReferralSourceEditor({ id }: { id: string }) {
           notes: data.notes || '',
           expectedMonthlyReferrals: data.expectedMonthlyReferrals || null,
           numberOfProviders: data.numberOfProviders || null,
+          referralFormUrl: data.referralFormUrl || '',
+          preferredChannel: data.preferredChannel || '',
         });
         
         setIsLoading(false);
@@ -380,6 +384,33 @@ export default function ReferralSourceEditor({ id }: { id: string }) {
                   </div>
                 </div>
 
+                <div className="sm:col-span-3">
+                  <label htmlFor="referralFormUrl" className="block text-sm font-medium leading-6 text-gray-900">
+                    Referral form URL
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      type="url"
+                      {...register('referralFormUrl')}
+                      className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                    />
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label htmlFor="preferredChannel" className="block text-sm font-medium leading-6 text-gray-900">
+                    Preferred referral channel
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      {...register('preferredChannel')}
+                      placeholder="fax, portal, call, or email"
+                      className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                    />
+                  </div>
+                </div>
+
                 <div className="col-span-full">
                   <label htmlFor="notes" className="block text-sm font-medium leading-6 text-gray-900">
                     Notes
@@ -396,7 +427,7 @@ export default function ReferralSourceEditor({ id }: { id: string }) {
             </div>
             
             <p className="px-4 text-sm text-gray-500 sm:px-8">
-              Edits to name, address, phone, website, and rating are kept the next time this county is seeded.
+              Edits are kept the next time this county is pulled or researched. A blank you clear stays blank.
             </p>
             <div className="flex items-center justify-between gap-x-6 border-t border-gray-900/10 px-4 py-4 sm:px-8">
               <button

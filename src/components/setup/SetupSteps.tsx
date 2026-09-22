@@ -3,11 +3,12 @@ const STEPS = [
   { n: 2, label: 'Pick counties' },
   { n: 3, label: 'Pull referral sources' },
   { n: 4, label: 'Enrich with Google Places' },
+  { n: 5, label: 'Research missing info' },
 ];
 
 export default function SetupSteps({ current }: { current: number }) {
   return (
-    <ol className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <ol className="grid grid-cols-2 gap-3 lg:grid-cols-5">
       {STEPS.map((step) => {
         const done = step.n < current;
         const active = step.n === current;

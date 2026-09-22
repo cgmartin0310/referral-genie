@@ -37,4 +37,14 @@ services:
       - key: AUTH_USERNAME
         sync: false # Required. Login is rejected when this is unset.
       - key: AUTH_PASSWORD
-        sync: false # Required. Login is rejected when this is unset. 
+        sync: false # Required. Login is rejected when this is unset.
+      - key: XAI_API_KEY
+        sync: false # Preferred research model key (Grok). GROK_API_KEY is also accepted.
+      - key: XAI_MODEL
+        sync: false # Optional. Defaults to grok-4.
+      - key: OPENAI_COMPAT_API_KEY
+        sync: false # Used for research only when XAI_API_KEY and GROK_API_KEY are unset.
+      - key: OPENAI_COMPAT_BASE_URL
+        sync: false # OpenAI-compatible base URL, for example https://api.openai.com/v1
+      - key: OPENAI_COMPAT_MODEL
+        sync: false # Model name for OPENAI_COMPAT_BASE_URL. 

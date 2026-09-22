@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import MainLayout from '@/components/layout/MainLayout';
 import SetupSteps from '@/components/setup/SetupSteps';
 import PullEnrichPanel from '@/components/setup/PullEnrichPanel';
+import ResearchPanel from '@/components/setup/ResearchPanel';
 import type { MarketCountyView } from '@/lib/geo/market-view';
 
 interface ClinicOption {
@@ -20,6 +21,7 @@ export default function PullSourcesPage() {
   const [clinicId, setClinicId] = useState('');
   const [loading, setLoading] = useState(true);
   const [pullProgress, setPullProgress] = useState({ anyPastNppes: false, anyCompleted: false });
+  const [researchDone, setResearchDone] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,15 +47,25 @@ export default function PullSourcesPage() {
 
   const clinic = clinics.find((item) => item.id === clinicId) ?? null;
   const counties = clinic?.marketCounties ?? [];
-  const step = !clinic ? 1 : counties.length === 0 ? 2 : pullProgress.anyCompleted ? 5 : pullProgress.anyPastNppes ? 4 : 3;
+  const step = !clinic
+    ? 1
+    : counties.length === 0
+      ? 2
+      : researchDone
+        ? 6
+        : pullProgress.anyCompleted
+          ? 5
+          : pullProgress.anyPastNppes
+            ? 4
+            : 3;
 
   return (
     <MainLayout>
       <div className="max-w-3xl">
-        <p className="text-sm font-medium text-indigo-600">Steps 3 and 4</p>
+        <p className="text-sm font-medium text-indigo-600">Steps 3 to 5</p>
         <h1 className="mt-1 text-2xl font-semibold text-gray-900">Pull referral sources</h1>
         <p className="mt-2 text-sm text-gray-600">
-          After a clinic has counties, pull pediatricians and primary care physicians, then enrich matches with Google Places.
+          After a clinic has counties, pull pediatricians and primary care physicians, enrich matches with Google Places, then research missing contact details.
         </p>
         <div className="mt-6">
           <SetupSteps current={step} />
@@ -85,6 +97,7 @@ export default function PullSourcesPage() {
                 value={clinicId}
                 onChange={(event) => {
                   setPullProgress({ anyPastNppes: false, anyCompleted: false });
+                  setResearchDone(false);
                   setClinicId(event.target.value);
                 }}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
@@ -113,6 +126,13 @@ export default function PullSourcesPage() {
               )}
             </div>
             {clinic && <PullEnrichPanel key={clinic.id} counties={counties} onProgress={setPullProgress} />}
+            {clinic && counties.length > 0 && (
+              <ResearchPanel
+                key={`${clinic.id}-research`}
+                clinicId={clinic.id}
+                onProgress={({ completed }) => setResearchDone(completed)}
+              />
+            )}
           </div>
         )}
       </div>

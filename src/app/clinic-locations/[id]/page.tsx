@@ -12,6 +12,7 @@ import ClinicFormFields, { clinicToForm, type ClinicFormValues } from '@/compone
 import SetupSteps from '@/components/setup/SetupSteps';
 import CountyMarketPicker from '@/components/setup/CountyMarketPicker';
 import PullEnrichPanel from '@/components/setup/PullEnrichPanel';
+import ResearchPanel from '@/components/setup/ResearchPanel';
 import type { MarketCountyView } from '@/lib/geo/market-view';
 
 interface ClinicLocation {
@@ -41,6 +42,7 @@ export default function ClinicSetupPage() {
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState<ClinicFormValues | null>(null);
   const [pullProgress, setPullProgress] = useState({ anyPastNppes: false, anyCompleted: false });
+  const [researchDone, setResearchDone] = useState(false);
 
   const { data: clinic, isLoading, isError } = useQuery<ClinicLocation>({
     queryKey: ['clinic-location', id],
@@ -69,7 +71,15 @@ export default function ClinicSetupPage() {
   });
 
   const counties = clinic?.marketCounties ?? [];
-  const step = counties.length === 0 ? 2 : pullProgress.anyCompleted ? 5 : pullProgress.anyPastNppes ? 4 : 3;
+  const step = counties.length === 0
+    ? 2
+    : researchDone
+      ? 6
+      : pullProgress.anyCompleted
+        ? 5
+        : pullProgress.anyPastNppes
+          ? 4
+          : 3;
 
   const clinicReady = Boolean(clinic);
   useEffect(() => {
@@ -87,7 +97,7 @@ export default function ClinicSetupPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-gray-900">{clinic?.name ?? 'Clinic'}</h1>
         <p className="mt-2 max-w-2xl text-sm text-gray-600">
-          Pick the counties this clinic serves, pull pediatric and primary care referral sources, then enrich them with Google Places.
+          Pick the counties this clinic serves, pull pediatric and primary care referral sources, enrich them with Google Places, then research missing contact details.
         </p>
       </div>
 
@@ -143,6 +153,9 @@ export default function ClinicSetupPage() {
           />
 
           <PullEnrichPanel counties={counties} onProgress={setPullProgress} />
+          {counties.length > 0 && (
+            <ResearchPanel clinicId={clinic.id} onProgress={({ completed }) => setResearchDone(completed)} />
+          )}
         </div>
       )}
 

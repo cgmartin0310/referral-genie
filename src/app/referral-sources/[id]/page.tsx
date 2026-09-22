@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import MainLayout from '../../../components/layout/MainLayout';
+import ResearchPanel from '../../../components/setup/ResearchPanel';
 import InteractionList from '../../../components/InteractionList';
 import { ArrowLeftIcon, PencilIcon } from '@heroicons/react/24/outline';
 
@@ -27,6 +28,8 @@ interface ReferralSource {
   contactPhone: string | null;
   contactEmail: string | null;
   faxNumber: string | null;
+  referralFormUrl: string | null;
+  preferredChannel: string | null;
   npiNumber: string | null;
   website: string | null;
   notes: string | null;
@@ -58,6 +61,7 @@ interface ReferralSource {
     overriddenBy?: string | null;
     overriddenAt?: string | null;
     overriddenFields?: string[];
+    fieldConfidence?: Record<string, number>;
   } | null;
 }
 
@@ -130,6 +134,19 @@ export default function ReferralSourceDetailPage() {
           Edit
         </button>
       </div>
+      {referralSource?.id && (
+        <div className="mt-6">
+          <ResearchPanel
+            sourceId={referralSource.id}
+            onProgress={({ completed }) => {
+              if (!completed || !referralSource.id) return;
+              axios.get(`/api/referral-sources/${referralSource.id}`).then(({ data }) => {
+                setReferralSource(data);
+              }).catch(() => undefined);
+            }}
+          />
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="mt-6 border-b border-gray-200">
@@ -286,6 +303,24 @@ export default function ReferralSourceDetailPage() {
                     </dd>
                   </div>
                   <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt className="text-sm font-medium text-gray-500">Referral form</dt>
+                    <dd className="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                      {referralSource?.referralFormUrl ? (
+                        <a href={referralSource.referralFormUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-500">
+                          {referralSource.referralFormUrl}
+                        </a>
+                      ) : (
+                        'Not specified'
+                      )}
+                    </dd>
+                  </div>
+                  <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt className="text-sm font-medium text-gray-500">Preferred channel</dt>
+                    <dd className="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                      {referralSource?.preferredChannel || 'Not specified'}
+                    </dd>
+                  </div>
+                  <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                     <dt className="text-sm font-medium text-gray-500">Number of Providers</dt>
                     <dd className="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
                       {referralSource?.numberOfProviders || 'Not specified'}
@@ -372,6 +407,9 @@ export default function ReferralSourceDetailPage() {
                       : ''}
                     {referralSource?.provenance?.overriddenFields?.length
                       ? ` · kept fields: ${referralSource.provenance.overriddenFields.join(', ')}`
+                      : ''}
+                    {referralSource?.provenance?.fieldConfidence
+                      ? ` · research: ${Object.entries(referralSource.provenance.fieldConfidence).map(([field, confidence]) => `${field} ${confidence}`).join(', ')}`
                       : ''}
                   </dd>
                 </div>

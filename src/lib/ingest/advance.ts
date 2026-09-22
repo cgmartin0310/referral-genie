@@ -137,6 +137,7 @@ async function stepNppes(
   summary: IngestSummary,
   cursor: IngestCursor,
   county: CountyMarket,
+  clinicLocationId: string | null,
 ): Promise<CountyIngestRun> {
   if (cursor.zipIndex >= county.zips.length) {
     cursor.phase = 'places';
@@ -174,7 +175,10 @@ async function stepNppes(
     const existing = await prisma.referralSource.findFirst({
       where: { organizationId: DEFAULT_ORGANIZATION_ID, npiNumber },
     });
-    const built = buildNppesUpsert(kept, county, DEFAULT_ORGANIZATION_ID, existing?.provenance ?? null);
+    const built = buildNppesUpsert(kept, county, DEFAULT_ORGANIZATION_ID, existing?.provenance ?? null, {
+      clinicLocationId,
+      existingClinicLocationId: existing?.clinicLocationId ?? null,
+    });
     blankCategory(built.create, ids);
     blankCategory(built.update, ids);
 
@@ -416,13 +420,27 @@ export async function createOrResumeRun(input: {
   });
 }
 
-export async function advanceCountyIngest(runId: string, options?: { budgetMs?: number }): Promise<AdvanceResult> {
+export async function advanceCountyIngest(
+  runId: string,
+  options?: { budgetMs?: number; clinicLocationId?: string | null },
+): Promise<AdvanceResult> {
   const budgetMs = options?.budgetMs ?? DEFAULT_BUDGET_MS;
   const existing = await prisma.countyIngestRun.findFirst({
     where: { id: runId, organizationId: DEFAULT_ORGANIZATION_ID },
   });
   if (!existing) throw new Error('Pull not found');
   if (existing.status === 'COMPLETED') return finish(existing, false);
+
+  let clinicLocationId: string | null = null;
+  const requestedClinicId = options?.clinicLocationId?.trim() || null;
+  if (requestedClinicId) {
+    const clinic = await prisma.clinicLocation.findFirst({
+      where: { id: requestedClinicId, organizationId: DEFAULT_ORGANIZATION_ID },
+      select: { id: true },
+    });
+    if (!clinic) throw new Error('Clinic not found');
+    clinicLocationId = clinic.id;
+  }
 
   const staleBefore = new Date(Date.now() - LOCK_MS);
   const claim = await prisma.countyIngestRun.updateMany({
@@ -448,7 +466,7 @@ export async function advanceCountyIngest(runId: string, options?: { budgetMs?: 
     const county = getCounty(run.countyId);
 
     if (cursor.phase === 'nppes') {
-      run = await stepNppes(run, summary, cursor, county);
+      run = await stepNppes(run, summary, cursor, county, clinicLocationId);
     } else if (cursor.phase === 'places') {
       run = await stepPlaces(run, summary, cursor, started, budgetMs);
     } else if (cursor.phase === 'duplicates') {

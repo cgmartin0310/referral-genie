@@ -65,7 +65,8 @@ export default function PullSourcesPage() {
         <p className="text-sm font-medium text-indigo-600">Steps 3 to 5</p>
         <h1 className="mt-1 text-2xl font-semibold text-gray-900">Pull referral sources</h1>
         <p className="mt-2 text-sm text-gray-600">
-          After a clinic has counties, pull pediatricians and primary care physicians, enrich matches with Google Places, then research missing contact details.
+          After a clinic has counties, pull pediatricians and primary care physicians for that clinic, enrich matches
+          with Google Places, then research missing contact details.
         </p>
         <div className="mt-6">
           <SetupSteps current={step} />
@@ -125,7 +126,9 @@ export default function PullSourcesPage() {
                 </p>
               )}
             </div>
-            {clinic && <PullEnrichPanel key={clinic.id} counties={counties} onProgress={setPullProgress} />}
+            {clinic && (
+              <PullEnrichPanel key={clinic.id} clinicId={clinic.id} counties={counties} onProgress={setPullProgress} />
+            )}
             {clinic && counties.length > 0 && (
               <ResearchPanel
                 key={`${clinic.id}-research`}

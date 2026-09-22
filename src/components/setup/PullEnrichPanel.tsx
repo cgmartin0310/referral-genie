@@ -79,9 +79,12 @@ function enrichLabel(job: CountyJob): string {
 
 export default function PullEnrichPanel({
   counties,
+  clinicId,
   onProgress,
 }: {
   counties: MarketCountyView[];
+  /** When set, NPI upserts stamp ReferralSource.clinicLocationId to this clinic. */
+  clinicId?: string;
   onProgress?: (progress: { anyPastNppes: boolean; anyCompleted: boolean }) => void;
 }) {
   const ready = counties.filter((county) => county.pullReady && county.seedCountyId);
@@ -162,7 +165,12 @@ export default function PullEnrichPanel({
     let mode = start.mode;
     try {
       for (let step = 0; step < 500; step += 1) {
-        const { data } = await axios.post('/api/county-seed', { countyId: seedCountyId, runId, mode });
+        const { data } = await axios.post('/api/county-seed', {
+          countyId: seedCountyId,
+          runId,
+          mode,
+          ...(clinicId ? { clinicLocationId: clinicId } : {}),
+        });
         const run = data.run as CountyRun;
         const placesPending = data.placesPending ?? 0;
         setJobs((prev) => {
@@ -216,7 +224,8 @@ export default function PullEnrichPanel({
       <div>
         <h2 className="text-lg font-medium text-gray-900">Pull referral sources, then enrich</h2>
         <p className="mt-1 text-sm text-gray-600">
-          Pull pediatricians and primary care physicians from NPPES, then match phone and address to Google Places.
+          Pull pediatricians and primary care physicians from NPPES for this clinic&apos;s counties, then match phone
+          and address to Google Places. Pulled sources are linked to this clinic so they show under Referral Sources.
           Keyword search for partners without an NPI stays on{' '}
           <Link href="/prospecting" className="text-indigo-600 hover:text-indigo-500">
             Non-NPI search

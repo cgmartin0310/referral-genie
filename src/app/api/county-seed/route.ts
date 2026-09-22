@@ -49,16 +49,25 @@ export async function POST(request: NextRequest) {
       countyId?: string;
       runId?: string;
       mode?: 'continue' | 'refresh';
+      clinicLocationId?: string | null;
     };
     const countyId = body.countyId || 'lenoir-nc';
     getCounty(countyId);
     const mode = body.mode === 'continue' ? 'continue' : 'refresh';
+    const clinicLocationId = typeof body.clinicLocationId === 'string' ? body.clinicLocationId.trim() : '';
     const run = await createOrResumeRun({ countyId, mode, runId: body.runId });
-    const step = await advanceCountyIngest(run.id);
+    const step = await advanceCountyIngest(run.id, {
+      clinicLocationId: clinicLocationId || null,
+    });
     return NextResponse.json(step);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Referral source pull failed';
-    const status = message.startsWith('Unknown county') || message.includes('not found') ? 400 : 500;
+    const status =
+      message.startsWith('Unknown county') ||
+      message.includes('not found') ||
+      message === 'Clinic not found'
+        ? 400
+        : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

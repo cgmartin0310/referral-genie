@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import MainLayout from '../../components/layout/MainLayout';
 import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/20/solid';
 import ReferralSourceModal from '../../components/ReferralSourceModal';
+import { sourceMatchesClinicFilter } from '@/lib/referral-sources/clinic-filter';
 
 interface ReferralSource {
   id: string;
@@ -30,6 +31,7 @@ interface ReferralSource {
   numberOfProviders: number | null;
   sourceType: string | null;
   countyName: string | null;
+  countyFips: string | null;
   placesMatchStatus: string | null;
   likelyDuplicate: boolean;
   reviewCount: number | null;
@@ -37,6 +39,12 @@ interface ReferralSource {
   rating: number | null;
   createdAt: string;
   category: { id: string; name: string } | null;
+}
+
+interface ClinicOption {
+  id: string;
+  name: string;
+  marketCounties?: { fips: string }[];
 }
 
 type SortField = 'name' | 'clinicLocation' | 'address' | 'expectedMonthlyReferrals' | 'numberOfProviders';
@@ -63,17 +71,35 @@ export default function ReferralSourcesPage() {
     },
   });
 
-  // Get unique clinic locations for filter
-  const uniqueClinicLocations = useMemo(() => {
-    if (!referralSources) return [];
-    const locations = new Map<string, string>();
-    referralSources.forEach((source: ReferralSource) => {
+  const { data: clinics } = useQuery({
+    queryKey: ['clinic-locations'],
+    queryFn: async () => {
+      const { data } = await axios.get('/api/clinic-locations');
+      return data as ClinicOption[];
+    },
+  });
+
+  const clinicOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    clinics?.forEach((clinic) => byId.set(clinic.id, clinic.name));
+    referralSources?.forEach((source: ReferralSource) => {
       if (source.clinicLocation) {
-        locations.set(source.clinicLocation.id, source.clinicLocation.name);
+        byId.set(source.clinicLocation.id, source.clinicLocation.name);
       }
     });
-    return Array.from(locations.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [referralSources]);
+    return Array.from(byId.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [clinics, referralSources]);
+
+  const marketFipsByClinic = useMemo(() => {
+    const map = new Map<string, string[]>();
+    clinics?.forEach((clinic) => {
+      map.set(
+        clinic.id,
+        (clinic.marketCounties ?? []).map((county) => county.fips).filter(Boolean),
+      );
+    });
+    return map;
+  }, [clinics]);
 
   const countyNames = useMemo(() => {
     if (!referralSources) return [];
@@ -84,25 +110,28 @@ export default function ReferralSourcesPage() {
     return Array.from(names).sort();
   }, [referralSources]);
 
-  // Filter and sort referral sources
   const filteredAndSortedReferralSources = useMemo(() => {
     if (!referralSources) return [];
-    
-    // First filter by clinic location
+
     let result = [...referralSources];
     if (clinicLocationFilter) {
-      result = result.filter((source: ReferralSource) => 
-        source.clinicLocation?.id === clinicLocationFilter
+      const marketFips = marketFipsByClinic.get(clinicLocationFilter) ?? [];
+      result = result.filter((source: ReferralSource) =>
+        sourceMatchesClinicFilter(
+          { clinicLocationId: source.clinicLocationId, countyFips: source.countyFips },
+          clinicLocationFilter,
+          marketFips,
+        ),
       );
     }
     if (countyFilter) {
       result = result.filter((source: ReferralSource) => source.countyName === countyFilter);
     }
-    
-    // Then sort by the selected field
+
     result.sort((a: ReferralSource, b: ReferralSource) => {
-      let valA, valB;
-      
+      let valA;
+      let valB;
+
       switch (sortField) {
         case 'name':
           valA = a.name || '';
@@ -128,33 +157,29 @@ export default function ReferralSourcesPage() {
           valA = a.name || '';
           valB = b.name || '';
       }
-      
+
       if (sortDirection === 'asc') {
         return valA > valB ? 1 : valA < valB ? -1 : 0;
-      } else {
-        return valA < valB ? 1 : valA > valB ? -1 : 0;
       }
+      return valA < valB ? 1 : valA > valB ? -1 : 0;
     });
-    
+
     return result;
-  }, [referralSources, clinicLocationFilter, countyFilter, sortField, sortDirection]);
-  
+  }, [referralSources, clinicLocationFilter, countyFilter, sortField, sortDirection, marketFipsByClinic]);
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      // Toggle sort direction if clicking the same field
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-      // Set new sort field and default to ascending
       setSortField(field);
       setSortDirection('asc');
     }
   };
-  
+
   const renderSortIcon = (field: SortField) => {
     if (sortField !== field) return null;
-    
-    return sortDirection === 'asc' 
-      ? <ChevronUpIcon className="h-4 w-4 inline-block ml-1" /> 
+    return sortDirection === 'asc'
+      ? <ChevronUpIcon className="h-4 w-4 inline-block ml-1" />
       : <ChevronDownIcon className="h-4 w-4 inline-block ml-1" />;
   };
 
@@ -170,6 +195,10 @@ export default function ReferralSourcesPage() {
     refetch();
   };
 
+  const filteredClinicName = clinicLocationFilter
+    ? clinicOptions.find(([id]) => id === clinicLocationFilter)?.[1]
+    : null;
+
   return (
     <MainLayout>
       <div className="sm:flex sm:items-center">
@@ -178,8 +207,8 @@ export default function ReferralSourcesPage() {
             Referral Sources
           </h1>
           <p className="mt-2 text-sm text-gray-700">
-            Pediatricians and primary care physicians pulled for a clinic market show up here with NPI,
-            source type, and Places match status. Add a source by hand for anyone else.
+            Sources pulled for a clinic&apos;s market (pediatrics and PCP from NPI) show here with clinic, county,
+            and Places status. Filter by clinic to see that market&apos;s list.
           </p>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
@@ -193,11 +222,10 @@ export default function ReferralSourcesPage() {
         </div>
       </div>
 
-      {/* Filter Section */}
       <div className="mt-4 flex flex-col sm:flex-row gap-4">
         <div className="sm:w-64">
           <label htmlFor="clinicLocationFilter" className="block text-sm font-medium text-gray-700">
-            Filter by Clinic Location
+            Filter by clinic
           </label>
           <select
             id="clinicLocationFilter"
@@ -205,8 +233,8 @@ export default function ReferralSourcesPage() {
             onChange={(e) => setClinicLocationFilter(e.target.value)}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           >
-            <option value="">All Locations</option>
-            {uniqueClinicLocations.map(([locationId, locationName]) => (
+            <option value="">All clinics</option>
+            {clinicOptions.map(([locationId, locationName]) => (
               <option key={locationId} value={locationId}>
                 {locationName}
               </option>
@@ -244,14 +272,14 @@ export default function ReferralSourcesPage() {
                 <a href="/clinic-locations" className="font-medium text-indigo-600 hover:text-indigo-500">
                   Add a clinic
                 </a>
-                , pick its counties, then pull referral sources.
+                , pick its counties, then pull referral sources from the clinic page.
               </div>
             ) : (
               <table className="min-w-full divide-y divide-gray-300">
                 <thead>
                   <tr>
-                    <th 
-                      scope="col" 
+                    <th
+                      scope="col"
                       className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0 cursor-pointer hover:bg-gray-50"
                       onClick={() => handleSort('name')}
                     >
@@ -260,18 +288,18 @@ export default function ReferralSourcesPage() {
                         {renderSortIcon('name')}
                       </span>
                     </th>
-                    <th 
-                      scope="col" 
+                    <th
+                      scope="col"
                       className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
                       onClick={() => handleSort('clinicLocation')}
                     >
                       <span className="group inline-flex">
-                        Clinic Location
+                        Clinic
                         {renderSortIcon('clinicLocation')}
                       </span>
                     </th>
-                    <th 
-                      scope="col" 
+                    <th
+                      scope="col"
                       className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
                       onClick={() => handleSort('address')}
                     >
@@ -294,8 +322,8 @@ export default function ReferralSourcesPage() {
                         Fax
                       </span>
                     </th>
-                    <th 
-                      scope="col" 
+                    <th
+                      scope="col"
                       className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
                       onClick={() => handleSort('expectedMonthlyReferrals')}
                     >
@@ -304,8 +332,8 @@ export default function ReferralSourcesPage() {
                         {renderSortIcon('expectedMonthlyReferrals')}
                       </span>
                     </th>
-                    <th 
-                      scope="col" 
+                    <th
+                      scope="col"
                       className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
                       onClick={() => handleSort('numberOfProviders')}
                     >
@@ -334,11 +362,14 @@ export default function ReferralSourcesPage() {
                         )}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {source.clinicLocation?.name || 'Not specified'}
+                        {source.clinicLocation?.name ||
+                          (clinicLocationFilter && filteredClinicName && !source.clinicLocationId
+                            ? filteredClinicName
+                            : 'Not specified')}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {source.address ? 
-                          (source.city ? `${source.address}, ${source.city}` : source.address) 
+                        {source.address
+                          ? (source.city ? `${source.address}, ${source.city}` : source.address)
                           : 'Not specified'}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
@@ -382,7 +413,6 @@ export default function ReferralSourcesPage() {
         </div>
       </div>
 
-      {/* Add Referral Source Modal */}
       <ReferralSourceModal
         isOpen={isAddModalOpen}
         onClose={handleModalClose}
@@ -390,4 +420,4 @@ export default function ReferralSourcesPage() {
       />
     </MainLayout>
   );
-} 
+}

@@ -24,7 +24,7 @@ Re-runs upsert on `(organizationId, npiNumber)`. Fields a person edited in the C
 
 ## Taxonomy allow-list
 
-Fifteen NUCC codes: the nine physician codes from the NPPES spike plus six clinic/center organization codes. A row is kept only when the **primary** taxonomy is on this list. Organization rows are never counted as providers; they name the practice and carry its fax.
+Twenty-two NUCC codes: the nine physician codes from the NPPES spike, seven nurse practitioner and physician assistant codes, and six clinic/center organization codes. A row is kept only when the **primary** taxonomy is on this list. Organization rows are never counted as providers; they name the practice and carry its fax.
 
 | Code | Display name |
 |------|----------------|
@@ -37,6 +37,13 @@ Fifteen NUCC codes: the nine physician codes from the NPPES spike plus six clini
 | 208000000X | Pediatrics |
 | 2080A0000X | Pediatrics, Adolescent Medicine |
 | 2080P0006X | Pediatrics, Developmental - Behavioral Pediatrics |
+| 363LP0200X | Nurse Practitioner, Pediatrics |
+| 363LF0000X | Nurse Practitioner, Family |
+| 363LP2300X | Nurse Practitioner, Primary Care |
+| 363LA2200X | Nurse Practitioner, Adult Health |
+| 363LG0600X | Nurse Practitioner, Gerontology |
+| 363A00000X | Physician Assistant |
+| 363AM0700X | Physician Assistant, Medical |
 | 261QP2300X | Clinic/Center, Primary Care |
 | 261QR1300X | Clinic/Center, Rural Health |
 | 261QF0400X | Clinic/Center, FQHC |
@@ -118,4 +125,4 @@ npx tsx scripts/seed-county.ts --county lenoir-nc
 
 After a finished run, **Referral sources** lists Lenoir County rows with source type, NPI, and a Places status of matched, unmatched, or quarantined. Open a row for taxonomy, FIPS, place id, rating, review count, business status, lat/lng, provenance, and the duplicate flag. Matched rows have those Places fields filled in. Unmatched rows were sent to Places and did not clear the address or phone check. Quarantined rows were not sent.
 
-A Read API pull on 2026-09-21 kept 81 NPIs (64 individuals, 17 organizations): family medicine, internal medicine, and general practice. None had pediatrics as the primary taxonomy. The Pediatrics search in these ZIPs returned pediatric nurse practitioners, and those codes are not on the allow-list, so they are not upserted. Many kept rows share a clinic main phone number. The duplicate pass flags that cluster and does not merge the NPIs.
+A Read API pull on 2026-09-21 kept 81 NPIs (64 individuals, 17 organizations): family medicine, internal medicine, and general practice. None had pediatrics as the primary taxonomy; pediatric care on NPI in these ZIPs is delivered by nurse practitioners, which is why NP and PA codes are on the list. Many kept rows share a clinic main phone number. The duplicate pass flags that cluster and does not merge the NPIs.

@@ -64,7 +64,7 @@ NPPES has no county parameter. The seed queries these practice-location ZIPs wit
 | 28572 | Pink Hill | boundary (~27%, mostly Duplin) |
 | 28538 | Hookerton | boundary (~18%, mostly Greene) |
 
-The Read API returns at most 1,200 rows per taxonomy and ZIP (`skip` tops out at 1,000). Lenoir is small enough that this cap is unlikely. A truncated query is counted on the seed summary. The national NPPES dissemination file is not downloaded or committed.
+Each ZIP is scanned with no taxonomy filter and rows are kept by taxonomy code locally, because NPPES's `taxonomy_description` search silently misses records (none of Lenoir's eight pediatricians came back from it). The Read API returns at most 1,200 rows per query (`skip` tops out at 1,000); a ZIP that hits the cap is also searched by description as a supplement and counted as truncated. PO Box ZIPs such as 28502 are not ZCTAs and are not reached by ZIP scans; that is a limit of pulling through the API, resolved by loading the NPI file and mapping practice ZIP to county. The national NPPES dissemination file is not downloaded or committed.
 
 ## Environment variables
 
@@ -123,4 +123,4 @@ npx tsx scripts/seed-county.ts --county lenoir-nc
 
 After a finished run, **Referral sources** lists Lenoir County rows with source type, NPI, and a Places status of matched, unmatched, or quarantined. Open a row for taxonomy, FIPS, place id, rating, review count, business status, lat/lng, provenance, and the duplicate flag. Matched rows have those Places fields filled in. Unmatched rows were sent to Places and did not clear the address or phone check. Quarantined rows were not sent.
 
-A Read API pull on 2026-09-21 kept 81 NPIs (64 individuals, 17 organizations): family medicine, internal medicine, and general practice. None had pediatrics as the primary taxonomy; pediatric care on NPI in these ZIPs is delivered by nurse practitioners, which is why NP and PA codes are on the list. Many kept rows share a clinic main phone number. The duplicate pass flags that cluster and does not merge the NPIs.
+A Read API pull on 2026-09-21 kept 81 NPIs (64 individuals, 17 organizations): family medicine, internal medicine, and general practice. A later unfiltered scan found eight pediatricians the description search had missed, although Kinston Pediatric Associates PA, which registers its office under the PO Box ZIP 28502, is only reachable from the NPI file. Many kept rows share a clinic main phone number. The duplicate pass flags that cluster and does not merge the NPIs.

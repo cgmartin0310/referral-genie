@@ -2,9 +2,9 @@ import { Prisma, type CountyIngestRun } from '@prisma/client';
 import prisma from '../prisma';
 import { DEFAULT_ORGANIZATION_ID } from '../org';
 import { getCounty, type CountyMarket } from '../nppes/counties';
-import { TAXONOMY_SEARCHES } from '../nppes/taxonomies';
 import { classifyHit } from '../nppes/normalize';
-import { fetchNppesPage, NPPES_MAX_SKIP, NPPES_PAGE_SIZE } from '../nppes/api';
+import { fetchNppesPage } from '../nppes/api';
+import { advanceScanCursor, searchDescriptionAt } from './scan';
 import { googlePlacesClient, matchPractice, PlacesConfigError, PlacesQuotaError } from '../places/match';
 import { assignDuplicateClusters } from './duplicates';
 import { buildPractices, type PracticeSourceRow } from '../practices/build';
@@ -145,9 +145,9 @@ async function stepNppes(
   }
 
   const zip = county.zips[cursor.zipIndex];
-  const search = TAXONOMY_SEARCHES[cursor.searchIndex] ?? TAXONOMY_SEARCHES[0];
+  const description = searchDescriptionAt(cursor.searchIndex);
   const page = await fetchNppesPage({
-    taxonomyDescription: search.search,
+    taxonomyDescription: description,
     postalCode: zip.zip,
     state: county.state,
     skip: cursor.skip,
@@ -156,7 +156,7 @@ async function stepNppes(
 
   summary.nppesQueries += 1;
   if (page.error) {
-    summary.nppesErrors.push(`${zip.zip} ${search.search}: ${page.error}`.slice(0, 300));
+    summary.nppesErrors.push(`${zip.zip} ${description ?? 'scan'}: ${page.error}`.slice(0, 300));
     summary.nppesErrors = summary.nppesErrors.slice(-20);
   }
 
@@ -170,6 +170,7 @@ async function stepNppes(
     }
 
     const kept = decision.provider;
+
     const npiNumber = normalizeNpiNumber(kept.npi);
     if (!npiNumber) continue;
     const existing = await prisma.referralSource.findFirst({
@@ -199,19 +200,9 @@ async function stepNppes(
     }
   }
 
-  const fullPage = page.rawCount >= NPPES_PAGE_SIZE;
-  if (fullPage && cursor.skip < NPPES_MAX_SKIP) {
-    cursor.skip += NPPES_PAGE_SIZE;
-  } else {
-    if (fullPage && cursor.skip >= NPPES_MAX_SKIP) summary.truncatedQueries += 1;
-    cursor.skip = 0;
-    cursor.searchIndex += 1;
-    if (cursor.searchIndex >= TAXONOMY_SEARCHES.length) {
-      cursor.searchIndex = 0;
-      cursor.zipIndex += 1;
-    }
-    if (cursor.zipIndex >= county.zips.length) cursor.phase = 'group';
-  }
+  const moved = advanceScanCursor(cursor, county.zips.length, { rawCount: page.rawCount });
+  summary.nppesQueryTotal += moved.addedQueries;
+  if (moved.truncated) summary.truncatedQueries += 1;
 
   return saveRun(run.id, {
     status: 'RUNNING',
@@ -531,7 +522,7 @@ export async function createOrResumeRun(input: {
       status: 'QUEUED',
       phase: 'nppes',
       cursor: asJson(emptyCursor()),
-      summary: asJson(emptySummary(county.zips.length * TAXONOMY_SEARCHES.length)),
+      summary: asJson(emptySummary(county.zips.length)),
     },
   });
 }

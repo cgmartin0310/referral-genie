@@ -24,7 +24,8 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function fetchNppesPage(input: {
-  taxonomyDescription: string;
+  /** Omit to scan every NPI in the ZIP; rows are kept by taxonomy code locally. */
+  taxonomyDescription?: string | null;
   postalCode: string;
   state: string;
   skip: number;
@@ -32,7 +33,7 @@ export async function fetchNppesPage(input: {
 }): Promise<NppesPage> {
   const url = new URL(NPPES_API_URL);
   url.searchParams.set('version', '2.1');
-  url.searchParams.set('taxonomy_description', input.taxonomyDescription);
+  if (input.taxonomyDescription) url.searchParams.set('taxonomy_description', input.taxonomyDescription);
   url.searchParams.set('postal_code', input.postalCode);
   url.searchParams.set('address_purpose', 'LOCATION');
   url.searchParams.set('state', input.state);

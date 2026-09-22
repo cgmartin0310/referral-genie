@@ -24,7 +24,7 @@ Run it on the server from a Render shell, restricting to the states you serve to
 npm run npi:load -- --states NC,SC,VA
 ```
 
-Re-run it monthly when CMS publishes the next file. Until the file is loaded, pulls fall back to scanning the NPPES API ZIP by ZIP, which is slower, capped at 1,200 rows per ZIP, and cannot see practices registered under a PO Box ZIP.
+Each ZIP belongs to exactly one county on the file (the county holding most of the ZCTA), so a practice in a ZIP that straddles a county line is filed under one county, not both; a clinic near a line adds practices from the neighboring county to its list as well. Re-run the loader monthly when CMS publishes the next file. Until the file is loaded, pulls fall back to scanning the NPPES API ZIP by ZIP, which is slower, capped at 1,200 rows per ZIP, and cannot see practices registered under a PO Box ZIP.
 
 ### 4. Enrich with Google Places — partial
 

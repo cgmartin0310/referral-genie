@@ -388,8 +388,11 @@ model NpiRecord {
   countyMatch         String?
   lastUpdated         String?
   loadedAt            DateTime
+  /// The NpiLoad that last wrote this row. Rows from an older load are removed when a load completes.
+  loadId              String?
 
   @@index([countyFips])
+  @@index([loadId])
   @@index([state, city])
   @@index([zip])
 }

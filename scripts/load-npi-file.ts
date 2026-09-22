@@ -20,8 +20,11 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { Prisma } from '@prisma/client';
-import prisma from '../src/lib/prisma';
+import { Prisma, PrismaClient } from '@prisma/client';
+
+// A quiet client: the shared one echoes every query in development, and each
+// batch here is a 1,000-row INSERT.
+const prisma = new PrismaClient({ log: ['error', 'warn'] });
 import { parseCsvLine, headerIndex } from '../src/lib/npi/csv';
 import { CityCountyMap, countyForZcta, zip5 } from '../src/lib/npi/county-map';
 import { allowListCodes } from '../src/lib/nppes/taxonomies';
@@ -88,13 +91,13 @@ const text = (value: string | undefined): string | null => {
   return trimmed ? trimmed : null;
 };
 
-async function upsertBatch(rows: Row[], loadedAt: Date): Promise<void> {
+async function upsertBatch(rows: Row[], loadedAt: Date, loadId: string): Promise<void> {
   if (rows.length === 0) return;
   const values = rows.map(
-    (r) => Prisma.sql`(${r.npi}, ${r.entityType}, ${r.name}, ${r.firstName}, ${r.lastName}, ${r.credential}, ${r.address1}, ${r.address2}, ${r.city}, ${r.state}, ${r.zip}, ${r.postalCode}, ${r.phone}, ${r.fax}, ${r.primaryTaxonomyCode}, ${r.taxonomyCodes}::text[], ${r.countyFips}, ${r.countyMatch}, ${r.lastUpdated}, ${loadedAt})`,
+    (r) => Prisma.sql`(${r.npi}, ${r.entityType}, ${r.name}, ${r.firstName}, ${r.lastName}, ${r.credential}, ${r.address1}, ${r.address2}, ${r.city}, ${r.state}, ${r.zip}, ${r.postalCode}, ${r.phone}, ${r.fax}, ${r.primaryTaxonomyCode}, ${r.taxonomyCodes}::text[], ${r.countyFips}, ${r.countyMatch}, ${r.lastUpdated}, ${loadedAt.toISOString()}::timestamp, ${loadId})`,
   );
   await prisma.$executeRaw`
-    INSERT INTO "NpiRecord" ("npi","entityType","name","firstName","lastName","credential","address1","address2","city","state","zip","postalCode","phone","fax","primaryTaxonomyCode","taxonomyCodes","countyFips","countyMatch","lastUpdated","loadedAt")
+    INSERT INTO "NpiRecord" ("npi","entityType","name","firstName","lastName","credential","address1","address2","city","state","zip","postalCode","phone","fax","primaryTaxonomyCode","taxonomyCodes","countyFips","countyMatch","lastUpdated","loadedAt","loadId")
     VALUES ${Prisma.join(values)}
     ON CONFLICT ("npi") DO UPDATE SET
       "entityType" = EXCLUDED."entityType", "name" = EXCLUDED."name", "firstName" = EXCLUDED."firstName",
@@ -103,7 +106,7 @@ async function upsertBatch(rows: Row[], loadedAt: Date): Promise<void> {
       "postalCode" = EXCLUDED."postalCode", "phone" = EXCLUDED."phone", "fax" = EXCLUDED."fax",
       "primaryTaxonomyCode" = EXCLUDED."primaryTaxonomyCode", "taxonomyCodes" = EXCLUDED."taxonomyCodes",
       "countyFips" = EXCLUDED."countyFips", "countyMatch" = EXCLUDED."countyMatch",
-      "lastUpdated" = EXCLUDED."lastUpdated", "loadedAt" = EXCLUDED."loadedAt"`;
+      "lastUpdated" = EXCLUDED."lastUpdated", "loadedAt" = EXCLUDED."loadedAt", "loadId" = EXCLUDED."loadId"`;
 }
 
 async function main() {
@@ -118,9 +121,8 @@ async function main() {
   }
 
   const load = await prisma.npiLoad.create({ data: { fileName } });
-  // Stamp rows with a second-precision time so the timestamp round-trips
-  // exactly through the raw insert and the cleanup comparison below.
-  const loadedAt = new Date(Math.floor(load.startedAt.getTime() / 1000) * 1000);
+  const loadedAt = load.startedAt;
+  const loadId = load.id;
   const allowed = allowListCodes();
   const cities = new CityCountyMap();
   let header: ((name: string) => number) | null = null;
@@ -220,16 +222,16 @@ async function main() {
     });
     rowsKept += 1;
     if (batch.length >= BATCH) {
-      await upsertBatch(batch, loadedAt);
+      await upsertBatch(batch, loadedAt, loadId);
       batch = [];
     }
   }
-  await upsertBatch(batch, loadedAt);
+  await upsertBatch(batch, loadedAt, loadId);
   console.log(`read ${rowsRead.toLocaleString()} rows · kept ${rowsKept.toLocaleString()} · ${mappedByZcta.toLocaleString()} mapped by street ZIP · ${cities.size().toLocaleString()} towns learned`);
 
   // PO Box ZIPs: map through the town, using where that town's street ZIPs landed.
   const unresolved = await prisma.npiRecord.findMany({
-    where: { loadedAt, countyFips: null },
+    where: { loadId, countyFips: null },
     select: { state: true, city: true },
     distinct: ['state', 'city'],
   });
@@ -238,7 +240,7 @@ async function main() {
     const fips = cities.resolve(group.state, group.city);
     if (!fips) continue;
     const result = await prisma.npiRecord.updateMany({
-      where: { loadedAt, countyFips: null, state: group.state, city: group.city },
+      where: { loadId, countyFips: null, state: group.state, city: group.city },
       data: { countyFips: fips, countyMatch: 'city' },
     });
     mappedByCity += result.count;
@@ -246,11 +248,11 @@ async function main() {
   console.log(`${mappedByCity.toLocaleString()} more mapped by town · ${unresolved.length.toLocaleString()} town groups checked`);
 
   // Rows that vanished from the file (within the states loaded, when filtered).
+  const written = await prisma.npiRecord.count({ where: { loadId } });
+  if (written === 0 && rowsKept > 0) throw new Error(`load kept ${rowsKept} rows but none carry loadId=${loadId}`);
   const removed = await prisma.npiRecord.deleteMany({
-    where: { loadedAt: { lt: loadedAt }, ...(states.size > 0 ? { state: { in: [...states] } } : {}) },
+    where: { OR: [{ loadId: { not: loadId } }, { loadId: null }], ...(states.size > 0 ? { state: { in: [...states] } } : {}) },
   });
-  const kept = await prisma.npiRecord.count({ where: { loadedAt } });
-  if (kept === 0 && rowsKept > 0) throw new Error(`load wrote ${rowsKept} rows but none carry loadedAt=${loadedAt.toISOString()}`);
   console.log(`removed ${removed.count.toLocaleString()} records no longer in the file`);
 
   await prisma.npiLoad.update({

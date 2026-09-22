@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Referral Genie
 
-## Getting Started
+Finds, verifies, and works referral sources for outpatient therapy clinics, then faxes them.
 
-First, run the development server:
+A **referral source** is a pediatrician, primary care physician, nurse practitioner, physician assistant, or the organization they work for, pulled from the NPI registry by county, enriched with Google Places, and researched on its own website for fax, referral email, and referral forms. A **clinic** is one of your sites; it keeps a referral list chosen from those sources. A **campaign** faxes a clinic's list, one page per fax machine.
+
+## How it works
+
+1. **Referral Sources** → *Pull referral sources for a county*. Pick a state and county and press one button. Three stages run with live progress:
+   - **Pull from the NPI file** — every provider whose practice ZIP maps to that county, kept by taxonomy code (see [taxonomies](src/lib/nppes/taxonomies.ts)). Falls back to scanning the NPPES API ZIP by ZIP when the file is not loaded.
+   - **Match to Google Places** — phone, address, website, rating, listing name.
+   - **Research websites** — an OpenAI-compatible model reads each practice site and fills fax, referral email, referral form, and preferred channel only when the page states them.
+2. The result is one list. An organization on NPI (NPI-2) groups the providers at its address and expands to show them; a provider with no organization on NPI is listed on their own. Every row has a fax and a referral estimate (per-type monthly rates in [estimate.ts](src/lib/practices/estimate.ts); starting assumptions to tune).
+3. **Our Clinics** → add a clinic. Back on Referral Sources, check rows and **Add to clinic**. The clinic's **Referral list** shows what was added with the estimate rolled up.
+4. **Campaigns** → choose the clinic. The audience is its list, previewed as pages to send: everyone at a practice sharing a fax machine gets one page; a provider whose *own fax* switch is on gets their own; anyone unreachable is listed, not dropped.
+
+Details and current limits: [docs/market-setup.md](docs/market-setup.md), [docs/kinston-pilot.md](docs/kinston-pilot.md).
+
+## Running it
+
+Next.js 15, Prisma, Postgres. Deployed on Render from `main` ([render.yaml](render.yaml)); the build runs the tests, builds, and applies migrations.
+
+Environment (see [render.yaml](render.yaml) for the full list):
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres |
+| `AUTH_USERNAME`, `AUTH_PASSWORD`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL` | Sign-in. There is no default login. |
+| `GOOGLE_PLACES_API_KEY` | Places enrichment |
+| `XAI_API_KEY` (or `OPENAI_COMPAT_API_KEY` + `_BASE_URL` + `_MODEL`) | Website research |
+| `HUMBLE_FAX_API_KEY`, `HUMBLE_FAX_API_SECRET` | Fax sending |
+| `HUMBLE_FAX_WEBHOOK_SECRET` | Optional; the delivery webhook then requires it |
+
+### Load the NPI file
+
+Pulls read the NPI dissemination file from the `NpiRecord` table. Load it once, and again each month when CMS publishes the next file. From a Render shell (or locally with `DATABASE_URL` set):
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run npi:load -- --states NC,SC,VA
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+It downloads the monthly file from CMS (about 1.2 GB), streams it, keeps referral-source taxonomies, and places each practice ZIP in a county: the HUD USPS ZIP–County crosswalk first, the Census ZCTA crosswalk second, and the town for ZIPs in neither (which is how a PO Box ZIP is placed). `--states` keeps the table to the states you serve; the whole country is about 930,000 rows and 330 MB. Needs `unzip` on the box.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The crosswalk data files are built by [scripts/build-zip-county.py](scripts/build-zip-county.py) (HUD workbook) and [scripts/build-zcta-county.mjs](scripts/build-zcta-county.mjs) (Census file).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Locally
 
-## Learn More
+```bash
+npm install
+npm run dev
+npm test
+```
 
-To learn more about Next.js, take a look at the following resources:
+Tests are pure-function suites under `src/lib` and run with Node's test runner through `tsx`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Layout
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/app/                 pages and API routes (Next.js app router)
+src/lib/nppes/           NPPES API client, taxonomy list, record classification
+src/lib/npi/             NPI file parsing and ZIP → county mapping
+src/lib/ingest/          the county pull: slices, cursor, Places, duplicates, formation
+src/lib/practices/       organization/provider formation, fax routing, estimate
+src/lib/places/          Google Places matching
+src/lib/research/        website research job and field guardrails
+src/lib/campaigns/       campaign audience from a clinic's list
+scripts/                 NPI file loader, crosswalk builders, county seed
+prisma/                  schema and migrations
+docs/                    product and data notes
+```

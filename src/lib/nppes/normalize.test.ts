@@ -21,6 +21,7 @@ function hit(overrides: Partial<RawHit>): RawHit {
         state: 'NC',
         postalCode: '28501',
         phone: '252-555-0100',
+        fax: '252-555-0190',
       },
     ],
     mailing: null,
@@ -76,6 +77,7 @@ describe('Lenoir allow-list', () => {
             state: 'NC',
             postalCode: '28504',
             phone: '252-555-0101',
+            fax: '',
           },
         ],
       }),
@@ -107,5 +109,51 @@ describe('Lenoir allow-list', () => {
       assert.equal(missingPhone.provider.enumerationType, 'NPI-2');
       assert.equal(missingPhone.provider.zipCode, '28504');
     }
+  });
+
+  it('carries the NPPES fax through to the kept provider', () => {
+    const parsed = hitFromApiResult({
+      number: '1679576722',
+      enumeration_type: 'NPI-2',
+      basic: { organization_name: 'KINSTON PEDIATRICS', status: 'A' },
+      addresses: [
+        {
+          address_purpose: 'LOCATION',
+          address_1: '200 QUEEN ST',
+          city: 'KINSTON',
+          state: 'NC',
+          postal_code: '28504',
+          telephone_number: '252-555-0100',
+          fax_number: '252-555-0190',
+        },
+      ],
+      taxonomies: [{ code: '208000000X', desc: 'Pediatrics', primary: true }],
+    });
+    assert.equal(parsed.locations[0].fax, '252-555-0190');
+    const decision = classifyHit(parsed, LENOIR_NC);
+    assert.equal(decision.action, 'keep');
+    if (decision.action === 'keep') assert.equal(decision.provider.fax, '252-555-0190');
+  });
+
+  it('reports an absent NPPES fax as empty, not missing', () => {
+    const parsed = hitFromApiResult({
+      number: '1679576722',
+      enumeration_type: 'NPI-1',
+      basic: { first_name: 'HOOVER', last_name: 'ROYALS', status: 'A' },
+      addresses: [
+        {
+          address_purpose: 'LOCATION',
+          address_1: '200 QUEEN ST',
+          city: 'KINSTON',
+          state: 'NC',
+          postal_code: '28504',
+          telephone_number: '252-555-0100',
+        },
+      ],
+      taxonomies: [{ code: '208000000X', desc: 'Pediatrics', primary: true }],
+    });
+    const decision = classifyHit(parsed, LENOIR_NC);
+    assert.equal(decision.action, 'keep');
+    if (decision.action === 'keep') assert.equal(decision.provider.fax, '');
   });
 });

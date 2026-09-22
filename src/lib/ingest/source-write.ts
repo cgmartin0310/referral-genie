@@ -12,6 +12,7 @@ export interface SourceWrite {
   state?: string | null;
   zipCode?: string | null;
   contactPhone?: string | null;
+  faxNumber?: string | null;
   website?: string | null;
   rating?: number | null;
   npiNumber?: string | null;
@@ -67,6 +68,11 @@ export function buildNppesUpsert(
     placesMatchStatus: kept.quarantined ? 'quarantined' : 'pending',
     provenance,
   };
+
+  // NPPES publishes a fax on roughly half of practice locations. Only write it
+  // when it is actually there: an absent value must not wipe a fax that research
+  // or a person already found.
+  if (kept.fax) create.faxNumber = kept.fax;
 
   const rest: Record<string, unknown> = { ...create };
   delete rest.organizationId;

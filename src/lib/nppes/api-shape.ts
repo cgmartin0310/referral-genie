@@ -8,6 +8,7 @@ interface ApiAddress {
   state?: string;
   postal_code?: string;
   telephone_number?: string;
+  fax_number?: string;
 }
 
 interface ApiTaxonomy {
@@ -41,8 +42,17 @@ function blankAddress(raw: ApiAddress | undefined): AddressParts | null {
     state: (raw.state ?? '').trim(),
     postalCode: (raw.postal_code ?? '').trim(),
     phone: (raw.telephone_number ?? '').trim(),
+    fax: (raw.fax_number ?? '').trim(),
   };
-  const any = [parts.address1, parts.address2, parts.city, parts.state, parts.postalCode, parts.phone].some(
+  const any = [
+    parts.address1,
+    parts.address2,
+    parts.city,
+    parts.state,
+    parts.postalCode,
+    parts.phone,
+    parts.fax,
+  ].some(
     (value) => value.length > 0,
   );
   return any ? parts : null;

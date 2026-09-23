@@ -17,6 +17,8 @@ export interface PracticeQuery {
   state: string;
   zip: string;
   phone: string;
+  /** An individual (NPI-1). Their clinic's listing is preferred over one in their own name. */
+  isPerson?: boolean;
 }
 
 const NAME_STOP = new Set([
@@ -28,6 +30,34 @@ function tokens(value: string): string[] {
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((token) => token.length > 1 && !NAME_STOP.has(token));
+}
+
+const CREDENTIALS = new Set([
+  'md', 'do', 'dr', 'jr', 'sr', 'ii', 'iii', 'phd', 'np', 'fnp', 'pa', 'pac', 'dds', 'dmd', 'faap', 'facp', 'aprn', 'cnp',
+]);
+
+function rawTokens(value: string): string[] {
+  return value.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+/**
+ * A Google listing in a person's name rather than the clinic's: "Carl L
+ * Haynes Jr., MD" beside "ECU Health Family Medicine - La Grange". It carries
+ * a credential, or it is mostly one of the people given.
+ */
+export function looksLikePersonListing(name: string, people: string[] = []): boolean {
+  const raw = rawTokens(name);
+  if (raw.some((token) => CREDENTIALS.has(token))) return true;
+  const listing = new Set(tokens(name));
+  if (listing.size === 0) return false;
+  for (const person of people) {
+    const personTokens = new Set(tokens(person).filter((token) => token.length > 2));
+    if (personTokens.size === 0) continue;
+    let shared = 0;
+    for (const token of personTokens) if (listing.has(token)) shared += 1;
+    if (shared >= Math.min(2, personTokens.size) && shared / listing.size >= 0.5) return true;
+  }
+  return false;
 }
 
 export function tokenOverlap(left: string, right: string): number {

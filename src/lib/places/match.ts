@@ -1,5 +1,5 @@
 import { digitsOnly } from '../nppes/normalize';
-import { evaluatePlaceMatch, type PlaceCandidate, type PracticeQuery } from './score';
+import { evaluatePlaceMatch, looksLikePersonListing, type PlaceCandidate, type PracticeQuery } from './score';
 
 export class PlacesConfigError extends Error {
   constructor(message: string) {
@@ -53,27 +53,36 @@ function nationalPhone(phone: string): string | null {
   return `+1${digits.slice(-10)}`;
 }
 
-function better(
-  current: { candidate: PlaceCandidate; evaluation: { accept: boolean; confidence: number }; matchedBy: 'phone' | 'address' } | null,
-  next: { candidate: PlaceCandidate; evaluation: { accept: boolean; confidence: number }; matchedBy: 'phone' | 'address' },
-) {
+type Scored = {
+  candidate: PlaceCandidate;
+  evaluation: { accept: boolean; confidence: number };
+  matchedBy: 'phone' | 'address';
+};
+
+/**
+ * Rank accepted candidates. A phone search for a physician often returns the
+ * clinic and a listing in the physician's own name at the same address; the
+ * clinic is the referral source, so a person's listing ranks below it.
+ */
+function preference(input: PracticeQuery, scored: Scored): number {
+  const personal = input.isPerson && looksLikePersonListing(scored.candidate.name, [input.name]);
+  return scored.evaluation.confidence - (personal ? 0.1 : 0);
+}
+
+function better(input: PracticeQuery, current: Scored | null, next: Scored): Scored | null {
   if (!next.evaluation.accept) return current;
-  if (!current || next.evaluation.confidence > current.evaluation.confidence) return next;
+  if (!current || preference(input, next) > preference(input, current)) return next;
   return current;
 }
 
 export async function matchPractice(input: PracticeQuery, client: PlaceClient): Promise<PlaceMatch | null> {
-  let winner: {
-    candidate: PlaceCandidate;
-    evaluation: { accept: boolean; confidence: number };
-    matchedBy: 'phone' | 'address';
-  } | null = null;
+  let winner: Scored | null = null;
 
   const phone = nationalPhone(input.phone);
   if (phone) {
     const candidates = await client.findPlace(phone, 'phonenumber');
     for (const candidate of candidates) {
-      winner = better(winner, {
+      winner = better(input, winner, {
         candidate,
         evaluation: evaluatePlaceMatch(input, candidate, { phoneQuery: true }),
         matchedBy: 'phone',
@@ -85,7 +94,7 @@ export async function matchPractice(input: PracticeQuery, client: PlaceClient): 
     const text = [input.name, input.street, input.city, input.state, input.zip].filter(Boolean).join(' ');
     const candidates = await client.findPlace(text, 'textquery');
     for (const candidate of candidates) {
-      winner = better(winner, {
+      winner = better(input, winner, {
         candidate,
         evaluation: evaluatePlaceMatch(input, candidate, { phoneQuery: false }),
         matchedBy: 'address',

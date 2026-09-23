@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { matchPractice } from './match';
-import { evaluatePlaceMatch, type PlaceCandidate } from './score';
+import { evaluatePlaceMatch, looksLikePersonListing, type PlaceCandidate } from './score';
 
 const practice = {
   name: 'Jane Doe',
@@ -38,6 +38,44 @@ describe('Places match scoring', () => {
     const result = evaluatePlaceMatch(practice, place, { phoneQuery: false });
     assert.equal(result.accept, true);
     assert.equal(result.confidence, 0.8);
+  });
+
+  it('tells a listing in a person\'s name from the clinic\'s', () => {
+    assert.equal(looksLikePersonListing('Carl L Haynes Jr., MD', ['CARL HAYNES']), true);
+    assert.equal(looksLikePersonListing('Dr. Ambrose S. Okonkwo', ['AMBROSE OKONKWO']), true);
+    assert.equal(looksLikePersonListing('Haynes Family Practice', ['CARL HAYNES']), false);
+    assert.equal(looksLikePersonListing('ECU Health Family Medicine - La Grange', ['CARL HAYNES', 'ATIT PATEL']), false);
+    assert.equal(looksLikePersonListing('Kinston Pediatric Associates', []), false);
+  });
+
+  it('prefers the clinic listing over one in the physician\'s own name at the same phone', async () => {
+    const clinic: PlaceCandidate = {
+      placeId: 'ChIJclinic',
+      name: 'ECU Health Family Medicine - La Grange',
+      formattedAddress: '101 S Carey St, La Grange, NC 28551, USA',
+    };
+    const own: PlaceCandidate = {
+      placeId: 'ChIJhaynes',
+      name: 'Carl L Haynes Jr., MD',
+      formattedAddress: '101 S Carey St, La Grange, NC 28551, USA',
+    };
+    const details = (name: string) => ({
+      phone: '(252) 566-4021', website: null, rating: null, reviewCount: null, businessStatus: 'OPERATIONAL',
+      latitude: null, longitude: null, name, formattedAddress: clinic.formattedAddress,
+    });
+    const query = { name: 'CARL HAYNES', street: '101 S CAREY ST', city: 'LA GRANGE', state: 'NC', zip: '28551', phone: '2525664021', isPerson: true };
+    // Google's order puts the physician first; the clinic still wins.
+    const match = await matchPractice(query, {
+      async findPlace() { return [own, clinic]; },
+      async placeDetails(placeId) { return details(placeId === 'ChIJclinic' ? clinic.name : own.name); },
+    });
+    assert.equal(match?.placeId, 'ChIJclinic');
+    // An organization query keeps plain confidence order.
+    const org = await matchPractice({ ...query, name: 'Haynes Medical PA', isPerson: false }, {
+      async findPlace() { return [own, clinic]; },
+      async placeDetails(placeId) { return details(placeId === 'ChIJclinic' ? clinic.name : own.name); },
+    });
+    assert.equal(org?.placeId, 'ChIJhaynes');
   });
 
   it('uses the injected client and does not merge two NPIs', async () => {

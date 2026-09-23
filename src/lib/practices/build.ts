@@ -1,4 +1,5 @@
 import { digitsOnly } from '../nppes/normalize';
+import { looksLikePersonListing } from '../places/score';
 import {
   addressClusterKey,
   assignDuplicateClusters,
@@ -146,6 +147,19 @@ function practiceName(orgs: PracticeSourceRow[], fax: string | null): {
   throw new Error('practiceName needs at least one organization');
 }
 
+/**
+ * The listing name for a location. Members may have matched different Google
+ * listings at one address (the clinic, and a physician's own); the clinic's
+ * name is the one to use, so listings in a member's name are set aside unless
+ * they are all there is.
+ */
+function listingName(members: PracticeSourceRow[]): string | null {
+  const people = members.filter((row) => !isOrg(row)).map((row) => row.name);
+  const names = members.map((row) => row.placeName ?? null);
+  const clinic = names.filter((name) => name && !looksLikePersonListing(name, people));
+  return modal(clinic) ?? modal(names);
+}
+
 /** The member whose Places listing has the most reviews; that is the one people see. */
 function bestListing(rows: PracticeSourceRow[]): PracticeSourceRow | null {
   let best: PracticeSourceRow | null = null;
@@ -164,7 +178,8 @@ function soloPractice(row: PracticeSourceRow, locationFax: string | null): Built
   return {
     practiceKey: `npi:${row.npiNumber ?? row.id}`,
     placeId: row.placeId,
-    placeName: row.placeName ?? null,
+    // Their own listing says nothing a person does not already see from the name.
+    placeName: row.placeName && !looksLikePersonListing(row.placeName, [row.name]) ? row.placeName : null,
     formedBy: 'provider',
     name: row.name,
     nameAmbiguous: false,
@@ -220,7 +235,7 @@ export function buildPractices(rows: PracticeSourceRow[]): BuiltPractice[] {
     const orgs = members.filter(isOrg);
     const people = members.filter((row) => !isOrg(row));
     const faxNumber = modal(members.map((row) => row.faxNumber));
-    const placeName = modal(members.map((row) => row.placeName ?? null));
+    const placeName = listingName(members);
 
     let name: string;
     let ambiguous = false;

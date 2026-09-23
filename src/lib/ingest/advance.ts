@@ -303,6 +303,7 @@ async function stepPlaces(
           state: source.state ?? '',
           zip: source.zipCode ?? '',
           phone: source.contactPhone ?? '',
+          isPerson: (source.enumerationType ?? '').toUpperCase() !== 'NPI-2',
         },
         client,
       );

@@ -63,6 +63,24 @@ describe('practice formation', () => {
     assert.equal(clinic.website, 'https://locations.ecuhealth.org/details/44');
   });
 
+  it('names the group from the clinic listing, not a member\'s own listing at the same address', () => {
+    // Haynes matched his personal Google listing; Patel matched the clinic's.
+    const practices = buildPractices([
+      row({ id: 'a', name: 'CARL HAYNES', placeId: 'ChIJhaynes', placeName: 'Carl L Haynes Jr., MD' }),
+      row({ id: 'b', name: 'ATIT PATEL', placeId: 'ChIJclinic', placeName: 'ECU Health Family Medicine - La Grange' }),
+    ]);
+    assert.equal(practices.length, 1);
+    assert.equal(practices[0].name, 'ECU Health Family Medicine - La Grange');
+    assert.equal(practices[0].providerCount, 2);
+  });
+
+  it('does not show a provider their own listing name', () => {
+    const practices = buildPractices([
+      row({ id: 'a', name: 'AMBROSE OKONKWO', placeId: 'ChIJo', placeName: 'Dr. Ambrose S. Okonkwo, MD' }),
+    ]);
+    assert.equal(practices[0].placeName, null);
+  });
+
   it('never names a group after its street: providers at one address with no listing stay individual', () => {
     const practices = buildPractices([
       row({ id: 'a', name: 'Joan Perry', faxNumber: '252-555-0190' }),

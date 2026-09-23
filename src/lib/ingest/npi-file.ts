@@ -1,9 +1,18 @@
 import type { NpiRecord } from '@prisma/client';
 import type { CountyMarket, CountyZip } from '../nppes/counties';
 import type { RawHit } from '../nppes/types';
+import { allowListCodes } from '../nppes/taxonomies';
 
 /** Records handled per call when pulling from the NPI file. */
 export const FILE_SLICE = 100;
+
+/**
+ * Only rows the current taxonomy list keeps. The file may have been loaded
+ * under an older, wider list; counts and pulls must not include the rest.
+ */
+export function keptTaxonomyFilter(): { primaryTaxonomyCode: { in: string[] } } {
+  return { primaryTaxonomyCode: { in: [...allowListCodes()] } };
+}
 
 /** Shape a loaded NPI file row like an NPPES API hit so one classifier serves both. */
 export function hitFromNpiRecord(record: NpiRecord): RawHit {

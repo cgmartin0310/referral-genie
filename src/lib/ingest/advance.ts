@@ -6,7 +6,7 @@ import { classifyHit } from '../nppes/normalize';
 import type { RawHit } from '../nppes/types';
 import { fetchNppesPage } from '../nppes/api';
 import { advanceScanCursor, searchDescriptionAt } from './scan';
-import { hitFromNpiRecord, withRecordZips, FILE_SLICE } from './npi-file';
+import { hitFromNpiRecord, withRecordZips, keptTaxonomyFilter, FILE_SLICE } from './npi-file';
 import { googlePlacesClient, matchPractice, PlacesConfigError, PlacesQuotaError } from '../places/match';
 import { assignDuplicateClusters } from './duplicates';
 import { buildPractices, type PracticeSourceRow } from '../practices/build';
@@ -192,7 +192,7 @@ async function stepNppesFile(
   county: CountyMarket,
 ): Promise<CountyIngestRun> {
   const records = await prisma.npiRecord.findMany({
-    where: { countyFips: county.fips },
+    where: { countyFips: county.fips, ...keptTaxonomyFilter() },
     orderBy: { npi: 'asc' },
     skip: cursor.skip,
     take: FILE_SLICE,
@@ -597,7 +597,7 @@ export async function createOrResumeRun(input: {
   }
 
   // Read from the loaded NPI file when it covers this county; otherwise scan NPPES by ZIP.
-  const onFile = await prisma.npiRecord.count({ where: { countyFips: county.fips } });
+  const onFile = await prisma.npiRecord.count({ where: { countyFips: county.fips, ...keptTaxonomyFilter() } });
   return prisma.countyIngestRun.create({
     data: {
       organizationId: DEFAULT_ORGANIZATION_ID,

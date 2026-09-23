@@ -7,6 +7,10 @@ export const SOURCE_TYPE_SHORT: Record<string, string> = {
   pcp_family_medicine: 'Family medicine',
   pcp_general_practice: 'General practice',
   clinic_center: 'Clinic / health center',
+  // Types no longer pulled; rows formed under an older list can still carry them.
+  pcp_internal_medicine: 'Internal medicine',
+  pediatrics_np: 'Pediatric NP',
+  pcp_np_pa: 'NP / PA',
 };
 
 export interface ProviderView {

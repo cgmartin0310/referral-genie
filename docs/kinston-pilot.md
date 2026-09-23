@@ -24,13 +24,11 @@ Re-runs upsert on `(organizationId, npiNumber)`. Fields a person edited in the C
 
 ## Taxonomy allow-list
 
-Thirteen NUCC codes: seven physician codes (family medicine, general practice, pediatrics; internal medicine was removed because adult internists rarely refer to pediatric therapy) and and six clinic/center organization codes. A row is kept only when the **primary** taxonomy is on this list. Organization rows are never counted as providers; they name the practice and carry its fax.
+Eleven NUCC codes: five physician codes (family medicine, general practice, pediatrics) and six clinic/center organization codes. Internal medicine and family medicine's adult-medicine and geriatric subtypes are left out: they see adults, and rarely refer to pediatric therapy. A row is kept only when the **primary** taxonomy is on this list. Organization rows are never counted as providers; they name the practice and carry its fax.
 
 | Code | Display name |
 |------|----------------|
 | 207Q00000X | Family Medicine |
-| 207QA0505X | Family Medicine, Adult Medicine |
-| 207QG0300X | Family Medicine, Geriatric Medicine |
 | 208D00000X | General Practice |
 | 208000000X | Pediatrics |
 | 2080A0000X | Pediatrics, Adolescent Medicine |

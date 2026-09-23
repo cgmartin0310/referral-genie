@@ -30,11 +30,26 @@ function hit(overrides: Partial<RawHit>): RawHit {
 }
 
 describe('Lenoir allow-list', () => {
-  it('keeps the nine pediatrician and PCP codes and the Kinston ZIP', () => {
-    assert.equal(TAXONOMY_ALLOW_LIST.length, 13);
+  it('keeps the eleven pediatrician, PCP, and clinic codes and the Kinston ZIP', () => {
+    assert.equal(TAXONOMY_ALLOW_LIST.length, 11);
     assert.equal(LENOIR_NC.fips, '37107');
     assert.ok(LENOIR_NC.zips.some((row) => row.zip === '28501'));
     assert.equal(LENOIR_NC.zips.some((row) => row.zip === '28502'), false);
+  });
+
+  it('drops a family physician whose primary code is adult medicine', () => {
+    // Katrina Meachem: Family Medicine, Adult Medicine first; internal medicine second.
+    const decision = classifyHit(
+      hit({
+        taxonomies: [
+          { code: '207QA0505X', desc: 'Family Medicine, Adult Medicine', primary: true },
+          { code: '207R00000X', desc: 'Internal Medicine', primary: false },
+          { code: '207Q00000X', desc: 'Family Medicine', primary: false },
+        ],
+      }),
+      LENOIR_NC,
+    );
+    assert.equal(decision.action, 'drop');
   });
 
   it('keeps a primary pediatrician and flags the Kinston boundary ZIP', () => {

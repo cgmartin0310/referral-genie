@@ -26,9 +26,10 @@ export type TaxonomyGroup =
   | 'clinic_center';
 
 export const TAXONOMY_ALLOW_LIST: TaxonomyCode[] = [
+  // Family medicine's adult-medicine (207QA0505X) and geriatric (207QG0300X)
+  // subtypes are left out: they see adults only, and in practice work as
+  // internists (often in hospitals).
   { code: '207Q00000X', description: 'Family Medicine', group: 'pcp_family_medicine' },
-  { code: '207QA0505X', description: 'Family Medicine, Adult Medicine', group: 'pcp_family_medicine' },
-  { code: '207QG0300X', description: 'Family Medicine, Geriatric Medicine', group: 'pcp_family_medicine' },
   { code: '208D00000X', description: 'General Practice', group: 'pcp_general_practice' },
   { code: '208000000X', description: 'Pediatrics', group: 'pediatrics' },
   { code: '2080A0000X', description: 'Pediatrics, Adolescent Medicine', group: 'pediatrics' },
@@ -43,7 +44,7 @@ export const TAXONOMY_ALLOW_LIST: TaxonomyCode[] = [
 ];
 
 export const TAXONOMY_SEARCHES: { search: string; why: string }[] = [
-  { search: 'Family Medicine', why: 'Family medicine PCPs, including adult and geriatric medicine' },
+  { search: 'Family Medicine', why: 'Family medicine PCPs (adult and geriatric subtypes are dropped by code)' },
   { search: 'General Practice', why: 'Physician general practice. Dentist hits are dropped' },
   { search: 'Pediatrics', why: 'Pediatricians, including adolescent and developmental-behavioral pediatrics' },
   { search: 'Primary Care', why: 'Clinic/Center, Primary Care organizations' },

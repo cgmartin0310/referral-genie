@@ -1,5 +1,5 @@
 import { digitsOnly } from '../nppes/normalize';
-import { evaluatePlaceMatch, looksLikePersonListing, type PlaceCandidate, type PracticeQuery } from './score';
+import { evaluatePlaceMatch, looksLikePersonListing, namesSpecialty, type PlaceCandidate, type PracticeQuery } from './score';
 
 export class PlacesConfigError extends Error {
   constructor(message: string) {
@@ -57,22 +57,47 @@ type Scored = {
   candidate: PlaceCandidate;
   evaluation: { accept: boolean; confidence: number };
   matchedBy: 'phone' | 'address';
+  details: PlaceDetails | null;
 };
 
+/** How many tied candidates are worth a details call to separate. */
+const DETAIL_CANDIDATES = 8;
+
 /**
- * Rank accepted candidates. A phone search for a physician often returns the
- * clinic and a listing in the physician's own name at the same address; the
- * clinic is the referral source, so a person's listing ranks below it.
+ * Rank accepted candidates. One clinic phone returns the clinic, each
+ * physician's own listing, a sister specialty clinic, and the building's old
+ * name, all at the same address and all accepted. The clinic is the referral
+ * source: a listing in the person's own name ranks below it, a name that says
+ * the specialty ranks above, and the listing people review is the one they use.
  */
 function preference(input: PracticeQuery, scored: Scored): number {
   const personal = input.isPerson && looksLikePersonListing(scored.candidate.name, [input.name]);
-  return scored.evaluation.confidence - (personal ? 0.1 : 0);
+  const specialty = namesSpecialty(scored.details?.name || scored.candidate.name, input.specialty);
+  const reviews = Math.min(scored.details?.reviewCount ?? 0, 100) / 100;
+  return scored.evaluation.confidence - (personal ? 0.1 : 0) + (specialty ? 0.05 : 0) + reviews * 0.04;
 }
 
-function better(input: PracticeQuery, current: Scored | null, next: Scored): Scored | null {
-  if (!next.evaluation.accept) return current;
-  if (!current || preference(input, next) > preference(input, current)) return next;
-  return current;
+async function pickWinner(
+  input: PracticeQuery,
+  candidates: PlaceCandidate[],
+  matchedBy: 'phone' | 'address',
+  client: PlaceClient,
+): Promise<Scored | null> {
+  const accepted: Scored[] = candidates
+    .map((candidate) => ({
+      candidate,
+      evaluation: evaluatePlaceMatch(input, candidate, { phoneQuery: matchedBy === 'phone' }),
+      matchedBy,
+      details: null,
+    }))
+    .filter((scored) => scored.evaluation.accept)
+    .sort((left, right) => right.evaluation.confidence - left.evaluation.confidence)
+    .slice(0, DETAIL_CANDIDATES);
+  if (accepted.length === 0) return null;
+  for (const scored of accepted) scored.details = await client.placeDetails(scored.candidate.placeId);
+  // Stable sort: ties keep confidence order, then Google's.
+  accepted.sort((left, right) => preference(input, right) - preference(input, left));
+  return accepted[0];
 }
 
 export async function matchPractice(input: PracticeQuery, client: PlaceClient): Promise<PlaceMatch | null> {
@@ -80,31 +105,17 @@ export async function matchPractice(input: PracticeQuery, client: PlaceClient): 
 
   const phone = nationalPhone(input.phone);
   if (phone) {
-    const candidates = await client.findPlace(phone, 'phonenumber');
-    for (const candidate of candidates) {
-      winner = better(input, winner, {
-        candidate,
-        evaluation: evaluatePlaceMatch(input, candidate, { phoneQuery: true }),
-        matchedBy: 'phone',
-      });
-    }
+    winner = await pickWinner(input, await client.findPlace(phone, 'phonenumber'), 'phone', client);
   }
 
   if (!winner) {
     const text = [input.name, input.street, input.city, input.state, input.zip].filter(Boolean).join(' ');
-    const candidates = await client.findPlace(text, 'textquery');
-    for (const candidate of candidates) {
-      winner = better(input, winner, {
-        candidate,
-        evaluation: evaluatePlaceMatch(input, candidate, { phoneQuery: false }),
-        matchedBy: 'address',
-      });
-    }
+    winner = await pickWinner(input, await client.findPlace(text, 'textquery'), 'address', client);
   }
 
   if (!winner) return null;
 
-  const details = await client.placeDetails(winner.candidate.placeId);
+  const details = winner.details;
   let confidence = winner.evaluation.confidence;
   if (details?.phone && winner.matchedBy === 'address') {
     const withPhone = evaluatePlaceMatch(
@@ -171,6 +182,9 @@ function throwForStatus(status: string | undefined, errorMessage: string | undef
 }
 
 export function googlePlacesClient(apiKey: string): PlaceClient {
+  // Every provider at a clinic gets the same candidates back; details are fetched once each.
+  const detailsMemo = new Map<string, PlaceDetails | null>();
+  const DETAILS_MEMO_MAX = 2000;
   return {
     async findPlace(text, inputtype) {
       const url = new URL(FIND_URL);
@@ -198,6 +212,16 @@ export function googlePlacesClient(apiKey: string): PlaceClient {
         }));
     },
     async placeDetails(placeId) {
+      if (detailsMemo.has(placeId)) return detailsMemo.get(placeId) ?? null;
+      const details = await fetchDetails(placeId);
+      if (detailsMemo.size >= DETAILS_MEMO_MAX) detailsMemo.clear();
+      detailsMemo.set(placeId, details);
+      return details;
+    },
+  };
+
+  async function fetchDetails(placeId: string): Promise<PlaceDetails | null> {
+    {
       const url = new URL(DETAILS_URL);
       url.searchParams.set('place_id', placeId);
       url.searchParams.set(
@@ -224,6 +248,6 @@ export function googlePlacesClient(apiKey: string): PlaceClient {
         name: result.name ?? '',
         formattedAddress: result.formatted_address ?? '',
       };
-    },
-  };
+    }
+  }
 }

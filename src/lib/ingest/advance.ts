@@ -8,6 +8,7 @@ import { fetchNppesPage } from '../nppes/api';
 import { advanceScanCursor, searchDescriptionAt } from './scan';
 import { hitFromNpiRecord, withRecordZips, keptTaxonomyFilter, FILE_SLICE } from './npi-file';
 import { googlePlacesClient, matchPractice, PlacesConfigError, PlacesQuotaError } from '../places/match';
+import { specialtyHints } from '../places/score';
 import { assignDuplicateClusters } from './duplicates';
 import { buildPractices, type PracticeSourceRow } from '../practices/build';
 import { normalizeNpiNumber } from '../npi';
@@ -304,6 +305,7 @@ async function stepPlaces(
           zip: source.zipCode ?? '',
           phone: source.contactPhone ?? '',
           isPerson: (source.enumerationType ?? '').toUpperCase() !== 'NPI-2',
+          specialty: specialtyHints(source.sourceType),
         },
         client,
       );

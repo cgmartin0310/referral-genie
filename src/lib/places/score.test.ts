@@ -78,6 +78,41 @@ describe('Places match scoring', () => {
     assert.equal(org?.placeId, 'ChIJhaynes');
   });
 
+  it('picks the reviewed specialty clinic over the building\'s old name and a sister clinic at one phone', async () => {
+    // Everything Google returns for the La Grange clinic phone, in Google's order.
+    const at = '101 S Carey St, La Grange, NC 28551, USA';
+    const listings: (PlaceCandidate & { reviews: number | null; website: string | null })[] = [
+      { placeId: 'haynes', name: 'Carl L Haynes Jr., MD', formattedAddress: at, reviews: 3, website: 'https://locations.ecuhealth.org/details/44' },
+      { placeId: 'building', name: 'La Grange Medical Center', formattedAddress: at, reviews: 11, website: 'http://lagrangenc.com/' },
+      { placeId: 'heart', name: 'ECU Health Heart & Vascular Care - La Grange', formattedAddress: at, reviews: null, website: null },
+      { placeId: 'hawkins', name: 'Taylor S. Hawkins, AGPCNP', formattedAddress: at, reviews: null, website: null },
+      { placeId: 'clinic', name: 'ECU Health Family Medicine - La Grange', formattedAddress: at, reviews: 113, website: 'https://locations.ecuhealth.org/details/44' },
+      { placeId: 'conway', name: 'Blair Conway, FNP-C', formattedAddress: at, reviews: null, website: null },
+    ];
+    const detailCalls: string[] = [];
+    const client = {
+      async findPlace() { return listings; },
+      async placeDetails(placeId: string) {
+        detailCalls.push(placeId);
+        const listing = listings.find((row) => row.placeId === placeId)!;
+        return {
+          phone: '(252) 566-4021', website: listing.website, rating: 4.5, reviewCount: listing.reviews, businessStatus: 'OPERATIONAL',
+          latitude: null, longitude: null, name: listing.name, formattedAddress: at,
+        };
+      },
+    };
+    const query = { name: 'ATIT PATEL', street: '101 S CAREY ST', city: 'LA GRANGE', state: 'NC', zip: '28551', phone: '2525664021', isPerson: true, specialty: ['family', 'primary care'] };
+    const match = await matchPractice(query, client);
+    assert.equal(match?.placeId, 'clinic');
+    assert.equal(match?.name, 'ECU Health Family Medicine - La Grange');
+    assert.equal(match?.reviewCount, 113);
+    // Tied candidates cost one details call each, and the winner is not fetched twice.
+    assert.equal(detailCalls.length, listings.length);
+    // Without the specialty hint, the reviewed clinic still wins over the building.
+    const plain = await matchPractice({ ...query, specialty: [] }, client);
+    assert.equal(plain?.placeId, 'clinic');
+  });
+
   it('uses the injected client and does not merge two NPIs', async () => {
     const calls: string[] = [];
     const match = await matchPractice(practice, {

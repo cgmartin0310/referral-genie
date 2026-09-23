@@ -74,6 +74,15 @@ describe('practice formation', () => {
     assert.equal(practices[0].providerCount, 2);
   });
 
+  it('prefers the listing more members matched, then the one with reviews', () => {
+    const practices = buildPractices([
+      row({ id: 'a', name: 'CARL HAYNES', placeId: 'ChIJbuilding', placeName: 'La Grange Medical Center', reviewCount: 11 }),
+      row({ id: 'b', name: 'ATIT PATEL', placeId: 'ChIJclinic', placeName: 'ECU Health Family Medicine - La Grange', reviewCount: 113 }),
+    ]);
+    assert.equal(practices.length, 1);
+    assert.equal(practices[0].name, 'ECU Health Family Medicine - La Grange');
+  });
+
   it('does not show a provider their own listing name', () => {
     const practices = buildPractices([
       row({ id: 'a', name: 'AMBROSE OKONKWO', placeId: 'ChIJo', placeName: 'Dr. Ambrose S. Okonkwo, MD' }),

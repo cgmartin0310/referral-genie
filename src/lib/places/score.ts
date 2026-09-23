@@ -19,6 +19,25 @@ export interface PracticeQuery {
   phone: string;
   /** An individual (NPI-1). Their clinic's listing is preferred over one in their own name. */
   isPerson?: boolean;
+  /** Words a listing for this kind of practice tends to carry; see specialtyHints. */
+  specialty?: string[];
+}
+
+const SPECIALTY_HINTS: Record<string, string[]> = {
+  pediatrics: ['pediatric', 'children'],
+  pcp_family_medicine: ['family', 'primary care'],
+  pcp_general_practice: ['primary care', 'general practice', 'family'],
+  clinic_center: ['health center', 'community health', 'clinic'],
+};
+
+/** Listing-name words that mark a practice of this source type. */
+export function specialtyHints(sourceType: string | null | undefined): string[] {
+  return (sourceType && SPECIALTY_HINTS[sourceType]) || [];
+}
+
+export function namesSpecialty(name: string, hints: string[] | undefined): boolean {
+  const lower = name.toLowerCase();
+  return (hints ?? []).some((hint) => lower.includes(hint));
 }
 
 const NAME_STOP = new Set([

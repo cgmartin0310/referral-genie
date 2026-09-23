@@ -155,9 +155,22 @@ function practiceName(orgs: PracticeSourceRow[], fax: string | null): {
  */
 function listingName(members: PracticeSourceRow[]): string | null {
   const people = members.filter((row) => !isOrg(row)).map((row) => row.name);
-  const names = members.map((row) => row.placeName ?? null);
-  const clinic = names.filter((name) => name && !looksLikePersonListing(name, people));
-  return modal(clinic) ?? modal(names);
+  const tally = new Map<string, { count: number; reviews: number; personal: boolean }>();
+  for (const row of members) {
+    const name = row.placeName?.trim();
+    if (!name) continue;
+    const entry = tally.get(name) ?? { count: 0, reviews: 0, personal: looksLikePersonListing(name, people) };
+    entry.count += 1;
+    entry.reviews = Math.max(entry.reviews, row.reviewCount ?? 0);
+    tally.set(name, entry);
+  }
+  // The clinic's listing over a person's; then the one most members matched; then the one people review.
+  const ranked = [...tally.entries()].sort(([, left], [, right]) => {
+    if (left.personal !== right.personal) return left.personal ? 1 : -1;
+    if (left.count !== right.count) return right.count - left.count;
+    return right.reviews - left.reviews;
+  });
+  return ranked[0]?.[0] ?? null;
 }
 
 /** The member whose Places listing has the most reviews; that is the one people see. */

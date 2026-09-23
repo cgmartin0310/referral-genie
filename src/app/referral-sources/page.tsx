@@ -70,9 +70,9 @@ function estimateText(estimate: PracticeView['estimate']): string {
   return estimate.low === estimate.high ? `${estimate.low}` : `${estimate.low}–${estimate.high}`;
 }
 
-/** An organization groups its providers; anyone else is their own referral source. */
-function isOrganization(source: PracticeView): boolean {
-  return source.orgNpis.length > 0;
+/** A practice (org NPI or shared Google listing) groups its providers; anyone else is their own referral source. */
+function isGroup(source: PracticeView): boolean {
+  return source.kind !== 'provider';
 }
 
 /* ------------------------------------------------------------------ */
@@ -164,10 +164,14 @@ function SourceRow({
   onToggle: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const organization = isOrganization(source);
-  const canExpand = organization && source.providers.length > 0;
-  const solo = !organization ? source.providers[0] : null;
+  const group = isGroup(source);
+  const canExpand = group && source.providers.length > 0;
+  const solo = !group ? source.providers[0] : null;
   const addressLine = [source.address, source.city, source.zipCode].filter(Boolean).join(', ');
+  // A provider on their own still shows the clinic Google lists at their address.
+  const listedAt = solo && source.placeName && source.placeName.toLowerCase() !== source.name.toLowerCase()
+    ? source.placeName
+    : null;
 
   return (
     <li className={classNames('bg-white', selected && 'bg-green-50/40')}>
@@ -180,7 +184,7 @@ function SourceRow({
             aria-label={`Select ${source.name}`}
             className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-600"
           />
-          {organization ? (
+          {group ? (
             <button
               type="button"
               onClick={() => canExpand && setOpen(!open)}
@@ -206,6 +210,7 @@ function SourceRow({
               )}
             </p>
             <p className="truncate text-sm text-gray-500">
+              {listedAt && <span className="text-gray-700">{listedAt} · </span>}
               {addressLine}
               {source.website && (
                 <>
@@ -243,10 +248,12 @@ function SourceRow({
         </div>
 
         <div className="col-span-6 mt-2 lg:col-span-3 lg:mt-0">
-          {organization ? (
+          {group ? (
             <>
               <p className="text-sm font-medium text-gray-900">
-                {source.providerCount === 0 ? 'Organization' : `${source.providerCount} provider${source.providerCount === 1 ? '' : 's'}`}
+                {source.providerCount === 0
+                  ? (source.kind === 'organization' ? 'Organization' : 'Practice')
+                  : `${source.providerCount} provider${source.providerCount === 1 ? '' : 's'}`}
               </p>
               {source.providerCount > 0 && <p className="truncate text-xs text-gray-500">{mixLabel(source.taxonomyMix)}</p>}
             </>
@@ -508,8 +515,8 @@ export default function ReferralSourcesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Referral Sources</h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">
-            Providers who can refer to you. Where an organization is on NPI, its providers sit under it; open the row
-            to see them. Check sources and add them to a clinic’s referral list.
+            Providers who can refer to you. Providers sit under their practice, named by its organization NPI or the
+            clinic Google lists at their address; open the row to see them. Check sources and add them to a clinic’s referral list.
           </p>
         </div>
         <Menu as="div" className="relative mt-4 sm:mt-0">
@@ -545,7 +552,7 @@ export default function ReferralSourcesPage() {
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatTile label="Providers" value={stats?.providers ?? '—'} />
         <StatTile
-          label="Organizations"
+          label="Practices"
           value={stats?.organizations ?? '—'}
           hint={stats ? `${stats.practices - stats.organizations} providers listed on their own` : undefined}
         />

@@ -348,7 +348,7 @@ async function stepDuplicates(
 
   const rows = await prisma.referralSource.findMany({
     where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: run.countyFips },
-    select: { id: true, contactPhone: true, placeId: true, address: true, zipCode: true },
+    select: { id: true, contactPhone: true, placeId: true, address: true, zipCode: true, city: true },
   });
   const assignments = assignDuplicateClusters(
     rows.map((row) => ({
@@ -357,6 +357,7 @@ async function stepDuplicates(
       placeId: row.placeId,
       address: row.address,
       zipCode: row.zipCode,
+      city: row.city,
     })),
   );
   const flagged = assignments.filter((row) => row.likelyDuplicate);
@@ -397,6 +398,7 @@ async function formPractices(run: CountyIngestRun, summary: IngestSummary): Prom
   for (const built of practices) {
     const shape = {
       placeId: built.placeId,
+      placeName: built.placeName,
       name: built.name,
       nameAmbiguous: built.nameAmbiguous,
       address: built.address,

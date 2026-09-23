@@ -256,6 +256,8 @@ model Practice {
   /// Cluster identity: a Places id when matched, else normalized street+suite+ZIP.
   practiceKey    String
   placeId        String?
+  /// Business name on the Google Places listing, when matched.
+  placeName      String?
   name           String
   /// Several org NPIs sit here and the name had to be chosen.
   nameAmbiguous  Boolean  @default(false)

@@ -9,12 +9,14 @@ import {
 /**
  * Referral source formation.
  *
- * Providers at a location that has an organization NPI (NPI-2) are grouped
- * under it: the org record carries the practice name and fax. Providers at a
- * location with no organization NPI are listed individually, each as a
- * referral source of one, rather than grouped under a made-up name. Identity
- * of a group comes from the location (place id, else street and town), since
- * NPPES does not link an individual to an employer.
+ * Providers at one location form a practice when something real names it:
+ * an organization NPI (NPI-2) registered there, or else the Google Places
+ * listing the providers share. Health systems register one NPI-2 at the home
+ * office and none at their clinics, so the listing is what identifies those.
+ * A provider with nothing to group under is listed on their own; no practice
+ * is ever named after its street. Identity of a group comes from the location
+ * (place id, else street and town), since NPPES does not link an individual
+ * to an employer.
  */
 
 export interface PracticeSourceRow {
@@ -50,10 +52,16 @@ export interface BuiltProvider {
   faxNumber: string | null;
 }
 
+export type PracticeFormedBy = 'organization' | 'listing' | 'provider';
+
 export interface BuiltPractice {
   /** Stable identity for this location. */
   practiceKey: string;
   placeId: string | null;
+  /** Business name on the Google Places listing, when matched. */
+  placeName: string | null;
+  /** What named this row: an org NPI, the shared Places listing, or the one provider on it. */
+  formedBy: PracticeFormedBy;
   name: string;
   /** True when several org NPIs sit here and the name had to be chosen. */
   nameAmbiguous: boolean;
@@ -116,10 +124,9 @@ function sameOrg(name: string): string {
  * Pick the practice name. An org NPI at the location names it; several org
  * NPIs with one name (a health center registered three times) still do.
  * Different org names mean two practices may share an address, so prefer the
- * one whose fax matches the practice fax and mark the name ambiguous. With no
- * org NPI, the Google Places listing names it; the street is the last resort.
+ * one whose fax matches the practice fax and mark the name ambiguous.
  */
-function practiceName(orgs: PracticeSourceRow[], members: PracticeSourceRow[], fax: string | null): {
+function practiceName(orgs: PracticeSourceRow[], fax: string | null): {
   name: string;
   ambiguous: boolean;
 } {
@@ -136,8 +143,7 @@ function practiceName(orgs: PracticeSourceRow[], members: PracticeSourceRow[], f
       : [...orgs].sort((left, right) => left.name.localeCompare(right.name))[0];
     return { name: chosen.name, ambiguous: true };
   }
-  const address = modal(members.map((row) => row.address));
-  return { name: address ?? members[0]?.name ?? 'Unnamed practice', ambiguous: false };
+  throw new Error('practiceName needs at least one organization');
 }
 
 /** The member whose Places listing has the most reviews; that is the one people see. */
@@ -150,11 +156,16 @@ function bestListing(rows: PracticeSourceRow[]): PracticeSourceRow | null {
   return best;
 }
 
-/** One provider as their own referral source. */
-function soloPractice(row: PracticeSourceRow): BuiltPractice {
+/**
+ * One provider as their own referral source. A colleague at the same location
+ * may have registered the fax this provider left blank, so the row borrows it.
+ */
+function soloPractice(row: PracticeSourceRow, locationFax: string | null): BuiltPractice {
   return {
     practiceKey: `npi:${row.npiNumber ?? row.id}`,
     placeId: row.placeId,
+    placeName: row.placeName ?? null,
+    formedBy: 'provider',
     name: row.name,
     nameAmbiguous: false,
     address: row.address,
@@ -164,7 +175,7 @@ function soloPractice(row: PracticeSourceRow): BuiltPractice {
     countyName: row.countyName,
     countyFips: row.countyFips,
     phone: row.contactPhone,
-    faxNumber: row.faxNumber,
+    faxNumber: row.faxNumber ?? locationFax,
     website: row.website ?? null,
     rating: row.rating ?? null,
     reviewCount: row.reviewCount ?? null,
@@ -208,13 +219,24 @@ export function buildPractices(rows: PracticeSourceRow[]): BuiltPractice[] {
   for (const [practiceKey, members] of groups) {
     const orgs = members.filter(isOrg);
     const people = members.filter((row) => !isOrg(row));
-    if (orgs.length === 0) {
-      // No organization here to group under: each provider stands alone.
-      for (const person of people) practices.push(soloPractice(person));
+    const faxNumber = modal(members.map((row) => row.faxNumber));
+    const placeName = modal(members.map((row) => row.placeName ?? null));
+
+    let name: string;
+    let ambiguous = false;
+    let formedBy: PracticeFormedBy;
+    if (orgs.length > 0) {
+      ({ name, ambiguous } = practiceName(orgs, faxNumber));
+      formedBy = 'organization';
+    } else if (people.length > 1 && placeName) {
+      // No org NPI here, but Google lists the clinic these providers share.
+      name = placeName;
+      formedBy = 'listing';
+    } else {
+      // Nothing real to name a group: each provider stands alone.
+      for (const person of people) practices.push(soloPractice(person, faxNumber));
       continue;
     }
-    const faxNumber = modal(members.map((row) => row.faxNumber));
-    const { name, ambiguous } = practiceName(orgs, members, faxNumber);
     const listing = bestListing(members);
 
     const taxonomyMix: Record<string, number> = {};
@@ -226,6 +248,8 @@ export function buildPractices(rows: PracticeSourceRow[]): BuiltPractice[] {
     practices.push({
       practiceKey,
       placeId: modal(members.map((row) => row.placeId)),
+      placeName,
+      formedBy,
       name,
       nameAmbiguous: ambiguous,
       address: modal(members.map((row) => row.address)),

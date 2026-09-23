@@ -44,6 +44,57 @@ describe('practice formation', () => {
     assert.equal(practices[0].faxNumber, '252-555-0190');
   });
 
+  it('groups providers under the Google listing they share when no organization NPI is registered there', () => {
+    // ECU Health registers one NPI-2 in Greenville and none at its La Grange
+    // clinic; Google lists the clinic, and both physicians match it.
+    const practices = buildPractices([
+      row({ id: 'a', name: 'Carl Haynes', address: '101 S Carey St', city: 'La Grange', zipCode: '28551', contactPhone: '252-566-4021', faxNumber: '252-566-2902', placeId: 'ChIJecu', placeName: 'ECU Health Family Medicine - La Grange', website: 'https://locations.ecuhealth.org/details/44' }),
+      row({ id: 'b', name: 'Atit Patel', address: '101 S CAREY ST', city: 'LA GRANGE', zipCode: '28551', contactPhone: '252-566-4021', faxNumber: null, placeId: 'ChIJecu', placeName: 'ECU Health Family Medicine - La Grange', website: 'https://locations.ecuhealth.org/details/44' }),
+    ]);
+    assert.equal(practices.length, 1);
+    const [clinic] = practices;
+    assert.equal(clinic.name, 'ECU Health Family Medicine - La Grange');
+    assert.equal(clinic.formedBy, 'listing');
+    assert.equal(clinic.practiceKey, 'place:ChIJecu');
+    assert.equal(clinic.providerCount, 2);
+    assert.deepEqual(clinic.orgNpis, []);
+    // One provider's registered fax covers the colleague who left theirs blank.
+    assert.equal(clinic.faxNumber, '252-566-2902');
+    assert.equal(clinic.website, 'https://locations.ecuhealth.org/details/44');
+  });
+
+  it('never names a group after its street: providers at one address with no listing stay individual', () => {
+    const practices = buildPractices([
+      row({ id: 'a', name: 'Joan Perry', faxNumber: '252-555-0190' }),
+      row({ id: 'b', name: 'Orvil Reece', faxNumber: null }),
+    ]);
+    assert.equal(practices.length, 2);
+    assert.ok(practices.every((p) => p.formedBy === 'provider'));
+    // The blank fax is borrowed from the colleague at the same location.
+    assert.equal(practices.find((p) => p.name === 'Orvil Reece')?.faxNumber, '252-555-0190');
+  });
+
+  it('carries the listing name on a provider listed alone', () => {
+    const practices = buildPractices([
+      row({ id: 'a', name: 'Joan Perry', placeId: 'ChIJx', placeName: 'Kinston Family Care' }),
+    ]);
+    assert.equal(practices.length, 1);
+    assert.equal(practices[0].name, 'Joan Perry');
+    assert.equal(practices[0].placeName, 'Kinston Family Care');
+  });
+
+  it('lets an organization NPI outrank the listing name', () => {
+    const practices = buildPractices([
+      row({ id: 'a', placeId: 'ChIJk', placeName: 'Kinston Pediatrics' }),
+      row({ id: 'b', placeId: 'ChIJk', placeName: 'Kinston Pediatrics' }),
+      row({ id: 'org', enumerationType: 'NPI-2', name: 'Kinston Pediatrics PA', npiNumber: '1679576722', placeId: 'ChIJk', placeName: 'Kinston Pediatrics' }),
+    ]);
+    assert.equal(practices.length, 1);
+    assert.equal(practices[0].name, 'Kinston Pediatrics PA');
+    assert.equal(practices[0].formedBy, 'organization');
+    assert.equal(practices[0].placeName, 'Kinston Pediatrics');
+  });
+
   it('names the practice from a single org NPI and excludes it from the count', () => {
     const practices = buildPractices([
       row({ id: 'a' }),

@@ -28,9 +28,18 @@ export interface ProviderView {
   sendsTo: { number: string | null; level: 'provider' | 'practice'; fellBack: boolean };
 }
 
+/**
+ * What names the row: an organization NPI, the Google Places listing its
+ * providers share, or the single provider listed on their own.
+ */
+export type PracticeKind = 'organization' | 'listing' | 'provider';
+
 export interface PracticeView {
   id: string;
   name: string;
+  kind: PracticeKind;
+  /** Business name on the Google Places listing, when matched. */
+  placeName: string | null;
   nameAmbiguous: boolean;
   address: string | null;
   city: string | null;
@@ -88,11 +97,18 @@ export function presentProvider(
   };
 }
 
+export function practiceKind(practice: Pick<Practice, 'orgNpis' | 'practiceKey'>): PracticeKind {
+  if (practice.orgNpis.length > 0) return 'organization';
+  return practice.practiceKey.startsWith('npi:') ? 'provider' : 'listing';
+}
+
 export function presentPractice(practice: PracticeWithRelations): PracticeView {
   const taxonomyMix = mixOf(practice.taxonomyMix);
   return {
     id: practice.id,
     name: practice.name,
+    kind: practiceKind(practice),
+    placeName: practice.placeName,
     nameAmbiguous: practice.nameAmbiguous,
     address: practice.address,
     city: practice.city,

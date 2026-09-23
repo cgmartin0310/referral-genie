@@ -11,10 +11,13 @@ export async function audienceForClinic(clinicId: string): Promise<Audience | nu
   if (!clinic) return null;
 
   const rows = await prisma.clinicPractice.findMany({
-    where: { clinicLocationId: clinicId, organizationId: DEFAULT_ORGANIZATION_ID },
+    // A deleted referral source or a removed provider is not faxed.
+    where: { clinicLocationId: clinicId, organizationId: DEFAULT_ORGANIZATION_ID, practice: { hiddenAt: null } },
     include: {
       practice: {
-        include: { providers: { select: { id: true, name: true, faxNumber: true, useOwnFax: true } } },
+        include: {
+          providers: { where: { hiddenAt: null }, select: { id: true, name: true, faxNumber: true, useOwnFax: true } },
+        },
       },
     },
     orderBy: { practice: { providerCount: 'desc' } },

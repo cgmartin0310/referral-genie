@@ -10,6 +10,7 @@ import {
   BuildingOffice2Icon,
   ChevronDownIcon,
   ChevronRightIcon,
+  EllipsisVerticalIcon,
   MagnifyingGlassIcon,
   PlusIcon,
   PrinterIcon,
@@ -17,6 +18,7 @@ import {
 } from '@heroicons/react/24/outline';
 import MainLayout from '../../components/layout/MainLayout';
 import AddPracticeModal from '../../components/AddPracticeModal';
+import EditPracticeModal from '../../components/EditPracticeModal';
 import CountyPullPanel from '../../components/setup/CountyPullPanel';
 import type { PracticeView, ProviderView } from '@/lib/practices/present';
 
@@ -152,16 +154,82 @@ function ClinicChips({ clinics }: { clinics: PracticeView['clinics'] }) {
   );
 }
 
+function RowMenu({ source, onEdit }: { source: PracticeView; onEdit: () => void }) {
+  const queryClient = useQueryClient();
+  const remove = useMutation({
+    mutationFn: async () => axios.delete(`/api/practices/${source.id}`),
+    onSuccess: () => {
+      toast.success(`Deleted ${source.name}. Restore it under Show deleted.`);
+      queryClient.invalidateQueries({ queryKey: ['practices'] });
+    },
+    onError: () => toast.error('Could not delete'),
+  });
+  return (
+    <Menu as="div" className="relative">
+      <Menu.Button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" aria-label={`Actions for ${source.name}`}>
+        <EllipsisVerticalIcon className="h-5 w-5" />
+      </Menu.Button>
+      <Menu.Items className="absolute right-0 z-20 mt-1 w-36 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 focus:outline-none">
+        <Menu.Item>
+          {({ active }) => (
+            <button type="button" onClick={onEdit} className={classNames('block w-full px-3 py-2 text-left text-sm', active ? 'bg-gray-100 text-gray-900' : 'text-gray-700')}>
+              Edit
+            </button>
+          )}
+        </Menu.Item>
+        <Menu.Item>
+          {({ active }) => (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Delete ${source.name}? Pulling the county again will not bring it back; you can restore it under Show deleted.`)) remove.mutate();
+              }}
+              className={classNames('block w-full px-3 py-2 text-left text-sm', active ? 'bg-red-50 text-red-700' : 'text-red-600')}
+            >
+              Delete
+            </button>
+          )}
+        </Menu.Item>
+      </Menu.Items>
+    </Menu>
+  );
+}
+
+function RemoveProvider({ provider }: { provider: ProviderView }) {
+  const queryClient = useQueryClient();
+  const remove = useMutation({
+    mutationFn: async () => axios.patch(`/api/providers/${provider.id}`, { hidden: true }),
+    onSuccess: () => {
+      toast.success(`Removed ${provider.name}. Restore under Show deleted.`);
+      queryClient.invalidateQueries({ queryKey: ['practices'] });
+    },
+    onError: () => toast.error('Could not remove the provider'),
+  });
+  return (
+    <button
+      type="button"
+      disabled={remove.isPending}
+      onClick={() => remove.mutate()}
+      className="text-xs font-medium text-gray-400 hover:text-red-600"
+      title="Take this provider off the list; later pulls keep them off"
+    >
+      Remove
+    </button>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 
 function SourceRow({
   source,
   selected,
   onToggle,
+  onEdit,
 }: {
   source: PracticeView;
   selected: boolean;
   onToggle: () => void;
+  onEdit: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const group = isGroup(source);
@@ -203,6 +271,11 @@ function SourceRow({
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-gray-900">
               {source.name}
+              {source.editedFields.length > 0 && (
+                <span className="ml-2 text-xs font-normal text-gray-400" title={`You edited: ${source.editedFields.join(', ')}`}>
+                  edited
+                </span>
+              )}
               {source.nameAmbiguous && (
                 <span className="ml-2 text-xs font-normal text-amber-600" title="Two organizations share this address">
                   shared address
@@ -267,8 +340,9 @@ function SourceRow({
           <p className="text-xs text-gray-500">est. referrals / mo</p>
         </div>
 
-        <div className="col-span-6 mt-2 lg:col-span-1 lg:mt-0">
+        <div className="col-span-6 mt-2 flex items-center justify-end gap-1 lg:col-span-1 lg:mt-0">
           <ClinicChips clinics={source.clinics} />
+          <RowMenu source={source} onEdit={onEdit} />
         </div>
       </div>
 
@@ -290,6 +364,7 @@ function SourceRow({
               <div className="col-span-12 mt-1 flex items-center justify-end gap-2 lg:col-span-1 lg:mt-0">
                 <span className="text-xs text-gray-500">Own fax</span>
                 <OwnFaxToggle provider={provider} />
+                <RemoveProvider provider={provider} />
               </div>
             </li>
           ))}
@@ -309,6 +384,8 @@ function SourceList({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void
   const [clinicId, setClinicId] = useState('');
   const [hideListed, setHideListed] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [editing, setEditing] = useState<PracticeView | null>(null);
 
   // Arriving from a clinic page: preselect that clinic and hide what it already has.
   useEffect(() => {
@@ -412,6 +489,15 @@ function SourceList({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void
             />
             Not yet on list
           </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={showDeleted}
+              onChange={(event) => setShowDeleted(event.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-600"
+            />
+            Show deleted
+          </label>
         </div>
 
         <div className="flex items-center gap-2">
@@ -438,6 +524,10 @@ function SourceList({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void
         </div>
       </div>
 
+      <EditPracticeModal practice={editing} onClose={() => setEditing(null)} />
+      {showDeleted ? (
+        <DeletedList />
+      ) : (
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 sm:px-6">
           <input
@@ -473,11 +563,90 @@ function SourceList({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void
         ) : (
           <ul role="list" className="divide-y divide-gray-200">
             {sources.map((source) => (
-              <SourceRow key={source.id} source={source} selected={selected.has(source.id)} onToggle={() => toggle(source.id)} />
+              <SourceRow
+                key={source.id}
+                source={source}
+                selected={selected.has(source.id)}
+                onToggle={() => toggle(source.id)}
+                onEdit={() => setEditing(source)}
+              />
             ))}
           </ul>
         )}
       </div>
+      )}
+    </div>
+  );
+}
+
+/** What a person deleted or removed, each with Restore. */
+function DeletedList() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ['practices', 'deleted'],
+    queryFn: async () =>
+      (await axios.get<{ practices: PracticeView[]; providers: ProviderView[] }>('/api/practices?deleted=1')).data,
+  });
+  const restore = useMutation({
+    mutationFn: async (target: { kind: 'practice' | 'provider'; id: string }) =>
+      target.kind === 'practice'
+        ? axios.patch(`/api/practices/${target.id}`, { hidden: false })
+        : axios.patch(`/api/providers/${target.id}`, { hidden: false }),
+    onSuccess: () => {
+      toast.success('Restored');
+      queryClient.invalidateQueries({ queryKey: ['practices'] });
+    },
+    onError: () => toast.error('Could not restore'),
+  });
+
+  const practices = data?.practices ?? [];
+  const providers = data?.providers ?? [];
+  const Row = ({ title, detail, onRestore }: { title: string; detail: string; onRestore: () => void }) => (
+    <li className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-gray-900">{title}</p>
+        <p className="truncate text-sm text-gray-500">{detail}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onRestore}
+        disabled={restore.isPending}
+        className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+      >
+        Restore
+      </button>
+    </li>
+  );
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-200 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 sm:px-6">
+        Deleted · {practices.length} referral source{practices.length === 1 ? '' : 's'} · {providers.length} provider{providers.length === 1 ? '' : 's'}
+      </div>
+      {isLoading ? (
+        <p className="px-6 py-10 text-center text-sm text-gray-500">Loading…</p>
+      ) : practices.length + providers.length === 0 ? (
+        <p className="px-6 py-10 text-center text-sm text-gray-500">Nothing deleted.</p>
+      ) : (
+        <ul role="list" className="divide-y divide-gray-200">
+          {practices.map((practice) => (
+            <Row
+              key={practice.id}
+              title={practice.name}
+              detail={[practice.address, practice.city].filter(Boolean).join(', ')}
+              onRestore={() => restore.mutate({ kind: 'practice', id: practice.id })}
+            />
+          ))}
+          {providers.map((provider) => (
+            <Row
+              key={provider.id}
+              title={provider.name}
+              detail={`${provider.sourceTypeLabel}${provider.practiceName ? ` · removed from ${provider.practiceName}` : ''}`}
+              onRestore={() => restore.mutate({ kind: 'provider', id: provider.id })}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

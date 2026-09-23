@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
-import { practiceInclude, presentPractice } from '@/lib/practices/present';
+import { practiceInclude, presentPractice, presentProvider } from '@/lib/practices/present';
 import { sumEstimates } from '@/lib/practices/estimate';
 import { addressClusterKey } from '@/lib/ingest/duplicates';
 
@@ -23,9 +23,31 @@ export async function GET(request: NextRequest) {
     const clinicId = params.get('clinicId')?.trim() || null;
     const notOnClinicId = params.get('notOnClinicId')?.trim() || null;
     const q = params.get('q')?.trim() || null;
+    const deleted = params.get('deleted') === '1';
+
+    if (deleted) {
+      // What a person deleted or removed, for restoring.
+      const [rows, providers] = await Promise.all([
+        prisma.practice.findMany({
+          where: { organizationId: DEFAULT_ORGANIZATION_ID, hiddenAt: { not: null } },
+          include: practiceInclude,
+          orderBy: { hiddenAt: 'desc' },
+        }),
+        prisma.provider.findMany({
+          where: { organizationId: DEFAULT_ORGANIZATION_ID, hiddenAt: { not: null } },
+          include: { practice: { select: { id: true, name: true, faxNumber: true } } },
+          orderBy: { hiddenAt: 'desc' },
+        }),
+      ]);
+      return NextResponse.json({
+        practices: rows.map(presentPractice),
+        providers: providers.map((provider) => presentProvider(provider, provider.practice)),
+      });
+    }
 
     const where: Prisma.PracticeWhereInput = {
       organizationId: DEFAULT_ORGANIZATION_ID,
+      hiddenAt: null,
       // A clinic's own list still shows a row a later pull retired; the catalog does not.
       ...(clinicId ? {} : { retiredAt: null }),
       ...(countyFips ? { countyFips } : {}),
@@ -52,7 +74,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.practice.groupBy({
         by: ['countyFips', 'countyName'],
-        where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: { not: null }, retiredAt: null },
+        where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: { not: null }, retiredAt: null, hiddenAt: null },
         _count: { _all: true },
         orderBy: { countyName: 'asc' },
       }),

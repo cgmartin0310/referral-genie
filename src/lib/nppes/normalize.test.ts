@@ -31,7 +31,7 @@ function hit(overrides: Partial<RawHit>): RawHit {
 
 describe('Lenoir allow-list', () => {
   it('keeps the nine pediatrician and PCP codes and the Kinston ZIP', () => {
-    assert.equal(TAXONOMY_ALLOW_LIST.length, 20);
+    assert.equal(TAXONOMY_ALLOW_LIST.length, 18);
     assert.equal(LENOIR_NC.fips, '37107');
     assert.ok(LENOIR_NC.zips.some((row) => row.zip === '28501'));
     assert.equal(LENOIR_NC.zips.some((row) => row.zip === '28502'), false);

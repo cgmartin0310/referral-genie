@@ -24,7 +24,7 @@ Re-runs upsert on `(organizationId, npiNumber)`. Fields a person edited in the C
 
 ## Taxonomy allow-list
 
-Twenty NUCC codes: seven physician codes (internal medicine was removed; adult internists rarely refer to pediatric therapy), seven nurse practitioner and physician assistant codes, and six clinic/center organization codes. A row is kept only when the **primary** taxonomy is on this list. Organization rows are never counted as providers; they name the practice and carry its fax.
+Eighteen NUCC codes: seven physician codes (internal medicine was removed; adult internists rarely refer to pediatric therapy), five nurse practitioner codes (physician assistants were removed; the PA taxonomy carries no specialty, so an OB/GYN PA is indistinguishable from a primary care one), and six clinic/center organization codes. A row is kept only when the **primary** taxonomy is on this list. Organization rows are never counted as providers; they name the practice and carry its fax.
 
 | Code | Display name |
 |------|----------------|
@@ -40,8 +40,6 @@ Twenty NUCC codes: seven physician codes (internal medicine was removed; adult i
 | 363LP2300X | Nurse Practitioner, Primary Care |
 | 363LA2200X | Nurse Practitioner, Adult Health |
 | 363LG0600X | Nurse Practitioner, Gerontology |
-| 363A00000X | Physician Assistant |
-| 363AM0700X | Physician Assistant, Medical |
 | 261QP2300X | Clinic/Center, Primary Care |
 | 261QR1300X | Clinic/Center, Rural Health |
 | 261QF0400X | Clinic/Center, FQHC |

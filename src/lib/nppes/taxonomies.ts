@@ -33,15 +33,16 @@ export const TAXONOMY_ALLOW_LIST: TaxonomyCode[] = [
   { code: '208000000X', description: 'Pediatrics', group: 'pediatrics' },
   { code: '2080A0000X', description: 'Pediatrics, Adolescent Medicine', group: 'pediatrics' },
   { code: '2080P0006X', description: 'Pediatrics, Developmental - Behavioral Pediatrics', group: 'pediatrics' },
-  // Nurse practitioners and physician assistants refer to therapy like physicians do,
-  // and in rural counties they are often the only pediatric providers on NPI.
+  // Nurse practitioners refer to therapy like physicians do, and in rural counties
+  // they are often the only pediatric providers on NPI. Their codes carry a
+  // specialty. Physician assistants are excluded: the PA code (363A00000X) says
+  // nothing about specialty, so an OB/GYN or surgical PA looks the same as a
+  // primary care one. Primary care PAs are reached through their practice.
   { code: '363LP0200X', description: 'Nurse Practitioner, Pediatrics', group: 'pediatrics_np' },
   { code: '363LF0000X', description: 'Nurse Practitioner, Family', group: 'pcp_np_pa' },
   { code: '363LP2300X', description: 'Nurse Practitioner, Primary Care', group: 'pcp_np_pa' },
   { code: '363LA2200X', description: 'Nurse Practitioner, Adult Health', group: 'pcp_np_pa' },
   { code: '363LG0600X', description: 'Nurse Practitioner, Gerontology', group: 'pcp_np_pa' },
-  { code: '363A00000X', description: 'Physician Assistant', group: 'pcp_np_pa' },
-  { code: '363AM0700X', description: 'Physician Assistant, Medical', group: 'pcp_np_pa' },
   // Organizations (NPI-2). No providers are counted from these; they name the practice.
   { code: '261QP2300X', description: 'Clinic/Center, Primary Care', group: 'clinic_center' },
   { code: '261QR1300X', description: 'Clinic/Center, Rural Health', group: 'clinic_center' },
@@ -56,7 +57,6 @@ export const TAXONOMY_SEARCHES: { search: string; why: string }[] = [
   { search: 'General Practice', why: 'Physician general practice. Dentist hits are dropped' },
   { search: 'Pediatrics', why: 'Pediatricians, including adolescent and developmental-behavioral pediatrics' },
   { search: 'Nurse Practitioner', why: 'Pediatric, family, primary care, adult, and gerontology NPs; other NP specialties are dropped' },
-  { search: 'Physician Assistant', why: 'PAs in primary care; specialty PAs share the code and are kept' },
   { search: 'Primary Care', why: 'Clinic/Center, Primary Care organizations' },
   { search: 'Rural Health', why: 'Rural health clinics' },
   { search: 'Federally Qualified Health Center', why: 'FQHCs' },
@@ -69,7 +69,7 @@ export const SOURCE_TYPE_LABELS: Record<TaxonomyGroup, string> = {
   pcp_family_medicine: 'PCP - Family Medicine',
   pcp_general_practice: 'PCP - General Practice',
   pediatrics_np: 'Pediatric Nurse Practitioner',
-  pcp_np_pa: 'PCP - Nurse Practitioner / PA',
+  pcp_np_pa: 'PCP - Nurse Practitioner',
   clinic_center: 'Clinic / Health Center',
 };
 

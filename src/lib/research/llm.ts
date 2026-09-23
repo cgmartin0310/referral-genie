@@ -9,11 +9,11 @@ export interface ResearchLlmConfig {
 
 export class ResearchConfigError extends Error {}
 
+// Provider counts come from NPI now; the model is not asked for them.
 const FIELDS: ResearchField[] = [
   'website',
   'contactPhone',
   'faxNumber',
-  'numberOfProviders',
   'contactEmail',
   'referralFormUrl',
   'preferredChannel',
@@ -100,6 +100,7 @@ async function llmExtract(
       body: JSON.stringify({
         model: config.model,
         temperature: 0,
+        response_format: { type: 'json_object' },
         messages: [
           {
             role: 'system',
@@ -107,7 +108,7 @@ async function llmExtract(
               'Extract practice contact details from public marketing pages.',
               'Never invent a phone, fax, email, or URL. If it is not explicit on the page, return null.',
               'Ignore patient names, reviews of care, and any personal health information.',
-              'Return JSON only with keys website, phone, fax, numberOfProviders, referralEmail, referralFormUrl, preferredChannel.',
+              'Return JSON only with keys website, phone, fax, referralEmail, referralFormUrl, preferredChannel.',
               'Each present value is {"value": ..., "confidence": 0 to 1}. Use null when unsure.',
               'preferredChannel value is one of fax, portal, call, email.',
             ].join(' '),
@@ -131,7 +132,11 @@ async function llmExtract(
     }
     const body = await response.json() as { choices?: { message?: { content?: string } }[] };
     const content = body.choices?.[0]?.message?.content ?? '';
-    return proposalsFromResearchJson(parseJsonContent(content));
+    const parsed = parseJsonContent(content);
+    if (parsed === null) {
+      throw new Error(`Research model did not return JSON: ${content.slice(0, 120).replace(/\s+/g, ' ')}`);
+    }
+    return proposalsFromResearchJson(parsed);
   } finally {
     clearTimeout(timer);
   }

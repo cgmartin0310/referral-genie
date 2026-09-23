@@ -14,8 +14,18 @@ export interface ResearchSummary {
   researched: number;
   skippedNoUrl: number;
   fieldsFilled: number;
+  /** Proposals dropped: not confident enough, or not verifiable on the page. */
   lowConfidence: number;
+  notOnPage: number;
+  /** Proposals for fields that already had a value. */
+  alreadyFilled: number;
+  /** Sites where the model proposed nothing at all. */
+  nothingProposed: number;
+  /** Sites where the model call itself failed (bad JSON, HTTP error). */
+  modelErrors: number;
   errors: string[];
+  /** One line per site, most recent last, capped. */
+  notes: string[];
 }
 
 interface ResearchCursor {
@@ -49,7 +59,12 @@ function emptySummary(total: number): ResearchSummary {
     skippedNoUrl: 0,
     fieldsFilled: 0,
     lowConfidence: 0,
+    notOnPage: 0,
+    alreadyFilled: 0,
+    nothingProposed: 0,
+    modelErrors: 0,
     errors: [],
+    notes: [],
   };
 }
 
@@ -61,7 +76,12 @@ function parseSummary(value: unknown): ResearchSummary {
     skippedNoUrl: numberOr(row.skippedNoUrl),
     fieldsFilled: numberOr(row.fieldsFilled),
     lowConfidence: numberOr(row.lowConfidence),
+    notOnPage: numberOr(row.notOnPage),
+    alreadyFilled: numberOr(row.alreadyFilled),
+    nothingProposed: numberOr(row.nothingProposed),
+    modelErrors: numberOr(row.modelErrors),
     errors: Array.isArray(row.errors) ? row.errors.filter((item): item is string => typeof item === 'string').slice(0, 20) : [],
+    notes: Array.isArray(row.notes) ? row.notes.filter((item): item is string => typeof item === 'string').slice(-40) : [],
   };
 }
 
@@ -266,13 +286,26 @@ async function stepResearch(run: ResearchRun): Promise<ResearchRun> {
       : saveProgress(run.id, summary, cursor);
   }
 
-  const proposals = await judge.extract({
-    practiceName: source.name,
-    city: source.city,
-    state: source.state,
-    pages: bundle.pages,
-    links: bundle.links,
-  });
+  let proposals;
+  try {
+    proposals = await judge.extract({
+      practiceName: source.name,
+      city: source.city,
+      state: source.state,
+      pages: bundle.pages,
+      links: bundle.links,
+    });
+  } catch (error) {
+    if (error instanceof ResearchConfigError) throw error;
+    summary.modelErrors += 1;
+    summary.researched += 1;
+    pushError(summary, `${source.name}: ${error instanceof Error ? error.message : 'model call failed'}`);
+    pushNote(summary, `${source.name}: model error`);
+    cursor.index += 1;
+    return cursor.index >= cursor.sourceIds.length
+      ? finishRun(run.id, summary, cursor)
+      : saveProgress(run.id, summary, cursor);
+  }
   const provenance = parseProvenance(source.provenance);
   const decision = acceptProposals({
     current: {
@@ -290,9 +323,25 @@ async function stepResearch(run: ResearchRun): Promise<ResearchRun> {
     fetchedUrls: bundle.pages.map((page) => page.url),
     proposals,
   });
-  summary.lowConfidence += decision.rejected;
+  summary.lowConfidence += decision.rejections.filter((row) => row.reason === 'low_confidence').length;
+  summary.notOnPage += decision.rejections.filter((row) => row.reason === 'not_on_page').length;
+  summary.alreadyFilled += decision.skippedFilled;
+  if (proposals.length === 0) summary.nothingProposed += 1;
   summary.researched += 1;
   summary.fieldsFilled += decision.accepted.length;
+  pushNote(
+    summary,
+    `${source.name} (${bundle.pages.length} page${bundle.pages.length === 1 ? '' : 's'}): ` +
+      (proposals.length === 0
+        ? 'nothing proposed'
+        : [
+            decision.accepted.length ? `filled ${decision.accepted.map((row) => row.field).join(', ')}` : null,
+            decision.skippedFilled ? `${decision.skippedFilled} already filled` : null,
+            decision.rejections.length
+              ? `dropped ${decision.rejections.map((row) => `${row.field} (${row.reason === 'not_on_page' ? 'not on page' : 'low confidence'})`).join(', ')}`
+              : null,
+          ].filter(Boolean).join(' · ')),
+  );
 
   if (decision.accepted.length > 0) {
     const updates = decision.updates;
@@ -315,6 +364,11 @@ async function stepResearch(run: ResearchRun): Promise<ResearchRun> {
   return cursor.index >= cursor.sourceIds.length
     ? finishRun(run.id, summary, cursor)
     : saveProgress(run.id, summary, cursor);
+}
+
+function pushNote(summary: ResearchSummary, message: string) {
+  summary.notes.push(message.slice(0, 200));
+  if (summary.notes.length > 40) summary.notes = summary.notes.slice(-40);
 }
 
 function pushError(summary: ResearchSummary, message: string) {

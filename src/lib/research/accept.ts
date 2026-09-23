@@ -12,10 +12,16 @@ const MIN_CONFIDENCE: Record<ResearchField, number> = {
 
 const CHANNELS = new Set(['fax', 'portal', 'call', 'email']);
 
+export type RejectReason = 'low_confidence' | 'not_on_page';
+
 export interface AcceptResult {
   updates: Partial<Record<ResearchField, string | number>>;
   accepted: { field: ResearchField; confidence: number }[];
   rejected: number;
+  /** Why each unused proposal was dropped, so a run can say what it saw. */
+  rejections: { field: ResearchField; reason: RejectReason }[];
+  /** Proposals for fields that already had a value or were edited by a person. */
+  skippedFilled: number;
 }
 
 export function acceptProposals(input: {
@@ -29,14 +35,23 @@ export function acceptProposals(input: {
   const blocked = new Set(input.overriddenFields);
   const updates: AcceptResult['updates'] = {};
   const accepted: AcceptResult['accepted'] = [];
+  const rejections: AcceptResult['rejections'] = [];
   let rejected = 0;
+  let skippedFilled = 0;
 
   for (const proposal of input.proposals) {
     if (blocked.has(proposal.field) || !isBlank(input.current[proposal.field])) {
+      skippedFilled += 1;
       continue;
     }
-    if (!isConfident(proposal) || !supportedByPage(proposal, input.pageText, input.links, input.fetchedUrls)) {
+    if (!isConfident(proposal)) {
       rejected += 1;
+      rejections.push({ field: proposal.field, reason: 'low_confidence' });
+      continue;
+    }
+    if (!supportedByPage(proposal, input.pageText, input.links, input.fetchedUrls)) {
+      rejected += 1;
+      rejections.push({ field: proposal.field, reason: 'not_on_page' });
       continue;
     }
     updates[proposal.field] = proposal.field === 'numberOfProviders'
@@ -47,7 +62,7 @@ export function acceptProposals(input: {
     accepted.push({ field: proposal.field, confidence: proposal.confidence });
   }
 
-  return { updates, accepted, rejected };
+  return { updates, accepted, rejected, rejections, skippedFilled };
 }
 
 function isBlank(value: unknown): boolean {

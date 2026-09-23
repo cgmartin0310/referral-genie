@@ -39,7 +39,19 @@ interface ResearchRun {
   error: string | null;
   index: number;
   total: number;
-  summary: { total: number; researched: number; skippedNoUrl: number; fieldsFilled: number; errors: string[] };
+  summary: {
+    total: number;
+    researched: number;
+    skippedNoUrl: number;
+    fieldsFilled: number;
+    lowConfidence?: number;
+    notOnPage?: number;
+    alreadyFilled?: number;
+    nothingProposed?: number;
+    modelErrors?: number;
+    errors: string[];
+    notes?: string[];
+  };
 }
 
 type StageState = 'idle' | 'running' | 'done' | 'failed' | 'skipped';
@@ -55,6 +67,17 @@ const PULL_PHASES = new Set(['nppes', 'group']);
 
 function classNames(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(' ');
+}
+
+function researchDetail(s: ResearchRun['summary']): string {
+  const parts = [`${s.researched}/${s.total} sites read`, `${s.fieldsFilled} fields filled`];
+  if (s.alreadyFilled) parts.push(`${s.alreadyFilled} already known from NPI or Places`);
+  if (s.notOnPage) parts.push(`${s.notOnPage} dropped (not on the page)`);
+  if (s.lowConfidence) parts.push(`${s.lowConfidence} dropped (low confidence)`);
+  if (s.nothingProposed) parts.push(`${s.nothingProposed} sites gave nothing`);
+  if (s.modelErrors) parts.push(`${s.modelErrors} model errors`);
+  if (s.skippedNoUrl) parts.push(`${s.skippedNoUrl} no website`);
+  return parts.join(' · ');
 }
 
 function stagesFromCountyRun(run: CountyRun | null): { pull: StageState; places: StageState } {
@@ -310,7 +333,7 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
             researchState === 'skipped'
               ? `Skipped — ${configError}`
               : researchRun
-                ? `${researchRun.summary.researched}/${researchRun.summary.total} sites read · ${researchRun.summary.fieldsFilled} fields filled`
+                ? researchDetail(researchRun.summary)
                 : withWebsite !== null
                   ? `${withWebsite} practices have a website to read for fax, referral email, and forms.`
                   : 'Reads each practice website for fax, referral email, and referral forms.'
@@ -318,6 +341,20 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
           error={researchState === 'failed' ? researchRun?.error : null}
         />
       </ol>
+
+      {researchRun && (researchRun.summary.notes?.length || researchRun.summary.errors.length) ? (
+        <details className="mt-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+          <summary className="cursor-pointer font-medium text-gray-700">What research found, site by site</summary>
+          <ul className="mt-2 space-y-1">
+            {(researchRun.summary.notes ?? []).map((note, index) => (
+              <li key={`n-${index}`} className="font-mono">{note}</li>
+            ))}
+            {researchRun.summary.errors.map((error, index) => (
+              <li key={`e-${index}`} className="font-mono text-red-700">{error}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }

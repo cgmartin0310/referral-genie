@@ -416,33 +416,39 @@ async function finishRun(id: string, summary: ResearchSummary, cursor: ResearchC
 }
 
 /**
- * One source per website. Everyone at a practice shares its site, and what
- * research finds there is written to the practice through whichever record
- * it read, so reading the site once per record would only repeat the cost.
- * An organization record is preferred as the reader; a source with no site
- * is kept (research reports it as skipped).
+ * What research reads: one website per practice that has no fax. NPI gives
+ * most practices their fax, and a site rarely states anything else a
+ * referral needs, so reading the rest only repeats what is known. Each
+ * practice is read through one of its records that has a website (an
+ * organization's first); a practice with no website is left for a person.
  */
-export async function onePerWebsite(ids: string[]): Promise<string[]> {
+export async function practicesNeedingFax(ids: string[]): Promise<string[]> {
   if (ids.length === 0) return [];
-  const rows = await prisma.referralSource.findMany({
-    where: { id: { in: ids } },
-    select: { id: true, website: true, enumerationType: true },
-    orderBy: { id: 'asc' },
-  });
-  const readerBySite = new Map<string, { id: string; org: boolean }>();
-  const keep: string[] = [];
-  for (const row of rows) {
-    const site = practiceUrl(row.website);
-    if (!site) {
-      keep.push(row.id);
-      continue;
-    }
-    const key = site.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '').toLowerCase();
-    const org = (row.enumerationType ?? '').toUpperCase() === 'NPI-2';
-    const current = readerBySite.get(key);
-    if (!current || (org && !current.org)) readerBySite.set(key, { id: row.id, org });
+  const [sources, practices] = await Promise.all([
+    prisma.referralSource.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, npiNumber: true, website: true, enumerationType: true },
+      orderBy: { id: 'asc' },
+    }),
+    prisma.practice.findMany({
+      where: { organizationId: DEFAULT_ORGANIZATION_ID, faxNumber: null, hiddenAt: null, retiredAt: null },
+      select: { id: true, orgNpis: true, providers: { where: { hiddenAt: null }, select: { npiNumber: true } } },
+    }),
+  ]);
+  const practiceByNpi = new Map<string, string>();
+  for (const practice of practices) {
+    for (const npi of practice.orgNpis) practiceByNpi.set(npi, practice.id);
+    for (const provider of practice.providers) practiceByNpi.set(provider.npiNumber, practice.id);
   }
-  return [...keep, ...[...readerBySite.values()].map((row) => row.id)].sort();
+  const reader = new Map<string, { id: string; org: boolean }>();
+  for (const source of sources) {
+    const practiceId = source.npiNumber ? practiceByNpi.get(source.npiNumber) : undefined;
+    if (!practiceId || !practiceUrl(source.website)) continue;
+    const org = (source.enumerationType ?? '').toUpperCase() === 'NPI-2';
+    const current = reader.get(practiceId);
+    if (!current || (org && !current.org)) reader.set(practiceId, { id: source.id, org });
+  }
+  return [...reader.values()].map((row) => row.id).sort();
 }
 
 export async function sourceIdsForCounty(countyFips: string): Promise<string[]> {
@@ -453,7 +459,7 @@ export async function sourceIdsForCounty(countyFips: string): Promise<string[]> 
     select: { id: true, countyFips: true },
     orderBy: { id: 'asc' },
   });
-  return onePerWebsite(sourceIdsMatchingFips(sources, fips));
+  return practicesNeedingFax(sourceIdsMatchingFips(sources, fips));
 }
 
 export async function sourceIdsForClinic(clinicId: string): Promise<string[]> {
@@ -472,7 +478,7 @@ export async function sourceIdsForClinic(clinicId: string): Promise<string[]> {
     select: { id: true, countyFips: true },
     orderBy: { id: 'asc' },
   });
-  return onePerWebsite(sourceIdsMatchingFips(sources, fips));
+  return practicesNeedingFax(sourceIdsMatchingFips(sources, fips));
 }
 
 /** Market FIPS plus the FIPS the pull actually stored for those seed counties. */

@@ -337,7 +337,7 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
         />
         <StageRow
           step={3}
-          title="Research websites"
+          title="Find missing faxes"
           state={researchState}
           active={working && stages.places === 'done'}
           fraction={researchRun && researchRun.total > 0 ? researchRun.index / researchRun.total : null}
@@ -347,8 +347,10 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
               : researchRun
                 ? researchDetail(researchRun.summary)
                 : withWebsite !== null
-                  ? `${withWebsite} practices have a website to read for fax, referral email, and forms.`
-                  : 'Reads each practice website for fax, referral email, and referral forms.'
+                  ? withWebsite === 0
+                    ? 'Every practice with a website already has a fax.'
+                    : `${withWebsite} practice${withWebsite === 1 ? '' : 's'} with no fax on NPI have a website to read.`
+                  : 'Reads the website of each practice with no fax on NPI.'
           }
           error={researchState === 'failed' ? researchRun?.error : null}
         />

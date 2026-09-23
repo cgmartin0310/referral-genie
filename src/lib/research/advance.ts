@@ -6,6 +6,7 @@ import { acceptProposals } from './accept';
 import { researchCountyFips, seedIdsForMarket, sourceIdsMatchingFips } from './clinic-sources';
 import { fetchPracticePages, practiceUrl } from './html';
 import { createResearchJudge, ResearchConfigError } from './llm';
+import { formPracticesForCounty } from '../ingest/advance';
 
 const LOCK_MS = 90_000;
 
@@ -389,6 +390,18 @@ async function saveProgress(id: string, summary: ResearchSummary, cursor: Resear
 }
 
 async function finishRun(id: string, summary: ResearchSummary, cursor: ResearchCursor): Promise<ResearchRun> {
+  const run = await prisma.researchRun.findUnique({ where: { id }, select: { scopeKey: true } });
+  const fips = run?.scopeKey.startsWith('county:') ? run.scopeKey.slice('county:'.length) : null;
+  if (fips) {
+    // What research wrote onto the records (a fax, a website) reaches the
+    // practice rows now rather than at the next pull.
+    const pull = await prisma.countyIngestRun.findFirst({
+      where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: fips },
+      orderBy: { createdAt: 'desc' },
+      select: { countyName: true },
+    });
+    await formPracticesForCounty(fips, pull?.countyName ?? '');
+  }
   return prisma.researchRun.update({
     where: { id },
     data: {

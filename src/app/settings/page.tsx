@@ -6,6 +6,7 @@ import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import MainLayout from '@/components/layout/MainLayout';
+import FaxOptOutSettings from '@/components/FaxOptOutSettings';
 import type { EstimateRates } from '@/lib/practices/estimate';
 
 interface RatesResponse {
@@ -228,6 +229,8 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
+
+      <FaxOptOutSettings />
     </MainLayout>
   );
 }

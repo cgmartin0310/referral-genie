@@ -386,13 +386,13 @@ export default function CampaignForm({
                           <p className="mb-2 text-sm text-gray-500">
                             <span className="font-semibold">Click to upload</span> or drag and drop
                           </p>
-                          <p className="text-xs text-gray-500">PDF, DOC, DOCX (MAX. 10MB)</p>
+                          <p className="text-xs text-gray-500">PDF (max. 10MB). The opt-out line from Settings is added to every page.</p>
                         </div>
                         <input 
                           id="dropzone-file" 
                           type="file" 
                           className="hidden" 
-                          accept=".pdf,.doc,.docx" 
+                          accept=".pdf,application/pdf" 
                           onChange={handleFileChange}
                           disabled={isLoading}
                         />

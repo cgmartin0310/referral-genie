@@ -30,6 +30,19 @@ model Organization {
   clinicPractices    ClinicPractice[]
   discoveredPlaces   DiscoveredPlace[]
   estimateSettings   EstimateSettings?
+  faxSettings        FaxSettings?
+}
+
+/// Who outbound faxes come from, and the free phone and fax a recipient uses
+/// to stop them. Printed on every page of every campaign fax.
+model FaxSettings {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  senderName     String?
+  optOutPhone    String?
+  optOutFax      String?
+  updatedAt      DateTime     @updatedAt
 }
 
 /// The referral estimate's rate table: disciplines, and referrals per

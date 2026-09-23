@@ -1,3 +1,5 @@
+import { optOutLine, withOptOut } from '@/lib/fax/opt-out';
+import { FaxDocumentError, loadFaxSettings, stampedDocumentPath } from '@/lib/fax/settings';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../../../lib/prisma';
 import { executeWithRetry } from '../../../../../lib/db-helpers';
@@ -45,10 +47,27 @@ export async function POST(
       );
     }
 
+    // Every page carries the opt-out line: who sent it and a free phone and
+    // fax to stop further faxes. Nothing goes out until those are set.
+    const optOut = optOutLine(await loadFaxSettings());
+    if (!optOut) {
+      return NextResponse.json(
+        { error: 'Set the sender name, opt-out phone, and opt-out fax in Settings before sending. Every fax page carries them.' },
+        { status: 400 }
+      );
+    }
+    let stampedPath: string;
+    try {
+      stampedPath = await stampedDocumentPath(campaign.documentUrl, optOut);
+    } catch (error) {
+      if (error instanceof FaxDocumentError) return NextResponse.json({ error: error.message }, { status: 400 });
+      throw error;
+    }
+
     // Get the absolute URL for the document
     const host = request.headers.get('host') || '';
     const protocol = host.includes('localhost') ? 'http' : 'https';
-    const documentUrl = `${protocol}://${host}${campaign.documentUrl}`;
+    const documentUrl = `${protocol}://${host}${stampedPath}`;
 
     // Format phone number for HumbleFax API
     const formatPhoneNumber = (phoneNumber?: string): string | undefined => {
@@ -120,7 +139,7 @@ export async function POST(
             companyInfo: campaign.coverSheetCompanyInfo || "",
             toName: referralSource.contactPerson || referralSource.name || "Provider",
             subject: campaign.coverSheetSubject || "Referral Information",
-            message: campaign.coverSheetMessage || "Please see attached referral information.",
+            message: withOptOut(campaign.coverSheetMessage || "Please see attached referral information.", optOut),
           }
         });
 
@@ -137,7 +156,7 @@ export async function POST(
             companyInfo: campaign.coverSheetCompanyInfo || "",
             toName: referralSource.contactPerson || referralSource.name || "Provider",
             subject: campaign.coverSheetSubject || "Referral Information",
-            message: campaign.coverSheetMessage || "Please see the attached referral information.",
+            message: withOptOut(campaign.coverSheetMessage || "Please see the attached referral information.", optOut),
           } : {
             includeCoversheet: false
           }
@@ -331,7 +350,7 @@ export async function POST(
             companyInfo: campaign.coverSheetCompanyInfo || "",
             toName: target.toName,
             subject: campaign.coverSheetSubject || "Referral Information",
-            message: campaign.coverSheetMessage || "Please see the attached referral information.",
+            message: withOptOut(campaign.coverSheetMessage || "Please see the attached referral information.", optOut),
           } : { includeCoversheet: false },
         });
         if (result.success) {

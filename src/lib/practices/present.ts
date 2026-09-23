@@ -22,6 +22,8 @@ export interface ProviderView {
   sourceTypeLabel: string;
   faxNumber: string | null;
   useOwnFax: boolean;
+  /** Removed from the list by a person. */
+  hidden: boolean;
   practiceId: string | null;
   practiceName: string | null;
   /** The number a fax to this provider actually goes to. */
@@ -41,6 +43,10 @@ export interface PracticeView {
   /** Business name on the Google Places listing, when matched. */
   placeName: string | null;
   nameAmbiguous: boolean;
+  /** Fields a person changed; the pull leaves them alone. */
+  editedFields: string[];
+  /** Deleted by a person. */
+  hidden: boolean;
   address: string | null;
   city: string | null;
   state: string | null;
@@ -91,13 +97,17 @@ export function presentProvider(
     sourceTypeLabel: (provider.sourceType && SOURCE_TYPE_SHORT[provider.sourceType]) || provider.sourceType || 'Unknown',
     faxNumber: provider.faxNumber,
     useOwnFax: provider.useOwnFax,
+    hidden: provider.hiddenAt !== null,
     practiceId: provider.practiceId,
     practiceName: practice?.name ?? null,
     sendsTo: { number: target.number, level: target.level, fellBack: target.fellBack },
   };
 }
 
-export function practiceKind(practice: Pick<Practice, 'orgNpis' | 'practiceKey'>): PracticeKind {
+export function practiceKind(practice: Pick<Practice, 'orgNpis' | 'practiceKey' | 'formedBy'>): PracticeKind {
+  if (practice.formedBy === 'organization' || practice.formedBy === 'listing' || practice.formedBy === 'provider') {
+    return practice.formedBy;
+  }
   if (practice.orgNpis.length > 0) return 'organization';
   return practice.practiceKey.startsWith('npi:') ? 'provider' : 'listing';
 }
@@ -110,6 +120,8 @@ export function presentPractice(practice: PracticeWithRelations): PracticeView {
     kind: practiceKind(practice),
     placeName: practice.placeName,
     nameAmbiguous: practice.nameAmbiguous,
+    editedFields: practice.editedFields,
+    hidden: practice.hiddenAt !== null,
     address: practice.address,
     city: practice.city,
     state: practice.state,
@@ -131,6 +143,6 @@ export function presentPractice(practice: PracticeWithRelations): PracticeView {
 }
 
 export const practiceInclude = {
-  providers: { orderBy: { name: 'asc' as const } },
+  providers: { where: { hiddenAt: null }, orderBy: { name: 'asc' as const } },
   clinicPractices: { select: { clinicLocation: { select: { id: true, name: true } } } },
 };

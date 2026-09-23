@@ -8,19 +8,15 @@ import { fetchNppesPage } from '../nppes/api';
 import { advanceScanCursor, searchDescriptionAt } from './scan';
 import { hitFromNpiRecord, withRecordZips, keptTaxonomyFilter, FILE_SLICE } from './npi-file';
 import {
+  findCandidates,
   googlePlacesClient,
-  matchPractice,
   PlacesConfigError,
   PlacesQuotaError,
-  type DiscoveryClient,
   type PlaceClient,
-  type PlaceMatch,
 } from '../places/match';
-import { looksLikePersonListing, specialtyHints } from '../places/score';
-import { discoveryPlan, discoveryTowns, isPersonalListing, keepDiscovered, parseFormattedAddress, searchText } from '../places/discover';
-import { countyForZip } from '../npi/county-map';
-import { attachSources, type AttachPlace } from './attach';
-import { buildPractices, type PlaceRow, type PracticeSourceRow } from '../practices/build';
+import { specialtyHints } from '../places/score';
+import { isPersonalListing, listingInCounty, parseFormattedAddress } from '../places/listing';
+import { buildPractices, npiGroups, type PlaceRow, type PracticeSourceRow } from '../practices/build';
 import { normalizeNpiNumber } from '../npi';
 import { buildNppesUpsert, buildPlacesWrite, type SourceWrite } from './source-write';
 import {
@@ -270,7 +266,7 @@ async function stepNppes(
   });
 }
 
-function placesClient(): PlaceClient & DiscoveryClient {
+function placesClient(): PlaceClient {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY?.trim();
   if (!apiKey) {
     throw new PlacesConfigError('GOOGLE_PLACES_API_KEY is not set. Set the key and resume this pull.');
@@ -278,356 +274,148 @@ function placesClient(): PlaceClient & DiscoveryClient {
   return googlePlacesClient(apiKey);
 }
 
-/** Practice cities on the county's NPI records, so every town with a practice is searched. */
-async function npiCitiesFor(county: CountyMarket): Promise<string[]> {
-  const onFile = await prisma.npiRecord.groupBy({
-    by: ['city'],
-    where: { countyFips: county.fips, ...keptTaxonomyFilter() },
+const SOURCE_FIELDS = {
+  id: true, npiNumber: true, name: true, enumerationType: true,
+  primaryTaxonomyCode: true, taxonomyCodes: true, sourceType: true,
+  address: true, city: true, state: true, zipCode: true,
+  countyName: true, countyFips: true, contactPhone: true,
+  faxNumber: true, placeId: true, placeName: true, website: true, rating: true, reviewCount: true,
+  placesMatchStatus: true,
+} as const;
+
+/** The county's NPI records, minus providers a person removed from the list. */
+async function countySources(countyFips: string) {
+  const hidden = await prisma.provider.findMany({
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips, hiddenAt: { not: null } },
+    select: { npiNumber: true },
   });
-  const cities = onFile.map((row) => row.city).filter((city): city is string => Boolean(city));
-  if (cities.length > 0) return cities;
-  const sources = await prisma.referralSource.groupBy({
-    by: ['city'],
-    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: county.fips },
-  });
-  return sources.map((row) => row.city).filter((city): city is string => Boolean(city));
-}
-
-/**
- * Discovery: search Google town by town for the kinds of practice that
- * refer, and keep each listing the crosswalk places in this county. One
- * search page per loop; the cursor holds the page token so a slice can end
- * mid-search.
- */
-async function stepDiscover(
-  run: CountyIngestRun,
-  summary: IngestSummary,
-  cursor: IngestCursor,
-  county: CountyMarket,
-  started: number,
-  budgetMs: number,
-): Promise<CountyIngestRun> {
-  const plan = discoveryPlan(discoveryTowns(county, await npiCitiesFor(county)));
-  summary.discoverQueryTotal = plan.length;
-  if (cursor.discoverIndex >= plan.length) {
-    cursor.phase = 'details';
-    return saveRun(run.id, { status: 'RUNNING', phase: 'details', cursor, summary, clearLock: true });
-  }
-
-  const client = placesClient();
-  while (cursor.discoverIndex < plan.length && Date.now() - started < budgetMs) {
-    const search = plan[cursor.discoverIndex];
-    const page = await client.textSearch(searchText(search, county.state), cursor.pageToken);
-    const tag = `${search.town}/${search.query}`;
-    for (const result of page.results) {
-      const { keep, parsed } = keepDiscovered(result, county.fips);
-      if (!keep) continue;
-      const existing = await prisma.discoveredPlace.findUnique({
-        where: { organizationId_placeId: { organizationId: DEFAULT_ORGANIZATION_ID, placeId: result.placeId } },
-        select: { id: true, queries: true },
-      });
-      if (existing) {
-        if (!existing.queries.includes(tag)) {
-          await prisma.discoveredPlace.update({ where: { id: existing.id }, data: { queries: [...existing.queries, tag] } });
-        }
-        continue;
-      }
-      const personal = isPersonalListing(result.name);
-      await prisma.discoveredPlace.create({
-        data: {
-          organizationId: DEFAULT_ORGANIZATION_ID,
-          countyFips: county.fips,
-          placeId: result.placeId,
-          name: result.name,
-          formattedAddress: result.formattedAddress,
-          address: parsed.address,
-          city: parsed.city,
-          state: parsed.state,
-          zipCode: parsed.zip,
-          rating: result.rating,
-          reviewCount: result.reviewCount,
-          businessStatus: result.businessStatus ?? null,
-          latitude: result.lat ?? null,
-          longitude: result.lng ?? null,
-          types: result.types,
-          queries: [tag],
-          personal,
-          origin: 'search',
-        },
-      });
-      summary.placesFound += 1;
-      if (personal) summary.placesPersonal += 1;
-    }
-    if (page.nextPageToken && cursor.pageCount < 2) {
-      cursor.pageToken = page.nextPageToken;
-      cursor.pageCount += 1;
-    } else {
-      cursor.pageToken = null;
-      cursor.pageCount = 0;
-      cursor.discoverIndex += 1;
-      summary.discoverQueries += 1;
-    }
-    await saveRun(run.id, { status: 'RUNNING', phase: 'discover', cursor, summary, clearLock: false });
-  }
-
-  if (cursor.discoverIndex >= plan.length) cursor.phase = 'details';
-  return saveRun(run.id, { status: 'RUNNING', phase: cursor.phase, cursor, summary, clearLock: true });
-}
-
-/** Phone, website, rating, and the exact address for each listing found. */
-async function stepDetails(
-  run: CountyIngestRun,
-  summary: IngestSummary,
-  cursor: IngestCursor,
-  county: CountyMarket,
-  started: number,
-  budgetMs: number,
-): Promise<CountyIngestRun> {
-  const pending = await prisma.discoveredPlace.findMany({
-    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: county.fips, detailsAt: null },
+  const hiddenNpis = new Set(hidden.map((row) => row.npiNumber));
+  const rows = await prisma.referralSource.findMany({
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips },
+    select: SOURCE_FIELDS,
     orderBy: { id: 'asc' },
-    take: 10,
   });
-  if (pending.length === 0) {
-    cursor.phase = 'nppes';
-    return saveRun(run.id, { status: 'RUNNING', phase: 'nppes', cursor, summary, clearLock: true });
-  }
-
-  const client = placesClient();
-  for (const place of pending) {
-    if (Date.now() - started > budgetMs) break;
-    const details = await client.placeDetails(place.placeId);
-    const name = details?.name || place.name;
-    const formattedAddress = details?.formattedAddress || place.formattedAddress;
-    const parsed = parseFormattedAddress(formattedAddress);
-    await prisma.discoveredPlace.update({
-      where: { id: place.id },
-      data: {
-        detailsAt: new Date(),
-        name,
-        formattedAddress,
-        address: parsed.address ?? place.address,
-        city: parsed.city ?? place.city,
-        state: parsed.state ?? place.state,
-        zipCode: parsed.zip ?? place.zipCode,
-        phone: details?.phone ?? place.phone,
-        website: details?.website ?? place.website,
-        rating: details?.rating ?? place.rating,
-        reviewCount: details?.reviewCount ?? place.reviewCount,
-        businessStatus: details?.businessStatus ?? place.businessStatus,
-        latitude: details?.latitude ?? place.latitude,
-        longitude: details?.longitude ?? place.longitude,
-        personal: isPersonalListing(name),
-      },
-    });
-  }
-  return saveRun(run.id, { status: 'RUNNING', phase: 'details', cursor, summary, clearLock: true });
+  return rows.filter((row) => !row.npiNumber || !hiddenNpis.has(row.npiNumber));
 }
 
-type PlaceRecord = Awaited<ReturnType<typeof prisma.discoveredPlace.findMany>>[number];
-
-function toAttachPlace(place: PlaceRecord): AttachPlace {
-  return {
-    placeId: place.placeId,
-    name: place.name,
-    address: place.address,
-    city: place.city,
-    zipCode: place.zipCode,
-    phone: place.phone,
-    reviewCount: place.reviewCount,
-    website: place.website,
-    personal: place.personal,
-  };
-}
-
-function matchFromPlace(place: PlaceRecord): PlaceMatch {
-  return {
-    placeId: place.placeId,
-    name: place.name,
-    formattedAddress: place.formattedAddress,
-    confidence: 1,
-    phone: place.phone,
-    website: place.website,
-    rating: place.rating,
-    reviewCount: place.reviewCount,
-    businessStatus: place.businessStatus,
-    latitude: place.latitude,
-    longitude: place.longitude,
-    matchedBy: 'address',
-  };
-}
+/** Groups looked up per call; each is one to three Places searches plus details. */
+const LOOKUP_GROUPS = 4;
 
 /**
- * Nest the county's NPI records under the listings found: by phone, then by
- * street. A record no listing claims is marked pending so the lookup step
- * searches Google for it by its own phone and address.
- */
-async function attachToPlaces(
-  countyFips: string,
-  summary: IngestSummary,
-  options: { markUnattached: boolean },
-): Promise<void> {
-  const places = await prisma.discoveredPlace.findMany({
-    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips },
-  });
-  const sources = await prisma.referralSource.findMany({
-    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips },
-    select: { id: true, name: true, address: true, city: true, zipCode: true, contactPhone: true, placeId: true, provenance: true },
-  });
-  const attached = attachSources(
-    sources.map((source) => ({
-      id: source.id,
-      name: source.name,
-      address: source.address,
-      city: source.city,
-      zipCode: source.zipCode,
-      phone: source.contactPhone,
-    })),
-    places.map(toAttachPlace),
-  );
-  const placeById = new Map(places.map((place) => [place.placeId, place]));
-
-  let attachedCount = 0;
-  let unattached = 0;
-  for (const source of sources) {
-    const placeId = attached.get(source.id);
-    const place = placeId ? placeById.get(placeId) : undefined;
-    if (place) {
-      await prisma.referralSource.update({
-        where: { id: source.id },
-        data: asWrite(buildPlacesWrite(matchFromPlace(place), source.provenance)),
-      });
-      attachedCount += 1;
-      continue;
-    }
-    unattached += 1;
-    if (options.markUnattached) {
-      // A link from an older pull to a listing this pull did not find is stale.
-      await prisma.referralSource.update({
-        where: { id: source.id },
-        data: { placeId: null, placeName: null, placesMatchStatus: 'pending' },
-      });
-    }
-  }
-  summary.providersAttached = attachedCount;
-  summary.providersUnattached = unattached;
-}
-
-/**
- * Lookup: for each NPI record no listing claimed, search Google by its
- * phone, then its address. A listing in this county joins the found set, so
- * a practice the county search missed still becomes a row.
+ * Name each NPI group on Google: search by its phone, then its address, then
+ * (for one person) their name in their town, and keep every listing in the
+ * county that plausibly is this practice. Formation picks among them.
  */
 async function stepLookup(
   run: CountyIngestRun,
   summary: IngestSummary,
   cursor: IngestCursor,
-  county: CountyMarket,
   started: number,
   budgetMs: number,
 ): Promise<CountyIngestRun> {
-  const pending = await prisma.referralSource.findMany({
-    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: run.countyFips, placesMatchStatus: 'pending' },
-    orderBy: { id: 'asc' },
-    take: 5,
-  });
+  const rows = await countySources(run.countyFips);
+  const pending = npiGroups(rows as PracticeSourceRow[])
+    .filter((group) => group.members.some((row) => (row as { placesMatchStatus?: string | null }).placesMatchStatus === 'pending'))
+    .slice(0, LOOKUP_GROUPS);
   if (pending.length === 0) {
     cursor.phase = 'practices';
     return saveRun(run.id, { status: 'RUNNING', phase: 'practices', cursor, summary, clearLock: true });
   }
 
   const client = placesClient();
-  let saved = run;
-  for (const source of pending) {
+  for (const group of pending) {
     if (Date.now() - started > budgetMs) break;
-    await sleep(200);
-    let match: PlaceMatch | null = null;
+    const members = group.members;
+    const org = members.find((row) => (row.enumerationType ?? '').toUpperCase() === 'NPI-2');
+    const people = members.filter((row) => row !== org);
+    const lead = org ?? people[0];
+    const phone = members.map((row) => row.contactPhone).find(Boolean) ?? '';
+    let candidates: Awaited<ReturnType<typeof findCandidates>> = [];
     try {
-      match = await matchPractice(
+      candidates = await findCandidates(
         {
-          name: source.name,
-          street: source.address ?? '',
-          city: source.city ?? '',
-          state: source.state ?? '',
-          zip: source.zipCode ?? '',
-          phone: source.contactPhone ?? '',
-          isPerson: (source.enumerationType ?? '').toUpperCase() !== 'NPI-2',
-          specialty: specialtyHints(source.sourceType),
+          name: lead.name,
+          street: lead.address ?? '',
+          city: lead.city ?? '',
+          state: lead.state ?? '',
+          zip: lead.zipCode ?? '',
+          phone,
+          isPerson: !org && people.length === 1,
+          specialty: specialtyHints(people[0]?.sourceType ?? null),
         },
         client,
       );
     } catch (error) {
       if (error instanceof PlacesConfigError || error instanceof PlacesQuotaError) throw error;
-      match = null;
+      candidates = [];
     }
 
-    const parsed = match?.formattedAddress ? parseFormattedAddress(match.formattedAddress) : null;
-    const inCounty = parsed?.zip ? countyForZip(parsed.zip)?.fips === county.fips : false;
-    if (match && parsed && inCounty) {
-      const personal = looksLikePersonListing(match.name ?? '', [source.name]);
-      const existing = await prisma.discoveredPlace.findUnique({
-        where: { organizationId_placeId: { organizationId: DEFAULT_ORGANIZATION_ID, placeId: match.placeId } },
-        select: { id: true },
-      });
+    let kept = 0;
+    for (const candidate of candidates) {
+      if (!listingInCounty(candidate.formattedAddress, run.countyFips)) continue;
+      const parsed = parseFormattedAddress(candidate.formattedAddress);
+      const details = candidate.details;
       const shape = {
-        name: match.name || source.name,
-        formattedAddress: match.formattedAddress ?? '',
+        countyFips: run.countyFips,
+        name: candidate.name,
+        formattedAddress: candidate.formattedAddress,
         address: parsed.address,
         city: parsed.city,
         state: parsed.state,
         zipCode: parsed.zip,
-        phone: match.phone,
-        website: match.website,
-        rating: match.rating,
-        reviewCount: match.reviewCount,
-        businessStatus: match.businessStatus,
-        latitude: match.latitude,
-        longitude: match.longitude,
-        personal,
+        phone: details?.phone ?? null,
+        website: details?.website ?? null,
+        rating: details?.rating ?? null,
+        reviewCount: details?.reviewCount ?? null,
+        businessStatus: details?.businessStatus ?? null,
+        latitude: details?.latitude ?? null,
+        longitude: details?.longitude ?? null,
+        personal: isPersonalListing(candidate.name),
         detailsAt: new Date(),
       };
+      const existing = await prisma.discoveredPlace.findUnique({
+        where: { organizationId_placeId: { organizationId: DEFAULT_ORGANIZATION_ID, placeId: candidate.placeId } },
+        select: { id: true },
+      });
       if (existing) {
         await prisma.discoveredPlace.update({ where: { id: existing.id }, data: shape });
       } else {
         await prisma.discoveredPlace.create({
           data: {
             organizationId: DEFAULT_ORGANIZATION_ID,
-            countyFips: county.fips,
-            placeId: match.placeId,
+            placeId: candidate.placeId,
             origin: 'provider',
-            queries: [`npi/${source.npiNumber ?? source.id}`],
+            queries: [`${candidate.matchedBy}/${lead.npiNumber ?? lead.id}`],
             ...shape,
           },
         });
-        summary.placesFromLookup += 1;
+        summary.placesFound += 1;
+        if (shape.personal) summary.placesPersonal += 1;
       }
-      await prisma.referralSource.update({
-        where: { id: source.id },
-        data: asWrite(buildPlacesWrite(match, source.provenance)),
-      });
-      summary.placesMatched += 1;
-    } else {
-      await prisma.referralSource.update({
-        where: { id: source.id },
-        data: asWrite(buildPlacesWrite(null, source.provenance)),
-      });
-      summary.placesUnmatched += 1;
+      kept += 1;
     }
-    saved = await saveRun(run.id, { status: 'RUNNING', phase: 'lookup', cursor, summary, clearLock: false });
+
+    if (kept > 0) summary.placesMatched += 1;
+    else summary.placesUnmatched += 1;
+    await prisma.referralSource.updateMany({
+      where: { id: { in: members.map((row) => row.id) } },
+      data: { placesMatchStatus: kept > 0 ? 'matched' : 'unmatched' },
+    });
+    await saveRun(run.id, { status: 'RUNNING', phase: 'lookup', cursor, summary, clearLock: false });
   }
 
-  return saveRun(saved.id, { status: 'RUNNING', phase: 'lookup', cursor, summary, clearLock: true });
+  return saveRun(run.id, { status: 'RUNNING', phase: 'lookup', cursor, summary, clearLock: true });
 }
 
 /**
- * Form practices: the listings found, with the county's NPI records nested
- * under them, then whatever NPI records Google lists nowhere. Runs right
- * after the NPI pull so the catalog shows practices at once, and again after
- * the lookup step. Upserts, so running twice is safe.
+ * Form practices from the county's NPI records (see practices/build) with
+ * the Google listings the lookup found, and write them. Upserts, so running
+ * twice is safe. Fields a person edited, and rows a person deleted, stay as
+ * they left them.
  */
-async function formPractices(run: CountyIngestRun, summary: IngestSummary): Promise<void> {
+export async function formPracticesForCounty(countyFips: string, countyName: string): Promise<{ practicesFormed: number; providersLinked: number }> {
   const found = await prisma.discoveredPlace.findMany({
-    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: run.countyFips },
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips },
     orderBy: { id: 'asc' },
   });
   const places: PlaceRow[] = found.map((place) => ({
@@ -637,33 +425,24 @@ async function formPractices(run: CountyIngestRun, summary: IngestSummary): Prom
     city: place.city,
     state: place.state,
     zipCode: place.zipCode,
-    countyName: run.countyName,
-    countyFips: run.countyFips,
+    countyName,
+    countyFips,
     phone: place.phone,
     website: place.website,
     rating: place.rating,
     reviewCount: place.reviewCount,
     personal: place.personal,
-    types: place.types,
   }));
-  const sources = await prisma.referralSource.findMany({
-    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: run.countyFips },
-    select: {
-      id: true, npiNumber: true, name: true, enumerationType: true,
-      primaryTaxonomyCode: true, taxonomyCodes: true, sourceType: true,
-      address: true, city: true, state: true, zipCode: true,
-      countyName: true, countyFips: true, contactPhone: true,
-      faxNumber: true, placeId: true, placeName: true, website: true, rating: true, reviewCount: true,
-    },
-  });
-
+  const sources = await countySources(countyFips);
   const practices = buildPractices(sources as PracticeSourceRow[], places);
+  const placeById = new Map(found.map((place) => [place.placeId, place]));
   let providersLinked = 0;
 
   for (const built of practices) {
-    const shape = {
+    const shape: Record<string, unknown> = {
       placeId: built.placeId,
       placeName: built.placeName,
+      formedBy: built.formedBy,
       name: built.name,
       nameAmbiguous: built.nameAmbiguous,
       address: built.address,
@@ -681,21 +460,27 @@ async function formPractices(run: CountyIngestRun, summary: IngestSummary): Prom
       providerCount: built.providerCount,
       taxonomyMix: asJson(built.taxonomyMix),
     };
-    const practice = await prisma.practice.upsert({
-      where: {
-        organizationId_practiceKey: {
+    const existing = await prisma.practice.findUnique({
+      where: { organizationId_practiceKey: { organizationId: DEFAULT_ORGANIZATION_ID, practiceKey: built.practiceKey } },
+      select: { id: true, editedFields: true },
+    });
+    let practiceId: string;
+    if (existing) {
+      const update: Record<string, unknown> = { ...shape, retiredAt: null };
+      for (const field of existing.editedFields) delete update[field];
+      await prisma.practice.update({ where: { id: existing.id }, data: update as Prisma.PracticeUncheckedUpdateInput });
+      practiceId = existing.id;
+    } else {
+      const created = await prisma.practice.create({
+        data: {
           organizationId: DEFAULT_ORGANIZATION_ID,
           practiceKey: built.practiceKey,
-        },
-      },
-      create: {
-        organizationId: DEFAULT_ORGANIZATION_ID,
-        practiceKey: built.practiceKey,
-        ...shape,
-      },
-      update: { ...shape, retiredAt: null },
-      select: { id: true },
-    });
+          ...shape,
+        } as Prisma.PracticeUncheckedCreateInput,
+        select: { id: true },
+      });
+      practiceId = created.id;
+    }
 
     for (const provider of built.providers) {
       if (!provider.npiNumber) continue;
@@ -706,7 +491,7 @@ async function formPractices(run: CountyIngestRun, summary: IngestSummary): Prom
         sourceType: provider.sourceType,
         countyFips: built.countyFips,
         faxNumber: provider.faxNumber,
-        practiceId: practice.id,
+        practiceId,
       };
       await prisma.provider.upsert({
         where: {
@@ -715,38 +500,56 @@ async function formPractices(run: CountyIngestRun, summary: IngestSummary): Prom
             npiNumber: provider.npiNumber,
           },
         },
-        // useOwnFax is a person's setting and is never written by the pull.
+        // useOwnFax and hiddenAt are a person's settings and are never written by the pull.
         create: { organizationId: DEFAULT_ORGANIZATION_ID, npiNumber: provider.npiNumber, ...fields },
         update: fields,
         select: { id: true },
       });
       providersLinked += 1;
     }
+
+    // Each record carries its practice's listing, so research reads the site
+    // Google lists. NPI's own phone and address are left as NPI wrote them.
+    const place = built.placeId ? placeById.get(built.placeId) : undefined;
+    await prisma.referralSource.updateMany({
+      where: { id: { in: built.memberIds } },
+      data: place
+        ? { placeId: place.placeId, placeName: place.name, rating: place.rating, reviewCount: place.reviewCount }
+        : { placeId: null, placeName: null },
+    });
+    if (place?.website) {
+      await prisma.referralSource.updateMany({
+        where: { id: { in: built.memberIds }, website: null },
+        data: { website: place.website },
+      });
+    }
   }
 
-  summary.practicesFormed = practices.length;
-  summary.providersLinked = providersLinked;
-
-  // A row this pass did not produce is stale: re-keyed by place id, or a
-  // grouping that no longer exists. Drop it when nothing refers to it; when a
-  // clinic list or campaign still does, keep the row but stop it claiming
-  // providers that now sit elsewhere.
+  // A row this pass did not produce is stale. Drop it when nothing refers to
+  // it; when a clinic list or campaign still does, retire it: hidden from the
+  // catalog, kept for the lists that use it.
   const keys = practices.map((built) => built.practiceKey);
   await prisma.practice.deleteMany({
     where: {
       organizationId: DEFAULT_ORGANIZATION_ID,
-      countyFips: run.countyFips,
+      countyFips,
       practiceKey: { notIn: keys },
       clinicPractices: { none: {} },
       campaignTargets: { none: {} },
     },
   });
   await prisma.practice.updateMany({
-    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: run.countyFips, practiceKey: { notIn: keys } },
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips, practiceKey: { notIn: keys }, retiredAt: null },
     data: { providerCount: 0, taxonomyMix: {}, retiredAt: new Date() },
   });
+  return { practicesFormed: practices.length, providersLinked };
 }
 
+async function formPractices(run: CountyIngestRun, summary: IngestSummary): Promise<void> {
+  const result = await formPracticesForCounty(run.countyFips, run.countyName);
+  summary.practicesFormed = result.practicesFormed;
+  summary.providersLinked = result.providersLinked;
+}
 /**
  * Sources for this county that the pull did not see are gone from NPI (or
  * moved counties). Remove them unless a person has logged activity or a
@@ -783,19 +586,17 @@ async function stepGroup(
   cursor: IngestCursor,
 ): Promise<CountyIngestRun> {
   summary.retired = await retireUnseen(run, summary);
-  await attachToPlaces(run.countyFips, summary, { markUnattached: true });
   await formPractices(run, summary);
   cursor.phase = 'lookup';
   return saveRun(run.id, { status: 'RUNNING', phase: 'lookup', cursor, summary, clearLock: true });
 }
 
-/** After the lookup: nest under any listing it added, re-form, and finish. */
+/** After the lookup: form with the listings found, and finish. */
 async function stepPractices(
   run: CountyIngestRun,
   summary: IngestSummary,
   cursor: IngestCursor,
 ): Promise<CountyIngestRun> {
-  await attachToPlaces(run.countyFips, summary, { markUnattached: false });
   await formPractices(run, summary);
   cursor.phase = 'done';
   return saveRun(run.id, {
@@ -880,7 +681,7 @@ export async function createOrResumeRun(input: {
       countyName: county.name,
       countyFips: county.fips,
       status: 'QUEUED',
-      phase: 'discover',
+      phase: 'nppes',
       cursor: asJson({ ...emptyCursor(), source: onFile > 0 ? 'file' : 'api' }),
       summary: asJson(emptySummary(onFile > 0 ? Math.ceil(onFile / FILE_SLICE) : county.zips.length)),
     },
@@ -918,10 +719,10 @@ export async function advanceCountyIngest(runId: string, options?: { budgetMs?: 
     const cursor = parseCursor(run.cursor);
     const county = getCounty(run.countyId);
 
-    if (cursor.phase === 'discover') {
-      run = await stepDiscover(run, summary, cursor, county, started, budgetMs);
-    } else if (cursor.phase === 'details') {
-      run = await stepDetails(run, summary, cursor, county, started, budgetMs);
+    if (cursor.phase === 'discover' || cursor.phase === 'details') {
+      // A pull started under the Google-first order: begin again from NPI.
+      cursor.phase = 'nppes';
+      run = await saveRun(run.id, { status: 'RUNNING', phase: 'nppes', cursor, summary, clearLock: true });
     } else if (cursor.phase === 'nppes') {
       run = cursor.source === 'file'
         ? await stepNppesFile(run, summary, cursor, county)
@@ -929,7 +730,7 @@ export async function advanceCountyIngest(runId: string, options?: { budgetMs?: 
     } else if (cursor.phase === 'group') {
       run = await stepGroup(run, summary, cursor);
     } else if (cursor.phase === 'lookup' || cursor.phase === 'places' || cursor.phase === 'duplicates') {
-      run = await stepLookup(run, summary, cursor, county, started, budgetMs);
+      run = await stepLookup(run, summary, cursor, started, budgetMs);
     } else if (cursor.phase === 'practices') {
       run = await stepPractices(run, summary, cursor);
     } else {

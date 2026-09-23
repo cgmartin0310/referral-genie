@@ -140,7 +140,14 @@ export const foldPersonalListings = foldListings;
  * The practice listing each record belongs to, after folding. A record that
  * matches nothing is left out, for a Google lookup of its own.
  */
-export function attachSources(sources: AttachSource[], places: AttachPlace[]): Map<string, string> {
+export function attachSources(
+  sources: AttachSource[],
+  places: AttachPlace[],
+  options: { followElsewhere?: boolean } = {},
+): Map<string, string> {
+  // Following a person to their own listing elsewhere suits someone working
+  // alone; in a group, one person's listing next door must not move the group.
+  const followElsewhere = options.followElsewhere ?? true;
   const fold = foldListings(places);
   const sites = new Map(places.map((place) => [place.placeId, siteOf(place)]));
   const rootOf = (place: AttachPlace) => fold.get(place.placeId) ?? place.placeId;
@@ -157,9 +164,9 @@ export function attachSources(sources: AttachSource[], places: AttachPlace[]): M
       const own = places.filter((place) => place.personal && listingNamesPerson(place.name, source.name as string));
       const near = own.find((place) => {
         const other = sites.get(place.placeId) as Site;
-        return sameSite(site, other) || (site.phone !== null && site.phone === other.phone);
+        return sameSite(site, other) || (followElsewhere && site.phone !== null && site.phone === other.phone);
       });
-      const chosen = near ?? (own.length === 1 ? own[0] : undefined);
+      const chosen = near ?? (followElsewhere && own.length === 1 ? own[0] : undefined);
       if (chosen) {
         out.set(source.id, rootOf(chosen));
         continue;

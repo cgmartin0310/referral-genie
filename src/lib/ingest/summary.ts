@@ -1,8 +1,9 @@
 /**
- * discover: search Google for the county's practices. details: phone, website,
- * rating for each. nppes: the NPI records. group: retire, attach, form.
- * lookup: a Places search for each NPI record no listing claimed. practices:
- * the final formation. ("places" and "duplicates" are older names for lookup.)
+ * nppes: the NPI records. group: retire what the pull did not see, form NPI
+ * groups. lookup: one Google search per group for its listings. practices:
+ * the final formation with the listings. ("places" and "duplicates" are older
+ * names for lookup; "discover" and "details" belong to an older order and
+ * restart at nppes.)
  */
 export type IngestPhase = 'discover' | 'details' | 'nppes' | 'group' | 'lookup' | 'places' | 'duplicates' | 'practices' | 'done';
 
@@ -53,7 +54,7 @@ export interface IngestSummary {
 }
 
 export function emptyCursor(): IngestCursor {
-  return { phase: 'discover', discoverIndex: 0, pageToken: null, pageCount: 0, zipIndex: 0, searchIndex: 0, skip: 0, source: 'api' };
+  return { phase: 'nppes', discoverIndex: 0, pageToken: null, pageCount: 0, zipIndex: 0, searchIndex: 0, skip: 0, source: 'api' };
 }
 
 export function emptySummary(nppesQueryTotal: number): IngestSummary {
@@ -95,7 +96,7 @@ export function parseCursor(value: unknown): IngestCursor {
   const phase = row.phase;
   const allowed: IngestPhase[] = ['discover', 'details', 'nppes', 'group', 'lookup', 'places', 'duplicates', 'practices', 'done'];
   return {
-    phase: allowed.includes(phase as IngestPhase) ? (phase as IngestPhase) : 'discover',
+    phase: allowed.includes(phase as IngestPhase) ? (phase as IngestPhase) : 'nppes',
     discoverIndex: numberField(row.discoverIndex),
     pageToken: typeof row.pageToken === 'string' && row.pageToken ? row.pageToken : null,
     pageCount: numberField(row.pageCount),

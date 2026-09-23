@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildPractices, type PracticeSourceRow } from './build';
+import { buildPractices, type PlaceRow, type PracticeSourceRow } from './build';
 
 function row(overrides: Partial<PracticeSourceRow> & { id: string }): PracticeSourceRow {
   return {
@@ -23,7 +23,37 @@ function row(overrides: Partial<PracticeSourceRow> & { id: string }): PracticeSo
   };
 }
 
-describe('practice formation', () => {
+function listing(overrides: Partial<PlaceRow> & { placeId: string; name: string }): PlaceRow {
+  return {
+    address: '100 King St',
+    city: 'Kinston',
+    state: 'NC',
+    zipCode: '28501',
+    countyName: 'Lenoir',
+    countyFips: '37107',
+    phone: '252-555-0100',
+    website: null,
+    rating: null,
+    reviewCount: null,
+    personal: false,
+    ...overrides,
+  };
+}
+
+// The ECU Health clinic in La Grange: no organization NPI there, and Google
+// lists the clinic, the building's old name, and a physician's own listing.
+const LA_GRANGE_ROWS = [
+  row({ id: 'haynes', name: 'CARL HAYNES', sourceType: 'pcp_family_medicine', address: '101 S CAREY ST', city: 'LA GRANGE', zipCode: '28551', contactPhone: '2525664021', faxNumber: '2525662902' }),
+  row({ id: 'patel', name: 'ATIT PATEL', sourceType: 'pcp_family_medicine', address: '101 S CAREY ST', city: 'LA GRANGE', zipCode: '28551', contactPhone: '2525664021', faxNumber: null }),
+];
+const at = { address: '101 S Carey St', city: 'La Grange', zipCode: '28551', phone: '(252) 566-4021' };
+const LA_GRANGE_LISTINGS = [
+  listing({ placeId: 'own', name: 'Carl L Haynes Jr., MD', personal: true, reviewCount: 3, website: 'https://locations.ecuhealth.org/details/44', ...at }),
+  listing({ placeId: 'building', name: 'La Grange Medical Center', reviewCount: 11, website: 'http://lagrangenc.com/', ...at }),
+  listing({ placeId: 'clinic', name: 'ECU Health Family Medicine - La Grange', reviewCount: 113, website: 'https://locations.ecuhealth.org/details/44', ...at }),
+];
+
+describe('practice formation, NPI first', () => {
   it('nests providers at one address under its organization', () => {
     const practices = buildPractices([
       row({ id: 'a' }), row({ id: 'b' }), row({ id: 'c' }),
@@ -34,94 +64,6 @@ describe('practice formation', () => {
     assert.equal(practices[0].providers.length, 3);
     assert.equal(practices[0].faxNumber, '252-555-0190');
   });
-
-  it('lists providers individually when their address has no organization NPI', () => {
-    // Nothing to group under, so no made-up "100 Airport Rd" practice.
-    const practices = buildPractices([row({ id: 'a', name: 'Joan Perry' }), row({ id: 'b', name: 'Orvil Reece' })]);
-    assert.equal(practices.length, 2);
-    assert.deepEqual(practices.map((p) => p.name).sort(), ['Joan Perry', 'Orvil Reece']);
-    assert.ok(practices.every((p) => p.providerCount === 1 && p.orgNpis.length === 0 && p.practiceKey.startsWith('npi:')));
-    assert.equal(practices[0].faxNumber, '252-555-0190');
-  });
-
-  it('groups providers under the Google listing they share when no organization NPI is registered there', () => {
-    // ECU Health registers one NPI-2 in Greenville and none at its La Grange
-    // clinic; Google lists the clinic, and both physicians match it.
-    const practices = buildPractices([
-      row({ id: 'a', name: 'Carl Haynes', address: '101 S Carey St', city: 'La Grange', zipCode: '28551', contactPhone: '252-566-4021', faxNumber: '252-566-2902', placeId: 'ChIJecu', placeName: 'ECU Health Family Medicine - La Grange', website: 'https://locations.ecuhealth.org/details/44' }),
-      row({ id: 'b', name: 'Atit Patel', address: '101 S CAREY ST', city: 'LA GRANGE', zipCode: '28551', contactPhone: '252-566-4021', faxNumber: null, placeId: 'ChIJecu', placeName: 'ECU Health Family Medicine - La Grange', website: 'https://locations.ecuhealth.org/details/44' }),
-    ]);
-    assert.equal(practices.length, 1);
-    const [clinic] = practices;
-    assert.equal(clinic.name, 'ECU Health Family Medicine - La Grange');
-    assert.equal(clinic.formedBy, 'listing');
-    assert.equal(clinic.practiceKey, 'place:ChIJecu');
-    assert.equal(clinic.providerCount, 2);
-    assert.deepEqual(clinic.orgNpis, []);
-    // One provider's registered fax covers the colleague who left theirs blank.
-    assert.equal(clinic.faxNumber, '252-566-2902');
-    assert.equal(clinic.website, 'https://locations.ecuhealth.org/details/44');
-  });
-
-  it('names the group from the clinic listing, not a member\'s own listing at the same address', () => {
-    // Haynes matched his personal Google listing; Patel matched the clinic's.
-    const practices = buildPractices([
-      row({ id: 'a', name: 'CARL HAYNES', placeId: 'ChIJhaynes', placeName: 'Carl L Haynes Jr., MD' }),
-      row({ id: 'b', name: 'ATIT PATEL', placeId: 'ChIJclinic', placeName: 'ECU Health Family Medicine - La Grange' }),
-    ]);
-    assert.equal(practices.length, 1);
-    assert.equal(practices[0].name, 'ECU Health Family Medicine - La Grange');
-    assert.equal(practices[0].providerCount, 2);
-  });
-
-  it('prefers the listing more members matched, then the one with reviews', () => {
-    const practices = buildPractices([
-      row({ id: 'a', name: 'CARL HAYNES', placeId: 'ChIJbuilding', placeName: 'La Grange Medical Center', reviewCount: 11 }),
-      row({ id: 'b', name: 'ATIT PATEL', placeId: 'ChIJclinic', placeName: 'ECU Health Family Medicine - La Grange', reviewCount: 113 }),
-    ]);
-    assert.equal(practices.length, 1);
-    assert.equal(practices[0].name, 'ECU Health Family Medicine - La Grange');
-  });
-
-  it('does not show a provider their own listing name', () => {
-    const practices = buildPractices([
-      row({ id: 'a', name: 'AMBROSE OKONKWO', placeId: 'ChIJo', placeName: 'Dr. Ambrose S. Okonkwo, MD' }),
-    ]);
-    assert.equal(practices[0].placeName, null);
-  });
-
-  it('never names a group after its street: providers at one address with no listing stay individual', () => {
-    const practices = buildPractices([
-      row({ id: 'a', name: 'Joan Perry', faxNumber: '252-555-0190' }),
-      row({ id: 'b', name: 'Orvil Reece', faxNumber: null }),
-    ]);
-    assert.equal(practices.length, 2);
-    assert.ok(practices.every((p) => p.formedBy === 'provider'));
-    // The blank fax is borrowed from the colleague at the same location.
-    assert.equal(practices.find((p) => p.name === 'Orvil Reece')?.faxNumber, '252-555-0190');
-  });
-
-  it('carries the listing name on a provider listed alone', () => {
-    const practices = buildPractices([
-      row({ id: 'a', name: 'Joan Perry', placeId: 'ChIJx', placeName: 'Kinston Family Care' }),
-    ]);
-    assert.equal(practices.length, 1);
-    assert.equal(practices[0].name, 'Joan Perry');
-    assert.equal(practices[0].placeName, 'Kinston Family Care');
-  });
-
-  it('lets an organization NPI outrank the listing name', () => {
-    const practices = buildPractices([
-      row({ id: 'a', placeId: 'ChIJk', placeName: 'Kinston Pediatrics' }),
-      row({ id: 'b', placeId: 'ChIJk', placeName: 'Kinston Pediatrics' }),
-      row({ id: 'org', enumerationType: 'NPI-2', name: 'Kinston Pediatrics PA', npiNumber: '1679576722', placeId: 'ChIJk', placeName: 'Kinston Pediatrics' }),
-    ]);
-    assert.equal(practices.length, 1);
-    assert.equal(practices[0].name, 'Kinston Pediatrics PA');
-    assert.equal(practices[0].formedBy, 'organization');
-    assert.equal(practices[0].placeName, 'Kinston Pediatrics');
-  });
-
   it('names the practice from a single org NPI and excludes it from the count', () => {
     const practices = buildPractices([
       row({ id: 'a' }),
@@ -134,7 +76,6 @@ describe('practice formation', () => {
     // An organization is not a provider.
     assert.equal(practices[0].providerCount, 2);
   });
-
   it('does not call one health center registered three times ambiguous', () => {
     const practices = buildPractices([
       row({ id: 'a' }),
@@ -146,7 +87,6 @@ describe('practice formation', () => {
     assert.equal(practices[0].nameAmbiguous, false);
     assert.equal(practices[0].orgNpis.length, 3);
   });
-
   it('picks the org whose fax matches when an address hosts two orgs', () => {
     // 744 Airport Rd holds both Eastern Carolina Physicians and Physicians East.
     const practices = buildPractices([
@@ -159,7 +99,6 @@ describe('practice formation', () => {
     assert.equal(practices[0].nameAmbiguous, true);
     assert.equal(practices[0].orgNpis.length, 2);
   });
-
   it('counts the taxonomy mix that drives the estimate', () => {
     const practices = buildPractices([
       row({ id: 'a', sourceType: 'pediatrics' }),
@@ -170,7 +109,6 @@ describe('practice formation', () => {
     assert.deepEqual(practices[0].taxonomyMix, { pediatrics: 2, pcp_family_medicine: 1 });
     assert.equal(practices[0].providerCount, 3);
   });
-
   it('does not make a row from an organization record with no provider', () => {
     // A rural health clinic code is on urgent cares and health departments too.
     const practices = buildPractices([
@@ -178,7 +116,6 @@ describe('practice formation', () => {
     ]);
     assert.equal(practices.length, 0);
   });
-
   it('separates different suites at one street address', () => {
     const practices = buildPractices([
       row({ id: 'a', address: '100 King St Ste 200', contactPhone: '252-555-0100' }),
@@ -191,7 +128,6 @@ describe('practice formation', () => {
     assert.equal(group?.providerCount, 2);
     assert.equal(practices.find((p) => p.orgNpis.length === 0)?.providerCount, 1);
   });
-
   it('keeps one office together across its street ZIP and its PO Box ZIP', () => {
     // Kinston Pediatric Associates: some providers registered under 28501, the org under 28502.
     const practices = buildPractices([
@@ -204,14 +140,123 @@ describe('practice formation', () => {
     assert.equal(practices[0].providerCount, 2);
   });
 
-  it('uses a place id to join addresses a person typed differently', () => {
-    const practices = buildPractices([
-      row({ id: 'a', address: '100 Airport Rd', placeId: 'ChIJlenoir' }),
-      row({ id: 'b', address: '100 Airport Rd, Lenoir Memorial Hospital', placeId: 'ChIJlenoir' }),
-      row({ id: 'org', enumerationType: 'NPI-2', name: 'Lenoir Memorial Hospital', npiNumber: '4', address: '100 Airport Rd', placeId: 'ChIJlenoir' }),
-    ]);
+  it('groups providers at one address with no organization, named by their Google listing', () => {
+    const practices = buildPractices(LA_GRANGE_ROWS, LA_GRANGE_LISTINGS);
     assert.equal(practices.length, 1);
-    assert.equal(practices[0].placeId, 'ChIJlenoir');
+    const [clinic] = practices;
+    assert.equal(clinic.name, 'ECU Health Family Medicine - La Grange');
+    assert.equal(clinic.formedBy, 'listing');
+    assert.equal(clinic.providerCount, 2);
+    // The group's NPI fax: one provider's registration covers the other.
+    assert.equal(clinic.faxNumber, '2525662902');
+    assert.equal(clinic.website, 'https://locations.ecuhealth.org/details/44');
+    assert.equal(clinic.reviewCount, 113);
+  });
+
+  it('never names a group after its street when Google has nothing', () => {
+    const practices = buildPractices(LA_GRANGE_ROWS, []);
+    assert.equal(practices.length, 1);
+    assert.equal(practices[0].name, 'CARL HAYNES and 1 other');
+    assert.equal(practices[0].formedBy, 'provider');
+  });
+
+  it('names a provider alone by their practice listing and keeps them keyed by NPI', () => {
+    const practices = buildPractices(
+      [row({ id: 'o', name: 'AMBROSE OKONKWO', npiNumber: '111', address: '2104 N Herritage St' })],
+      [listing({ placeId: 'hope', name: 'Hope Physicians and Urgent Care', address: '2104 N Herritage St' })],
+    );
+    assert.equal(practices.length, 1);
+    assert.equal(practices[0].name, 'Hope Physicians and Urgent Care');
+    assert.equal(practices[0].practiceKey, 'npi:111');
+    assert.equal(practices[0].providerCount, 1);
+  });
+
+  it('lists a provider alone under their own name when Google has nothing', () => {
+    const practices = buildPractices([row({ id: 'm', name: 'PATRICIA MCCARRON' })], []);
+    assert.equal(practices[0].name, 'PATRICIA MCCARRON');
+    assert.equal(practices[0].formedBy, 'provider');
+  });
+
+  it('follows a physician to their own listing when their NPI address is old', () => {
+    const practices = buildPractices(
+      [row({ id: 's', name: 'LORI SCOTT', address: '400 GLENWOOD AVE STE 10', contactPhone: '9195815882' })],
+      [listing({ placeId: 'own', name: 'Lori Scott Family Care: Lori Scott, MD', personal: true, address: '108 W Capitola Ave', phone: '252-513-1749' })],
+    );
+    assert.equal(practices[0].name, 'Lori Scott Family Care: Lori Scott, MD');
+    assert.equal(practices[0].address, '108 W Capitola Ave');
+  });
+
+  it('keeps the organization name and records the listing beside it', () => {
+    const practices = buildPractices(
+      [
+        row({ id: 'a' }),
+        row({ id: 'org', enumerationType: 'NPI-2', name: 'Kinston Pediatric Associates PA', npiNumber: '1871577197' }),
+      ],
+      [listing({ placeId: 'kpa', name: 'Kinston Pediatric Associates', reviewCount: 40 })],
+    );
+    assert.equal(practices.length, 1);
+    assert.equal(practices[0].name, 'Kinston Pediatric Associates PA');
+    assert.equal(practices[0].formedBy, 'organization');
+    assert.equal(practices[0].placeName, 'Kinston Pediatric Associates');
+    assert.equal(practices[0].practiceKey, 'org:1871577197');
+  });
+
+  it('uses Google\'s name where the organization is a health system registered at several sites', () => {
+    const practices = buildPractices(
+      [
+        row({ id: 'a', address: '109 Airport Rd Ste A', contactPhone: '252-643-7575' }),
+        row({ id: 'o1', enumerationType: 'NPI-2', name: 'University of North Carolina Hospitals', npiNumber: '1', address: '109 Airport Rd Ste A', contactPhone: '252-643-7575' }),
+        row({ id: 'o2', enumerationType: 'NPI-2', name: 'University of North Carolina Hospitals', npiNumber: '2', address: '7868 US Hwy 70 W', city: 'La Grange', zipCode: '28551', contactPhone: '252-775-5910' }),
+      ],
+      [listing({ placeId: 'unc', name: 'UNC Health Complete Care', address: '109 Airport Rd A', phone: '(252) 643-7575' })],
+    );
+    assert.equal(practices.length, 1);
+    assert.equal(practices[0].name, 'UNC Health Complete Care');
+  });
+
+  it('does not let one member\'s own listing next door move the group', () => {
+    const practices = buildPractices(
+      [
+        row({ id: 'r', name: 'ALLEEN RICHARDS', address: '109 Airport Rd Ste A', contactPhone: '252-643-7575' }),
+        row({ id: 'n', name: 'MICHELLE NZUNA', address: '109 Airport Rd Ste A', contactPhone: '252-643-7575' }),
+        row({ id: 'lfm', name: 'LADDIE CRISP', address: '107 Airport Rd', contactPhone: '252-527-4146' }),
+        row({ id: 'org', enumerationType: 'NPI-2', name: 'Lenoir Family Medicine, PA', npiNumber: '5', address: '107 Airport Rd', contactPhone: '252-527-4146' }),
+      ],
+      [
+        listing({ placeId: 'unc', name: 'UNC Health Complete Care', address: '109 Airport Rd A', phone: '(252) 643-7575' }),
+        listing({ placeId: 'lfm', name: 'Lenoir Family Medicine', address: '107 Airport Rd', phone: '(252) 527-4146', reviewCount: 14 }),
+        listing({ placeId: 'richards', name: 'Alleen D. Richards, MD', personal: true, address: '107 Airport Rd', phone: '(252) 527-4146' }),
+      ],
+    );
+    assert.equal(practices.length, 2);
+    assert.equal(practices.find((p) => p.name === 'UNC Health Complete Care')?.providerCount, 2);
+  });
+
+  it('does not name a row after another clinician\'s own listing', () => {
+    // A hospital physician's direct line reaches only colleagues' listings.
+    const practices = buildPractices(
+      [row({ id: 'k', name: 'KATRINA MEACHEM', address: '100 Airport Rd Fl 4', contactPhone: '252-522-7197' })],
+      [listing({ placeId: 'av', name: 'Anand Vakharia, MD', personal: true, address: '100 Airport Rd', phone: '(252) 522-7197' })],
+    );
+    assert.equal(practices[0].name, 'KATRINA MEACHEM');
+    assert.equal(practices[0].placeId, null);
+  });
+
+  it('merges an organization and a provider that Google lists as one practice', () => {
+    // The health center's org NPIs give the street; a physician added the suite.
+    const practices = buildPractices(
+      [
+        row({ id: 'org', enumerationType: 'NPI-2', name: 'Kinston Community Health Center, Inc', npiNumber: '9', address: '324 N Queen St', contactPhone: '252-522-9800' }),
+        row({ id: 'r', name: 'JENNIFER ROBERSON', address: '324 N Queen St A', contactPhone: '252-522-9800' }),
+        row({ id: 'g', name: 'HLOY GREEN', address: '324 N Queen St', contactPhone: '252-522-9800' }),
+      ],
+      [
+        listing({ placeId: 'kh', name: 'Kinston Health (Kinston Community Health Center, Inc)', address: '324 N Queen St', phone: '(252) 522-9800', reviewCount: 70 }),
+        listing({ placeId: 'jr', name: 'Dr. Jennifer Roberson, MD', personal: true, address: '324 N Queen St A', phone: '(252) 522-9800' }),
+      ],
+    );
+    assert.equal(practices.length, 1);
     assert.equal(practices[0].providerCount, 2);
+    assert.equal(practices[0].name, 'Kinston Community Health Center, Inc');
   });
 });

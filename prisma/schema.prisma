@@ -320,6 +320,12 @@ model Practice {
   /// Set when a pull no longer forms this row but a clinic list or campaign still
   /// points at it. Hidden from Referral Sources; kept for the lists that use it.
   retiredAt      DateTime?
+  /// What named the row: "organization" (NPI-2), "listing" (Google), or "provider".
+  formedBy       String?
+  /// Fields a person changed. The pull leaves them as the person set them.
+  editedFields   String[] @default([])
+  /// Deleted by a person. The pull keeps it deleted; Restore brings it back.
+  hiddenAt       DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   organizationId String
@@ -346,6 +352,8 @@ model Provider {
   faxNumber           String?
   /// Send to `faxNumber` instead of the practice fax.
   useOwnFax           Boolean  @default(false)
+  /// Removed from the list by a person. The pull leaves them out until restored.
+  hiddenAt            DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   practiceId          String?

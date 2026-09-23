@@ -515,8 +515,8 @@ export default function ReferralSourcesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Referral Sources</h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">
-            The practices Google lists in each county, with the pediatricians and primary care physicians from NPI nested
-            under them; open a row to see them. Check sources and add them to a clinic’s referral list.
+            Pediatricians and primary care physicians from NPI, grouped under their practice and named as Google lists it;
+            open a row to see them. Check sources and add them to a clinic’s referral list.
           </p>
         </div>
         <Menu as="div" className="relative mt-4 sm:mt-0">

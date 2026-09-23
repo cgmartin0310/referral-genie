@@ -1,5 +1,6 @@
 import { digitsOnly } from '../nppes/normalize';
-import { evaluatePlaceMatch, looksLikePersonListing, namesSpecialty, type PlaceCandidate, type PracticeQuery } from './score';
+import { evaluatePlaceMatch, listingNamesPerson, looksLikePersonListing, namesSpecialty, type PlaceCandidate, type PracticeQuery } from './score';
+import { isPersonalListing } from './listing';
 
 export class PlacesConfigError extends Error {
   constructor(message: string) {
@@ -47,23 +48,6 @@ export interface PlaceMatch {
 export interface PlaceClient {
   findPlace: (text: string, inputtype: 'phonenumber' | 'textquery') => Promise<PlaceCandidate[]>;
   placeDetails: (placeId: string) => Promise<PlaceDetails | null>;
-}
-
-/** A listing as a text search returns it: a candidate plus what the search page carries. */
-export interface SearchResult extends PlaceCandidate {
-  types: string[];
-  rating: number | null;
-  reviewCount: number | null;
-}
-
-export interface SearchPage {
-  results: SearchResult[];
-  /** Google issues the token before it is usable; wait about two seconds. */
-  nextPageToken: string | null;
-}
-
-export interface DiscoveryClient {
-  textSearch: (query: string, pageToken?: string | null) => Promise<SearchPage>;
 }
 
 function nationalPhone(phone: string): string | null {
@@ -161,35 +145,73 @@ export async function matchPractice(input: PracticeQuery, client: PlaceClient): 
   };
 }
 
-const FIND_URL = 'https://maps.googleapis.com/maps/api/place/findplacefromtext/json';
-const TEXT_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText';
-const TEXT_SEARCH_FIELDS = [
-  'places.id',
-  'places.displayName',
-  'places.formattedAddress',
-  'places.types',
-  'places.rating',
-  'places.userRatingCount',
-  'places.businessStatus',
-  'places.location',
-  'nextPageToken',
-].join(',');
-
-interface TextSearchResponse {
-  error?: { message?: string };
-  nextPageToken?: string;
-  places?: {
-    id?: string;
-    displayName?: { text?: string };
-    formattedAddress?: string;
-    types?: string[];
-    rating?: number;
-    userRatingCount?: number;
-    businessStatus?: string;
-    location?: { latitude?: number; longitude?: number };
-  }[];
+export interface ListingCandidate {
+  placeId: string;
+  name: string;
+  formattedAddress: string;
+  details: PlaceDetails | null;
+  matchedBy: 'phone' | 'address' | 'name';
 }
 
+/**
+ * Every Google listing that plausibly is this practice, not just the best
+ * one. A clinic phone returns the clinic, each clinician's own listing, and
+ * the building's old name; formation needs all of them to decide which
+ * listing stands for the practice. Phone first, then the address; for a
+ * person with neither, their name in their town (a physician's NPI address
+ * is often one they left).
+ */
+export async function findCandidates(input: PracticeQuery, client: PlaceClient): Promise<ListingCandidate[]> {
+  const collect = async (
+    candidates: PlaceCandidate[],
+    matchedBy: ListingCandidate['matchedBy'],
+    accept: (candidate: PlaceCandidate) => boolean,
+  ): Promise<ListingCandidate[]> => {
+    const kept = candidates.filter(accept).slice(0, DETAIL_CANDIDATES);
+    const out: ListingCandidate[] = [];
+    for (const candidate of kept) {
+      const details = await client.placeDetails(candidate.placeId);
+      out.push({
+        placeId: candidate.placeId,
+        name: details?.name || candidate.name,
+        formattedAddress: details?.formattedAddress || candidate.formattedAddress,
+        details,
+        matchedBy,
+      });
+    }
+    return out;
+  };
+
+  const phone = nationalPhone(input.phone);
+  let byPhone: ListingCandidate[] = [];
+  if (phone) {
+    byPhone = await collect(await client.findPlace(phone, 'phonenumber'), 'phone', (candidate) =>
+      evaluatePlaceMatch(input, candidate, { phoneQuery: true }).accept);
+    if (byPhone.some((found) => !isPersonalListing(found.name))) return byPhone;
+  }
+  if (byPhone.length > 0) {
+    // The phone reached only clinicians' own listings (a direct line in a
+    // hospital or large clinic). Search the address alone for the practice.
+    const where = [input.street, input.city, input.state, input.zip].filter(Boolean).join(' ');
+    const seen = new Set(byPhone.map((found) => found.placeId));
+    const practices = await collect(await client.findPlace(where, 'textquery'), 'address', (candidate) =>
+      !seen.has(candidate.placeId)
+      && !isPersonalListing(candidate.name)
+      && evaluatePlaceMatch({ ...input, name: candidate.name }, candidate, { phoneQuery: false }).accept);
+    return [...byPhone, ...practices];
+  }
+
+  const street = [input.name, input.street, input.city, input.state, input.zip].filter(Boolean).join(' ');
+  const byAddress = await collect(await client.findPlace(street, 'textquery'), 'address', (candidate) =>
+    evaluatePlaceMatch(input, candidate, { phoneQuery: false }).accept);
+  if (byAddress.length > 0 || !input.isPerson) return byAddress;
+
+  const byName = [input.name, input.city, input.state].filter(Boolean).join(' ');
+  return collect(await client.findPlace(byName, 'textquery'), 'name', (candidate) =>
+    listingNamesPerson(candidate.name, input.name));
+}
+
+const FIND_URL = 'https://maps.googleapis.com/maps/api/place/findplacefromtext/json';
 const DETAILS_URL = 'https://maps.googleapis.com/maps/api/place/details/json';
 
 interface FindResponse {
@@ -229,48 +251,11 @@ function throwForStatus(status: string | undefined, errorMessage: string | undef
   }
 }
 
-export function googlePlacesClient(apiKey: string): PlaceClient & DiscoveryClient {
+export function googlePlacesClient(apiKey: string): PlaceClient {
   // Every provider at a clinic gets the same candidates back; details are fetched once each.
   const detailsMemo = new Map<string, PlaceDetails | null>();
   const DETAILS_MEMO_MAX = 2000;
   return {
-    async textSearch(query, pageToken) {
-      // The newer Places API: its page tokens work at once, where the older
-      // text search's tokens are refused on this key however long one waits.
-      const response = await fetch(TEXT_SEARCH_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask': TEXT_SEARCH_FIELDS,
-        },
-        body: JSON.stringify({ textQuery: query, pageSize: 20, ...(pageToken ? { pageToken } : {}) }),
-        signal: AbortSignal.timeout(15_000),
-      });
-      const body = (await response.json().catch(() => ({}))) as TextSearchResponse;
-      if (!response.ok) {
-        const message = body.error?.message || `Places search HTTP ${response.status}`;
-        if (response.status === 429) throw new PlacesQuotaError(message);
-        if (response.status === 400 || response.status === 403) throw new PlacesConfigError(message);
-        throw new Error(message);
-      }
-      return {
-        results: (body.places ?? [])
-          .filter((row) => row.id)
-          .map((row) => ({
-            placeId: row.id as string,
-            name: row.displayName?.text ?? '',
-            formattedAddress: row.formattedAddress ?? '',
-            businessStatus: row.businessStatus ?? null,
-            lat: row.location?.latitude ?? null,
-            lng: row.location?.longitude ?? null,
-            types: row.types ?? [],
-            rating: typeof row.rating === 'number' ? row.rating : null,
-            reviewCount: typeof row.userRatingCount === 'number' ? row.userRatingCount : null,
-          })),
-        nextPageToken: body.nextPageToken ?? null,
-      };
-    },
     async findPlace(text, inputtype) {
       const url = new URL(FIND_URL);
       url.searchParams.set('input', text);

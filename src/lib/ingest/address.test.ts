@@ -2,6 +2,17 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { normalizeStreet } from './address';
 
+describe('trailing suites as Google writes them', () => {
+  it('reads a bare token after the street type as the suite', () => {
+    assert.deepEqual(normalizeStreet('701 Doctors Dr e1'), normalizeStreet('701 DOCTORS DR STE E1'));
+    assert.deepEqual(normalizeStreet('109 Airport Rd A'), normalizeStreet('109 AIRPORT RD STE A'));
+  });
+
+  it('leaves a directional alone', () => {
+    assert.equal(normalizeStreet('100 Main St N').unit, null);
+  });
+});
+
 describe('street normalization', () => {
   it('expands street types and directionals', () => {
     assert.equal(normalizeStreet('100 King St').street, '100 king street');

@@ -51,12 +51,21 @@ function tokens(value: string): string[] {
     .filter((token) => token.length > 1 && !NAME_STOP.has(token));
 }
 
+/**
+ * Marks of a clinician's own listing. "PA" is left out: "Physicians East,
+ * PA" is a professional association. "PA-C" is the physician assistant.
+ */
 const CREDENTIALS = new Set([
-  'md', 'do', 'dr', 'jr', 'sr', 'ii', 'iii', 'phd', 'np', 'fnp', 'pa', 'pac', 'dds', 'dmd', 'faap', 'facp', 'aprn', 'cnp',
+  'md', 'do', 'dr', 'jr', 'sr', 'ii', 'iii', 'phd', 'np', 'fnp', 'pac', 'dds', 'dmd', 'faap', 'facp', 'aprn', 'cnp',
+  'agpcnp', 'dnp', 'fnpc', 'fnpbc', 'cpnp', 'pnp',
 ]);
 
 function rawTokens(value: string): string[] {
-  return value.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  return value
+    .toLowerCase()
+    .replace(/\b(pa|fnp|np)-(c|bc)\b/g, '$1$2')
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
 }
 
 /**
@@ -77,6 +86,20 @@ export function looksLikePersonListing(name: string, people: string[] = []): boo
     if (shared >= Math.min(2, personTokens.size) && shared / listing.size >= 0.5) return true;
   }
   return false;
+}
+
+/**
+ * The listing carries this person's first and last name ("Lori Scott Family
+ * Care: Lori Scott, MD" for LORI SCOTT). A credential alone is not enough:
+ * that says the listing is someone's, not whose.
+ */
+export function listingNamesPerson(listing: string, person: string): boolean {
+  const words = new Set(rawTokens(listing));
+  const parts = rawTokens(person).filter((token) => token.length > 1 && !CREDENTIALS.has(token));
+  if (parts.length < 2) return false;
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  return words.has(first) && words.has(last);
 }
 
 export function tokenOverlap(left: string, right: string): number {

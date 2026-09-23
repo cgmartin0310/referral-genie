@@ -8,9 +8,10 @@ import { CheckCircleIcon, ExclamationCircleIcon, MinusCircleIcon } from '@heroic
 
 /**
  * One button that runs the whole county pipeline and shows where it is:
- * NPI pull → Google Places → website research. Each server call does one
- * slice of work and returns; the loop here calls the next slice until the
- * stage is done. Closing the tab pauses; pressing the button resumes.
+ * find practices on Google → nest NPI providers under them → website
+ * research. Each server call does one slice of work and returns; the loop
+ * here calls the next slice until the stage is done. Closing the tab pauses;
+ * pressing the button resumes.
  */
 
 interface CountyRun {
@@ -20,6 +21,13 @@ interface CountyRun {
   error: string | null;
   source?: 'file' | 'api';
   summary: {
+    placesFound?: number;
+    placesPersonal?: number;
+    discoverQueries?: number;
+    discoverQueryTotal?: number;
+    placesFromLookup?: number;
+    providersAttached?: number;
+    providersUnattached?: number;
     npisUpserted: number;
     quarantined: number;
     placesMatched: number;
@@ -63,7 +71,10 @@ interface Props {
   countyName: string;
 }
 
-const PULL_PHASES = new Set(['nppes', 'group']);
+/** Stage 1 searches Google; everything after it is stage 2. */
+const DISCOVER_PHASES = new Set(['discover', 'details']);
+/** Phases before the first practice formation; the list refreshes once these are past. */
+const BEFORE_FORMATION = new Set(['discover', 'details', 'nppes']);
 
 function classNames(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(' ');
@@ -83,9 +94,9 @@ function researchDetail(s: ResearchRun['summary']): string {
 function stagesFromCountyRun(run: CountyRun | null): { pull: StageState; places: StageState } {
   if (!run) return { pull: 'idle', places: 'idle' };
   if (run.status === 'COMPLETED') return { pull: 'done', places: 'done' };
-  const inPull = PULL_PHASES.has(run.phase);
-  if (run.status === 'FAILED') return inPull ? { pull: 'failed', places: 'idle' } : { pull: 'done', places: 'failed' };
-  return inPull ? { pull: 'running', places: 'idle' } : { pull: 'done', places: 'running' };
+  const discovering = DISCOVER_PHASES.has(run.phase);
+  if (run.status === 'FAILED') return discovering ? { pull: 'failed', places: 'idle' } : { pull: 'done', places: 'failed' };
+  return discovering ? { pull: 'running', places: 'idle' } : { pull: 'done', places: 'running' };
 }
 
 function stageFromResearchRun(run: ResearchRun | null, configError: string | null): StageState {
@@ -208,7 +219,7 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
   const run = async () => {
     setWorking(true);
     try {
-      // Stages 1 and 2: the county job carries NPI, grouping, Places, duplicates.
+      // Stages 1 and 2: the county job carries discovery, NPI, nesting, and lookup.
       let current = countyRun;
       if (!current || current.status === 'COMPLETED') current = null;
       let runId = current?.id;
@@ -221,7 +232,7 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
         setPlacesPending(data.placesPending ?? 0);
         runId = next.id;
         mode = 'continue';
-        if (!formedOnce && !PULL_PHASES.has(next.phase)) {
+        if (!formedOnce && !BEFORE_FORMATION.has(next.phase)) {
           formedOnce = true;
           refreshCatalog();
         }
@@ -274,6 +285,28 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
     : stageFromResearchRun(researchRun, configError);
   const summary = countyRun?.summary;
   const placesDone = (summary?.placesMatched ?? 0) + (summary?.placesUnmatched ?? 0);
+  const phase = countyRun?.phase ?? '';
+  const nestingFraction = !summary
+    ? null
+    : phase === 'nppes' && summary.nppesQueryTotal > 0
+      ? (summary.nppesQueries / summary.nppesQueryTotal) * 0.7
+      : phase === 'group'
+        ? 0.7
+        : placesDone + placesPending > 0
+          ? 0.7 + (placesDone / (placesDone + placesPending)) * 0.3
+          : null;
+  const nestingDetail = !summary
+    ? 'Pediatricians and primary care physicians from the NPI registry, nested under the practices found. Their NPI registrations supply the fax.'
+    : phase === 'nppes'
+      ? `${summary.npisUpserted} providers · ${summary.nppesQueries}/${summary.nppesQueryTotal} ${countyRun?.source === 'api' ? 'ZIP queries' : 'slices'}`
+      : [
+          `${summary.npisUpserted} providers`,
+          `${summary.providersAttached ?? 0} nested under a practice`,
+          `${summary.providersUnattached ?? 0} not on Google${placesPending ? ` (${placesPending} still to look up)` : ''}`,
+          summary.placesFromLookup ? `${summary.placesFromLookup} practices added from provider lookups` : null,
+          summary.practicesFormed ? `${summary.practicesFormed} rows` : null,
+          summary.retired ? `${summary.retired} no longer on NPI removed` : null,
+        ].filter(Boolean).join(' · ');
   const failed = stages.pull === 'failed' || stages.places === 'failed' || researchState === 'failed';
   const allDone = stages.places === 'done' && (researchState === 'done' || researchState === 'skipped');
 
@@ -299,28 +332,28 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
       <ol className="mt-4 divide-y divide-gray-100">
         <StageRow
           step={1}
-          title={countyRun?.source === 'api' ? 'Pull from the NPPES API' : 'Pull from the NPI file'}
+          title="Find practices on Google"
           state={stages.pull}
           active={working && stages.pull !== 'done'}
-          fraction={summary && summary.nppesQueryTotal > 0 ? summary.nppesQueries / summary.nppesQueryTotal : null}
+          fraction={
+            summary && (summary.discoverQueryTotal ?? 0) > 0
+              ? (summary.discoverQueries ?? 0) / (summary.discoverQueryTotal ?? 1)
+              : null
+          }
           detail={
-            summary
-              ? `${summary.npisUpserted} providers · ${summary.nppesQueries}/${summary.nppesQueryTotal} ${countyRun?.source === 'api' ? 'ZIP queries' : 'slices'}${summary.practicesFormed ? ` · ${summary.practicesFormed} practices` : ''}${summary.retired ? ` · ${summary.retired} no longer on NPI removed` : ''}`
-              : 'Pediatricians and primary care physicians from the NPI registry.'
+            summary && stages.pull !== 'idle'
+              ? `${summary.placesFound ?? 0} listings${summary.placesPersonal ? ` (${summary.placesPersonal} in a clinician’s own name, folded into their practice)` : ''} · ${summary.discoverQueries ?? 0}/${summary.discoverQueryTotal ?? 0} searches${phase === 'details' ? ' · reading phone, website, and rating' : ''}`
+              : 'Pediatricians, family medicine, and primary care listings in each town, with phone, website, and rating.'
           }
           error={stages.pull === 'failed' ? countyRun?.error : null}
         />
         <StageRow
           step={2}
-          title="Match to Google Places"
+          title={countyRun?.source === 'api' ? 'Nest providers from the NPPES API' : 'Nest providers from the NPI file'}
           state={stages.places}
           active={working && stages.pull === 'done' && stages.places !== 'done'}
-          fraction={placesDone + placesPending > 0 ? placesDone / (placesDone + placesPending) : null}
-          detail={
-            summary && stages.places !== 'idle'
-              ? `${summary.placesMatched} matched · ${summary.placesUnmatched} unmatched · ${placesPending} pending${summary.duplicatesFlagged ? ` · ${summary.duplicatesFlagged} shared-location flags` : ''}`
-              : 'Phone, address, website, and rating for each practice.'
-          }
+          fraction={nestingFraction}
+          detail={nestingDetail}
           error={stages.places === 'failed' ? countyRun?.error : null}
         />
         <StageRow

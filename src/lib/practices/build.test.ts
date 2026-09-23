@@ -171,15 +171,12 @@ describe('practice formation', () => {
     assert.equal(practices[0].providerCount, 3);
   });
 
-  it('keeps an org-only location as a practice with no providers', () => {
-    // Abode Care Partners appears with no NPI-1 in the pull. Zero providers is
-    // an unknown count, not an estimate of zero.
+  it('does not make a row from an organization record with no provider', () => {
+    // A rural health clinic code is on urgent cares and health departments too.
     const practices = buildPractices([
-      row({ id: 'org', enumerationType: 'NPI-2', name: 'Abode Care Partners', npiNumber: '5', address: '907 Cunningham Rd' }),
+      row({ id: 'org', enumerationType: 'NPI-2', name: 'Fast Pace Kentucky PLLC', npiNumber: '5', address: '700 Plaza Blvd' }),
     ]);
-    assert.equal(practices.length, 1);
-    assert.equal(practices[0].providerCount, 0);
-    assert.equal(practices[0].name, 'Abode Care Partners');
+    assert.equal(practices.length, 0);
   });
 
   it('separates different suites at one street address', () => {

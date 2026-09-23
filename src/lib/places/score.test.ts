@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { matchPractice } from './match';
-import { evaluatePlaceMatch, looksLikePersonListing, type PlaceCandidate } from './score';
+import { evaluatePlaceMatch, listingNamesPerson, looksLikePersonListing, type PlaceCandidate } from './score';
 
 const practice = {
   name: 'Jane Doe',
@@ -46,6 +46,13 @@ describe('Places match scoring', () => {
     assert.equal(looksLikePersonListing('Haynes Family Practice', ['CARL HAYNES']), false);
     assert.equal(looksLikePersonListing('ECU Health Family Medicine - La Grange', ['CARL HAYNES', 'ATIT PATEL']), false);
     assert.equal(looksLikePersonListing('Kinston Pediatric Associates', []), false);
+    // "PA" after a business name is a professional association; "PA-C" is a clinician.
+    assert.equal(looksLikePersonListing('Physicians East, PA - Kinston', []), false);
+    assert.equal(looksLikePersonListing('Christie Westbrook, PA-C', []), true);
+    assert.equal(looksLikePersonListing('Dana Wade, FNP-C', []), true);
+    assert.equal(listingNamesPerson('Lori Scott Family Care: Lori Scott, MD', 'LORI SCOTT'), true);
+    assert.equal(listingNamesPerson('Carl L Haynes Jr., MD', 'LORI SCOTT'), false);
+    assert.equal(listingNamesPerson('Carl L Haynes Jr., MD', 'CARL HAYNES'), true);
   });
 
   it('prefers the clinic listing over one in the physician\'s own name at the same phone', async () => {

@@ -28,6 +28,43 @@ model Organization {
   practices          Practice[]
   providers          Provider[]
   clinicPractices    ClinicPractice[]
+  discoveredPlaces   DiscoveredPlace[]
+}
+
+/// A practice Google lists in a county. The referral source list is built
+/// from these; NPI providers nest under them.
+model DiscoveredPlace {
+  id              String   @id @default(cuid())
+  countyFips      String
+  placeId         String
+  name            String
+  formattedAddress String
+  address         String?
+  city            String?
+  state           String?
+  zipCode         String?
+  phone           String?
+  website         String?
+  rating          Float?
+  reviewCount     Int?
+  businessStatus  String?
+  latitude        Float?
+  longitude       Float?
+  types           String[] @default([])
+  /// The searches that returned it, as "town/query".
+  queries         String[] @default([])
+  /// A listing in a clinician's own name; it folds into the clinic at its address.
+  personal        Boolean  @default(false)
+  /// "search": found by the county search. "provider": found from a provider's NPI phone or address.
+  origin          String   @default("search")
+  detailsAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, placeId])
+  @@index([organizationId, countyFips])
 }
 
 model ClinicLocation {
@@ -280,6 +317,9 @@ model Practice {
   providerCount  Int      @default(0)
   /// Source type to count, for the referral estimate's drivers.
   taxonomyMix    Json?
+  /// Set when a pull no longer forms this row but a clinic list or campaign still
+  /// points at it. Hidden from Referral Sources; kept for the lists that use it.
+  retiredAt      DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   organizationId String

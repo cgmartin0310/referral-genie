@@ -2,15 +2,15 @@
 
 Finds, verifies, and works referral sources for outpatient therapy clinics, then faxes them.
 
-A **referral source** is a pediatrician, primary care physician, or the organization they work for, pulled from the NPI registry by county, enriched with Google Places, and researched on its own website for fax, referral email, and referral forms. A **clinic** is one of your sites; it keeps a referral list chosen from those sources. A **campaign** faxes a clinic's list, one page per fax machine.
+A **referral source** is a practice Google lists in a county, with the pediatricians and primary care physicians from the NPI registry nested under it, and researched on its own website for fax, referral email, and referral forms. A **clinic** is one of your sites; it keeps a referral list chosen from those sources. A **campaign** faxes a clinic's list, one page per fax machine.
 
 ## How it works
 
 1. **Referral Sources** → *Pull referral sources for a county*. Pick a state and county and press one button. Three stages run with live progress:
-   - **Pull from the NPI file** — every provider whose practice ZIP maps to that county, kept by taxonomy code (see [taxonomies](src/lib/nppes/taxonomies.ts)). Falls back to scanning the NPPES API ZIP by ZIP when the file is not loaded.
-   - **Match to Google Places** — phone, address, website, rating, listing name.
-   - **Research websites** — an OpenAI-compatible model reads each practice site and fills fax, referral email, referral form, and preferred channel only when the page states them.
-2. The result is one list. An organization on NPI (NPI-2) groups the providers at its address and expands to show them. Where a health system registered no organization at a clinic (common: one NPI-2 at the home office), the Google Places listing the providers share names the practice instead. A provider with neither is listed on their own; nothing is ever named after its street. One provider's registered fax covers colleagues at the same location who left theirs blank. Every row has a fax and a referral estimate (per-type monthly rates in [estimate.ts](src/lib/practices/estimate.ts); starting assumptions to tune).
+   - **Find practices on Google** — each town in the county is searched for pediatricians, family medicine, and primary care; listings whose ZIP the crosswalk places in the county are kept, with phone, website, and rating. A listing in a clinician's own name folds into the clinic at its address.
+   - **Nest providers from the NPI file** — every provider whose practice ZIP maps to that county, kept by taxonomy code (see [taxonomies](src/lib/nppes/taxonomies.ts)), is attached to a listing by phone, then by street. A provider no listing claims gets a Google lookup of their own; a practice that turns up joins the list. Falls back to scanning the NPPES API ZIP by ZIP when the file is not loaded.
+   - **Research websites** — an OpenAI-compatible model reads each practice site once and fills fax, referral email, referral form, and preferred channel only when the page states them.
+2. The result is one list of practices as Google names them, each expanding to its providers. The fax comes from the providers' and organization's NPI registrations, since Google does not publish fax numbers. A provider Google lists nowhere is shown on their own (or under an organization NPI at their address); nothing is ever named after its street. Every row has a fax and a referral estimate (per-type monthly rates in [estimate.ts](src/lib/practices/estimate.ts); starting assumptions to tune).
 3. **Our Clinics** → add a clinic. Back on Referral Sources, check rows and **Add to clinic**. The clinic's **Referral list** shows what was added with the estimate rolled up.
 4. **Campaigns** → choose the clinic. The audience is its list, previewed as pages to send: everyone at a practice sharing a fax machine gets one page; a provider whose *own fax* switch is on gets their own; anyone unreachable is listed, not dropped.
 

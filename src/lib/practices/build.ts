@@ -1,5 +1,7 @@
 import { digitsOnly } from '../nppes/normalize';
 import { looksLikePersonListing } from '../places/score';
+import { foldListings } from '../ingest/attach';
+import { namedAsReferralPractice } from '../places/discover';
 import {
   addressClusterKey,
   assignDuplicateClusters,
@@ -10,15 +12,34 @@ import {
 /**
  * Referral source formation.
  *
- * Providers at one location form a practice when something real names it:
- * an organization NPI (NPI-2) registered there, or else the Google Places
- * listing the providers share. Health systems register one NPI-2 at the home
- * office and none at their clinics, so the listing is what identifies those.
- * A provider with nothing to group under is listed on their own; no practice
- * is ever named after its street. Identity of a group comes from the location
- * (place id, else street and town), since NPPES does not link an individual
- * to an employer.
+ * The practices Google lists in the county come first: each is a row, named
+ * as Google names it, and the NPI records attached to it nest under it, with
+ * the fax taken from their NPI registrations. That is how a health system's
+ * clinic, which has no organization NPI of its own, still appears as one
+ * practice with its physicians under it.
+ *
+ * NPI records attached to no listing fall back to the older rules: an
+ * organization NPI (NPI-2) at an address groups the providers there; a
+ * provider with nothing to group under is listed on their own. No practice is
+ * ever named after its street.
  */
+
+export interface PlaceRow {
+  placeId: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zipCode: string | null;
+  countyName: string | null;
+  countyFips: string | null;
+  phone: string | null;
+  website: string | null;
+  rating: number | null;
+  reviewCount: number | null;
+  personal: boolean;
+  types?: string[];
+}
 
 export interface PracticeSourceRow {
   id: string;
@@ -208,23 +229,100 @@ function soloPractice(row: PracticeSourceRow, locationFax: string | null): Built
     rating: row.rating ?? null,
     reviewCount: row.reviewCount ?? null,
     orgNpis: [],
-    providers: [
-      {
-        sourceId: row.id,
-        npiNumber: row.npiNumber,
-        name: row.name,
-        primaryTaxonomyCode: row.primaryTaxonomyCode,
-        taxonomyCodes: row.taxonomyCodes,
-        sourceType: row.sourceType,
-        faxNumber: row.faxNumber,
-      },
-    ],
+    providers: [providerOf(row)],
     providerCount: 1,
     taxonomyMix: { [row.sourceType ?? 'unknown']: 1 },
   };
 }
 
-export function buildPractices(rows: PracticeSourceRow[]): BuiltPractice[] {
+function providerOf(row: PracticeSourceRow): BuiltProvider {
+  return {
+    sourceId: row.id,
+    npiNumber: row.npiNumber,
+    name: row.name,
+    primaryTaxonomyCode: row.primaryTaxonomyCode,
+    taxonomyCodes: row.taxonomyCodes,
+    sourceType: row.sourceType,
+    faxNumber: row.faxNumber,
+  };
+}
+
+function mixOf(people: PracticeSourceRow[]): Record<string, number> {
+  const taxonomyMix: Record<string, number> = {};
+  for (const person of people) {
+    const key = person.sourceType ?? 'unknown';
+    taxonomyMix[key] = (taxonomyMix[key] ?? 0) + 1;
+  }
+  return taxonomyMix;
+}
+
+/** A practice Google lists, with the NPI records attached to it under it. */
+function listedPractice(place: PlaceRow, members: PracticeSourceRow[]): BuiltPractice {
+  const orgs = members.filter(isOrg);
+  const people = members.filter((row) => !isOrg(row));
+  return {
+    practiceKey: `place:${place.placeId}`,
+    placeId: place.placeId,
+    placeName: place.name,
+    formedBy: 'listing',
+    name: place.name,
+    nameAmbiguous: false,
+    address: place.address ?? modal(members.map((row) => row.address)),
+    city: place.city ?? modal(members.map((row) => row.city)),
+    state: place.state ?? modal(members.map((row) => row.state)),
+    zipCode: place.zipCode ?? modal(members.map((row) => row.zipCode)),
+    countyName: place.countyName ?? modal(members.map((row) => row.countyName)),
+    countyFips: place.countyFips ?? modal(members.map((row) => row.countyFips)),
+    phone: place.phone ?? modal(members.map((row) => row.contactPhone)),
+    // Google does not publish fax numbers; NPI registrations here do.
+    faxNumber: modal([...orgs, ...people].map((row) => row.faxNumber)),
+    website: place.website ?? modal(members.map((row) => row.website ?? null)),
+    rating: place.rating,
+    reviewCount: place.reviewCount,
+    orgNpis: orgs.map((row) => row.npiNumber).filter((npi): npi is string => Boolean(npi)),
+    providers: people.map(providerOf),
+    providerCount: people.length,
+    taxonomyMix: mixOf(people),
+  };
+}
+
+/**
+ * Rows, in order: each practice Google lists that has a pediatrician or
+ * family physician from NPI under it, or that Google names as that kind of
+ * practice; then the NPI providers no listing claims. An organization record
+ * alone does not make a row: a rural health clinic code is on urgent cares
+ * and health departments too, so it names and faxes a practice but does not
+ * decide that one is there.
+ */
+export function buildPractices(rows: PracticeSourceRow[], places: PlaceRow[] = []): BuiltPractice[] {
+  const placeById = new Map(places.map((place) => [place.placeId, place]));
+  const fold = foldListings(places);
+  const attached = new Map<string, PracticeSourceRow[]>();
+  const rest: PracticeSourceRow[] = [];
+  for (const row of rows) {
+    const placeId = row.placeId && placeById.has(row.placeId) ? fold.get(row.placeId) ?? row.placeId : null;
+    if (placeId) attached.set(placeId, [...(attached.get(placeId) ?? []), row]);
+    else rest.push(row);
+  }
+
+  const practices: BuiltPractice[] = [];
+  for (const place of places) {
+    // A listing that folded into another is not a row of its own.
+    if (fold.get(place.placeId) !== place.placeId) continue;
+    const members = attached.get(place.placeId) ?? [];
+    const hasProvider = members.some((row) => !isOrg(row));
+    if (!hasProvider && !namedAsReferralPractice(place.name, place.types ?? [])) {
+      // Not a row, but an organization record here still stands on its own below.
+      rest.push(...members);
+      continue;
+    }
+    practices.push(listedPractice(place, members));
+  }
+  return [...practices, ...buildUnlisted(rest)];
+}
+
+/** NPI records Google lists nowhere: group under an organization NPI, else stand alone. */
+function buildUnlisted(rows: PracticeSourceRow[]): BuiltPractice[] {
   const clusterInputs: ClusterInput[] = rows.map((row) => ({
     id: row.id,
     phone: row.contactPhone,
@@ -253,6 +351,10 @@ export function buildPractices(rows: PracticeSourceRow[]): BuiltPractice[] {
     let name: string;
     let ambiguous = false;
     let formedBy: PracticeFormedBy;
+    if (orgs.length > 0 && people.length === 0) {
+      // An organization record with no provider here is not a referral source by itself.
+      continue;
+    }
     if (orgs.length > 0) {
       ({ name, ambiguous } = practiceName(orgs, faxNumber));
       formedBy = 'organization';
@@ -266,12 +368,7 @@ export function buildPractices(rows: PracticeSourceRow[]): BuiltPractice[] {
       continue;
     }
     const listing = bestListing(members);
-
-    const taxonomyMix: Record<string, number> = {};
-    for (const person of people) {
-      const key = person.sourceType ?? 'unknown';
-      taxonomyMix[key] = (taxonomyMix[key] ?? 0) + 1;
-    }
+    const taxonomyMix = mixOf(people);
 
     practices.push({
       practiceKey,
@@ -293,15 +390,7 @@ export function buildPractices(rows: PracticeSourceRow[]): BuiltPractice[] {
       rating: listing?.rating ?? null,
       reviewCount: listing?.reviewCount ?? null,
       orgNpis: orgs.map((row) => row.npiNumber).filter((npi): npi is string => Boolean(npi)),
-      providers: people.map((row) => ({
-        sourceId: row.id,
-        npiNumber: row.npiNumber,
-        name: row.name,
-        primaryTaxonomyCode: row.primaryTaxonomyCode,
-        taxonomyCodes: row.taxonomyCodes,
-        sourceType: row.sourceType,
-        faxNumber: row.faxNumber,
-      })),
+      providers: people.map(providerOf),
       providerCount: people.length,
       taxonomyMix,
     });

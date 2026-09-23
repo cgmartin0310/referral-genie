@@ -1,7 +1,18 @@
-export type IngestPhase = 'nppes' | 'group' | 'places' | 'duplicates' | 'practices' | 'done';
+/**
+ * discover: search Google for the county's practices. details: phone, website,
+ * rating for each. nppes: the NPI records. group: retire, attach, form.
+ * lookup: a Places search for each NPI record no listing claimed. practices:
+ * the final formation. ("places" and "duplicates" are older names for lookup.)
+ */
+export type IngestPhase = 'discover' | 'details' | 'nppes' | 'group' | 'lookup' | 'places' | 'duplicates' | 'practices' | 'done';
 
 export interface IngestCursor {
   phase: IngestPhase;
+  /** Which town-and-query search the discovery is on. */
+  discoverIndex: number;
+  /** The next page of the current search, when Google has more. */
+  pageToken: string | null;
+  pageCount: number;
   zipIndex: number;
   searchIndex: number;
   skip: number;
@@ -10,6 +21,16 @@ export interface IngestCursor {
 }
 
 export interface IngestSummary {
+  /** Listings kept by the county search, and how many of them are in a clinician's own name. */
+  placesFound: number;
+  placesPersonal: number;
+  discoverQueries: number;
+  discoverQueryTotal: number;
+  /** Listings found from an NPI record's own phone or address, after the county search. */
+  placesFromLookup: number;
+  /** NPI records nested under a listing, and those Google lists nowhere. */
+  providersAttached: number;
+  providersUnattached: number;
   npisUpserted: number;
   npisCreated: number;
   npisUpdated: number;
@@ -32,11 +53,18 @@ export interface IngestSummary {
 }
 
 export function emptyCursor(): IngestCursor {
-  return { phase: 'nppes', zipIndex: 0, searchIndex: 0, skip: 0, source: 'api' };
+  return { phase: 'discover', discoverIndex: 0, pageToken: null, pageCount: 0, zipIndex: 0, searchIndex: 0, skip: 0, source: 'api' };
 }
 
 export function emptySummary(nppesQueryTotal: number): IngestSummary {
   return {
+    placesFound: 0,
+    placesPersonal: 0,
+    discoverQueries: 0,
+    discoverQueryTotal: 0,
+    placesFromLookup: 0,
+    providersAttached: 0,
+    providersUnattached: 0,
     npisUpserted: 0,
     npisCreated: 0,
     npisUpdated: 0,
@@ -65,9 +93,12 @@ function numberField(value: unknown, fallback = 0): number {
 export function parseCursor(value: unknown): IngestCursor {
   const row = value && typeof value === 'object' ? (value as Partial<IngestCursor>) : {};
   const phase = row.phase;
-  const allowed: IngestPhase[] = ['nppes', 'group', 'places', 'duplicates', 'practices', 'done'];
+  const allowed: IngestPhase[] = ['discover', 'details', 'nppes', 'group', 'lookup', 'places', 'duplicates', 'practices', 'done'];
   return {
-    phase: allowed.includes(phase as IngestPhase) ? (phase as IngestPhase) : 'nppes',
+    phase: allowed.includes(phase as IngestPhase) ? (phase as IngestPhase) : 'discover',
+    discoverIndex: numberField(row.discoverIndex),
+    pageToken: typeof row.pageToken === 'string' && row.pageToken ? row.pageToken : null,
+    pageCount: numberField(row.pageCount),
     zipIndex: numberField(row.zipIndex),
     searchIndex: numberField(row.searchIndex),
     skip: numberField(row.skip),
@@ -80,6 +111,13 @@ export function parseSummary(value: unknown): IngestSummary {
   const base = emptySummary(numberField(row.nppesQueryTotal));
   return {
     ...base,
+    placesFound: numberField(row.placesFound),
+    placesPersonal: numberField(row.placesPersonal),
+    discoverQueries: numberField(row.discoverQueries),
+    discoverQueryTotal: numberField(row.discoverQueryTotal),
+    placesFromLookup: numberField(row.placesFromLookup),
+    providersAttached: numberField(row.providersAttached),
+    providersUnattached: numberField(row.providersUnattached),
     npisUpserted: numberField(row.npisUpserted),
     npisCreated: numberField(row.npisCreated),
     npisUpdated: numberField(row.npisUpdated),

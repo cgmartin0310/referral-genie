@@ -26,6 +26,8 @@ export async function GET(request: NextRequest) {
 
     const where: Prisma.PracticeWhereInput = {
       organizationId: DEFAULT_ORGANIZATION_ID,
+      // A clinic's own list still shows a row a later pull retired; the catalog does not.
+      ...(clinicId ? {} : { retiredAt: null }),
       ...(countyFips ? { countyFips } : {}),
       ...(hasFax ? { faxNumber: { not: null } } : {}),
       ...(clinicId ? { clinicPractices: { some: { clinicLocationId: clinicId } } } : {}),
@@ -50,7 +52,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.practice.groupBy({
         by: ['countyFips', 'countyName'],
-        where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: { not: null } },
+        where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: { not: null }, retiredAt: null },
         _count: { _all: true },
         orderBy: { countyName: 'asc' },
       }),

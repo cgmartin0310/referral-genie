@@ -46,6 +46,8 @@ const STREET_TYPE: Record<string, string> = {
   fwy: 'freeway',
 };
 
+const STREET_TYPE_WORDS = new Set(Object.values(STREET_TYPE));
+
 /**
  * Words that mark a tenant space. The suite family collapses to one token so
  * "Ste 200", "Unit 200", and "#200" agree. Floor and building stay distinct
@@ -101,6 +103,18 @@ export function normalizeStreet(raw: string): NormalizedAddress {
       continue;
     }
     streetTokens.push(DIRECTIONAL[token] ?? STREET_TYPE[token] ?? token);
+  }
+
+  // Google writes a suite bare after the street: "701 Doctors Dr e1",
+  // "109 Airport Rd A". A short token right after the street type is that
+  // suite. A directional there ("Main St N") was already expanded to a word.
+  if (unit === null && streetTokens.length >= 3) {
+    const last = streetTokens[streetTokens.length - 1];
+    const before = streetTokens[streetTokens.length - 2];
+    if (STREET_TYPE_WORDS.has(before) && /^(?:[a-z]|[a-z]?\d{1,4}[a-z]?)$/.test(last)) {
+      streetTokens.pop();
+      unit = `suite ${last}`;
+    }
   }
 
   return {

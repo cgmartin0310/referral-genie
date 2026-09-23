@@ -402,6 +402,36 @@ async function finishRun(id: string, summary: ResearchSummary, cursor: ResearchC
   });
 }
 
+/**
+ * One source per website. Everyone at a practice shares its site, and what
+ * research finds there is written to the practice through whichever record
+ * it read, so reading the site once per record would only repeat the cost.
+ * An organization record is preferred as the reader; a source with no site
+ * is kept (research reports it as skipped).
+ */
+export async function onePerWebsite(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const rows = await prisma.referralSource.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, website: true, enumerationType: true },
+    orderBy: { id: 'asc' },
+  });
+  const readerBySite = new Map<string, { id: string; org: boolean }>();
+  const keep: string[] = [];
+  for (const row of rows) {
+    const site = practiceUrl(row.website);
+    if (!site) {
+      keep.push(row.id);
+      continue;
+    }
+    const key = site.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '').toLowerCase();
+    const org = (row.enumerationType ?? '').toUpperCase() === 'NPI-2';
+    const current = readerBySite.get(key);
+    if (!current || (org && !current.org)) readerBySite.set(key, { id: row.id, org });
+  }
+  return [...keep, ...[...readerBySite.values()].map((row) => row.id)].sort();
+}
+
 export async function sourceIdsForCounty(countyFips: string): Promise<string[]> {
   const fips = researchCountyFips([countyFips]);
   if (fips.length === 0) return [];
@@ -410,7 +440,7 @@ export async function sourceIdsForCounty(countyFips: string): Promise<string[]> 
     select: { id: true, countyFips: true },
     orderBy: { id: 'asc' },
   });
-  return sourceIdsMatchingFips(sources, fips);
+  return onePerWebsite(sourceIdsMatchingFips(sources, fips));
 }
 
 export async function sourceIdsForClinic(clinicId: string): Promise<string[]> {
@@ -429,7 +459,7 @@ export async function sourceIdsForClinic(clinicId: string): Promise<string[]> {
     select: { id: true, countyFips: true },
     orderBy: { id: 'asc' },
   });
-  return sourceIdsMatchingFips(sources, fips);
+  return onePerWebsite(sourceIdsMatchingFips(sources, fips));
 }
 
 /** Market FIPS plus the FIPS the pull actually stored for those seed counties. */

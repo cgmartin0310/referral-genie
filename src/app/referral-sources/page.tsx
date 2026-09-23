@@ -252,7 +252,7 @@ function SourceRow({
             <>
               <p className="text-sm font-medium text-gray-900">
                 {source.providerCount === 0
-                  ? (source.kind === 'organization' ? 'Organization' : 'Practice')
+                  ? (source.kind === 'organization' ? 'Organization' : 'No providers on NPI')
                   : `${source.providerCount} provider${source.providerCount === 1 ? '' : 's'}`}
               </p>
               {source.providerCount > 0 && <p className="truncate text-xs text-gray-500">{mixLabel(source.taxonomyMix)}</p>}
@@ -515,8 +515,8 @@ export default function ReferralSourcesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Referral Sources</h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">
-            Providers who can refer to you. Providers sit under their practice, named by its organization NPI or the
-            clinic Google lists at their address; open the row to see them. Check sources and add them to a clinic’s referral list.
+            The practices Google lists in each county, with the pediatricians and primary care physicians from NPI nested
+            under them; open a row to see them. Check sources and add them to a clinic’s referral list.
           </p>
         </div>
         <Menu as="div" className="relative mt-4 sm:mt-0">

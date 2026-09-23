@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 import { practiceInclude, presentPractice } from '@/lib/practices/present';
+import { loadEstimateRates } from '@/lib/practices/estimate-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,12 +48,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (typeof body.hidden === 'boolean') data.hiddenAt = body.hidden ? new Date() : null;
     if (Object.keys(data).length === 0) {
       const unchanged = await prisma.practice.findUniqueOrThrow({ where: { id }, include: practiceInclude });
-      return NextResponse.json(presentPractice(unchanged));
+      return NextResponse.json(presentPractice(unchanged, await loadEstimateRates()));
     }
     data.editedFields = [...edited];
 
     const updated = await prisma.practice.update({ where: { id }, data, include: practiceInclude });
-    return NextResponse.json(presentPractice(updated));
+    return NextResponse.json(presentPractice(updated, await loadEstimateRates()));
   } catch (error) {
     console.error('Error updating referral source:', error);
     return NextResponse.json({ error: 'Failed to update the referral source' }, { status: 500 });

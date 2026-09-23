@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 import { practiceInclude, presentPractice, presentProvider } from '@/lib/practices/present';
 import { sumEstimates } from '@/lib/practices/estimate';
+import { loadEstimateRates } from '@/lib/practices/estimate-settings';
 import { addressClusterKey } from '@/lib/ingest/duplicates';
 
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
     const notOnClinicId = params.get('notOnClinicId')?.trim() || null;
     const q = params.get('q')?.trim() || null;
     const deleted = params.get('deleted') === '1';
+    const rates = await loadEstimateRates();
 
     if (deleted) {
       // What a person deleted or removed, for restoring.
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest) {
         }),
       ]);
       return NextResponse.json({
-        practices: rows.map(presentPractice),
+        practices: rows.map((row) => presentPractice(row, rates)),
         providers: providers.map((provider) => presentProvider(provider, provider.practice)),
       });
     }
@@ -80,7 +82,7 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const practices = rows.map(presentPractice);
+    const practices = rows.map((row) => presentPractice(row, rates));
     const estimate = sumEstimates(practices.map((practice) => practice.estimate));
 
     return NextResponse.json({
@@ -147,7 +149,7 @@ export async function POST(request: NextRequest) {
       },
       include: practiceInclude,
     });
-    return NextResponse.json(presentPractice(created), { status: 201 });
+    return NextResponse.json(presentPractice(created, await loadEstimateRates()), { status: 201 });
   } catch (error) {
     console.error('Error creating practice:', error);
     return NextResponse.json({ error: 'Failed to add the practice' }, { status: 500 });

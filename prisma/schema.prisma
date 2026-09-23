@@ -29,6 +29,18 @@ model Organization {
   providers          Provider[]
   clinicPractices    ClinicPractice[]
   discoveredPlaces   DiscoveredPlace[]
+  estimateSettings   EstimateSettings?
+}
+
+/// The referral estimate's rate table: disciplines, and referrals per
+/// provider per month for each provider type in each discipline.
+model EstimateSettings {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  /// { disciplines: [{ key, label }], rates: { [discipline]: { [sourceType]: number } } }
+  rates          Json
+  updatedAt      DateTime     @updatedAt
 }
 
 /// A practice Google lists in a county. The referral source list is built

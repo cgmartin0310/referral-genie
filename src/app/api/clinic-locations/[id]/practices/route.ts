@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 import { practiceInclude, presentPractice } from '@/lib/practices/present';
 import { sumEstimates } from '@/lib/practices/estimate';
+import { loadEstimateRates } from '@/lib/practices/estimate-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +33,8 @@ export async function GET(_request: NextRequest, { params }: Params) {
       include: { practice: { include: practiceInclude } },
       orderBy: { practice: { providerCount: 'desc' } },
     });
-    const practices = rows.map((row) => presentPractice(row.practice));
+    const rates = await loadEstimateRates();
+    const practices = rows.map((row) => presentPractice(row.practice, rates));
     return NextResponse.json({
       clinic,
       practices,

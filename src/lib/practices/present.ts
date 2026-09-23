@@ -1,5 +1,5 @@
 import type { Practice, Provider } from '@prisma/client';
-import { estimateMonthlyReferrals, type ReferralEstimate } from './estimate';
+import { estimateMonthlyReferrals, DEFAULT_ESTIMATE_RATES, type EstimateRates, type ReferralEstimate } from './estimate';
 import { resolveFaxTarget } from './fax';
 
 export const SOURCE_TYPE_SHORT: Record<string, string> = {
@@ -112,7 +112,7 @@ export function practiceKind(practice: Pick<Practice, 'orgNpis' | 'practiceKey' 
   return practice.practiceKey.startsWith('npi:') ? 'provider' : 'listing';
 }
 
-export function presentPractice(practice: PracticeWithRelations): PracticeView {
+export function presentPractice(practice: PracticeWithRelations, rates: EstimateRates = DEFAULT_ESTIMATE_RATES): PracticeView {
   const taxonomyMix = mixOf(practice.taxonomyMix);
   return {
     id: practice.id,
@@ -136,7 +136,7 @@ export function presentPractice(practice: PracticeWithRelations): PracticeView {
     orgNpis: practice.orgNpis,
     providerCount: practice.providerCount,
     taxonomyMix,
-    estimate: estimateMonthlyReferrals(taxonomyMix),
+    estimate: estimateMonthlyReferrals(taxonomyMix, rates),
     clinics: practice.clinicPractices.map((row) => row.clinicLocation),
     providers: practice.providers.map((provider) => presentProvider(provider, practice)),
   };

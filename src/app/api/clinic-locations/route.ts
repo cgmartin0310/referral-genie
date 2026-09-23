@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 import { presentMarketCounty } from '@/lib/geo/market';
-import { estimateMonthlyReferrals, sumEstimates } from '@/lib/practices/estimate';
+import { estimateMonthlyReferrals, sumEstimates, type EstimateRates } from '@/lib/practices/estimate';
+import { loadEstimateRates } from '@/lib/practices/estimate-settings';
 
 const clinicInclude = {
   _count: {
@@ -23,10 +24,10 @@ function serializeClinic<
     marketCounties: { id: string; countyFips: string; countyName: string; state: string }[];
     clinicPractices?: ListedPractice[];
   },
->(clinic: T) {
+>(clinic: T, rates: EstimateRates) {
   const { marketCounties, clinicPractices = [], ...rest } = clinic;
   const estimates = clinicPractices.map((row) =>
-    estimateMonthlyReferrals(row.practice.taxonomyMix as Record<string, number> | null),
+    estimateMonthlyReferrals(row.practice.taxonomyMix as Record<string, number> | null, rates),
   );
   return {
     ...rest,
@@ -50,7 +51,8 @@ export async function GET() {
       include: clinicInclude,
     });
 
-    return NextResponse.json(clinicLocations.map((clinic) => serializeClinic(clinic)));
+    const rates = await loadEstimateRates();
+    return NextResponse.json(clinicLocations.map((clinic) => serializeClinic(clinic, rates)));
   } catch (error) {
     console.error('Error fetching clinic locations:', error);
     return NextResponse.json(

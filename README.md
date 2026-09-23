@@ -12,6 +12,7 @@ A **referral source** is a practice: pediatricians and primary care physicians f
    - **Research websites** — an OpenAI-compatible model reads each practice site once and fills fax, referral email, referral form, and preferred channel only when the page states them.
 2. The result is one list of practices, each expanding to its providers. The fax is the one the group's NPI records agree on; Google publishes none. An organization with no provider under it is not listed.
 3. **Our Clinics** → add a clinic. Back on Referral Sources, check rows and **Add to clinic**. The clinic's **Referral list** shows what was added with the estimate rolled up.
+   The estimate comes from **Settings → Referral estimates**: therapy disciplines across, provider types down, each cell referrals per provider per month. Every estimate is the sum across disciplines, shown as a range with a per-discipline breakdown.
 4. **Campaigns** → choose the clinic. The audience is its list, previewed as pages to send: everyone at a practice sharing a fax machine gets one page; a provider whose *own fax* switch is on gets their own; anyone unreachable is listed, not dropped.
 
 Details and current limits: [docs/market-setup.md](docs/market-setup.md), [docs/kinston-pilot.md](docs/kinston-pilot.md).

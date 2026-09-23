@@ -7,6 +7,7 @@ import {
   ArrowRightOnRectangleIcon,
   BuildingOffice2Icon,
   ClockIcon,
+  Cog6ToothIcon,
   MegaphoneIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline';
@@ -21,7 +22,7 @@ function isCurrent(pathname: string, href: string): boolean {
 }
 
 /**
- * Four destinations. Setup steps (counties, pull, enrich, research) live on a
+ * Five destinations. Setup steps (counties, pull, enrich, research) live on a
  * clinic's page; Google keyword search and manual entry are ways to add a
  * practice, reached from Referral Sources.
  */
@@ -30,6 +31,7 @@ export const navigation = [
   { name: 'Referral Sources', href: '/referral-sources', icon: UserGroupIcon },
   { name: 'Campaigns', href: '/campaigns', icon: MegaphoneIcon },
   { name: 'Activity', href: '/interactions', icon: ClockIcon },
+  { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
 ];
 
 export default function Navigation() {

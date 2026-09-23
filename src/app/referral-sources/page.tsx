@@ -34,7 +34,7 @@ interface SourcesResponse {
     organizations: number;
     providers: number;
     withFax: number;
-    estimate: { low: number; high: number };
+    estimate: { low: number; high: number; byDiscipline: { key: string; label: string; low: number; high: number }[] };
   };
   counties: { fips: string | null; name: string | null; practices: number }[];
 }
@@ -64,6 +64,18 @@ function mixLabel(mix: Record<string, number>): string {
   return Object.entries(mix)
     .sort((left, right) => right[1] - left[1])
     .map(([type, count]) => `${SHORT[type] ?? type} ${count}`)
+    .join(' · ');
+}
+
+function rangeOf(low: number, high: number): string {
+  return low === high ? `${low}` : `${low}–${high}`;
+}
+
+/** "Speech therapy 1–3 · Occupational therapy 0–2", skipping disciplines with nothing. */
+function disciplineText(rows: { label: string; low: number; high: number }[] | undefined): string {
+  return (rows ?? [])
+    .filter((row) => row.high > 0)
+    .map((row) => `${row.label} ${rangeOf(row.low, row.high)}`)
     .join(' · ');
 }
 
@@ -340,7 +352,9 @@ function SourceRow({
         </div>
 
         <div className="col-span-6 mt-2 whitespace-nowrap lg:col-span-2 lg:mt-0 lg:text-right">
-          <p className="text-sm font-semibold text-gray-900">{estimateText(source.estimate)}</p>
+          <p className="text-sm font-semibold text-gray-900" title={disciplineText(source.estimate?.byDiscipline) || undefined}>
+            {estimateText(source.estimate)}
+          </p>
           <p className="text-xs text-gray-500">est. referrals / mo</p>
         </div>
 
@@ -737,7 +751,7 @@ export default function ReferralSourcesPage() {
         <StatTile
           label="Est. referrals / month"
           value={stats ? `${stats.estimate.low}–${stats.estimate.high}` : '—'}
-          hint="across all sources"
+          hint={stats ? disciplineText(stats.estimate.byDiscipline) || 'across all sources' : undefined}
         />
       </div>
 

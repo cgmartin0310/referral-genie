@@ -29,7 +29,11 @@ interface ClinicLocation {
 
 interface ReferralListResponse {
   practices: PracticeView[];
-  totals: { practices: number; providers: number; estimate: { low: number; high: number } };
+  totals: {
+    practices: number;
+    providers: number;
+    estimate: { low: number; high: number; byDiscipline?: { key: string; label: string; low: number; high: number }[] };
+  };
 }
 
 type Tab = 'list' | 'market';
@@ -265,7 +269,16 @@ export default function ClinicPage() {
           <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatTile label="Practices on list" value={totals?.practices ?? '—'} />
             <StatTile label="Providers" value={totals?.providers ?? '—'} hint="across listed practices" />
-            <StatTile label="Est. referrals / month" value={rangeText(totals?.estimate)} hint="from listed practices" />
+            <StatTile
+              label="Est. referrals / month"
+              value={rangeText(totals?.estimate)}
+              hint={
+                (totals?.estimate.byDiscipline ?? [])
+                  .filter((row) => row.high > 0)
+                  .map((row) => `${row.label} ${row.low === row.high ? row.low : `${row.low}–${row.high}`}`)
+                  .join(' · ') || 'from listed practices'
+              }
+            />
             <StatTile
               label="Market"
               value={counties.length === 0 ? 'Not set' : `${counties.length} count${counties.length === 1 ? 'y' : 'ies'}`}

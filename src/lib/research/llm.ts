@@ -28,7 +28,7 @@ export function readResearchLlmConfig(
       provider: 'xai',
       apiKey: xaiKey,
       baseUrl: (env.XAI_BASE_URL?.trim() || 'https://api.x.ai/v1').replace(/\/$/, ''),
-      model: env.XAI_MODEL?.trim() || env.GROK_MODEL?.trim() || 'grok-4',
+      model: env.XAI_MODEL?.trim() || env.GROK_MODEL?.trim() || 'grok-4.7',
     };
   }
 

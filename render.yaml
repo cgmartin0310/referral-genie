@@ -43,7 +43,7 @@ services:
       - key: XAI_API_KEY
         sync: false # Preferred research model key (Grok). GROK_API_KEY is also accepted.
       - key: XAI_MODEL
-        sync: false # Optional. Defaults to grok-4.
+        sync: false # Optional. Defaults to grok-4.7.
       - key: OPENAI_COMPAT_API_KEY
         sync: false # Used for research only when XAI_API_KEY and GROK_API_KEY are unset.
       - key: OPENAI_COMPAT_BASE_URL

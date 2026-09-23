@@ -169,7 +169,11 @@ function RowMenu({ source, onEdit }: { source: PracticeView; onEdit: () => void 
       <Menu.Button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" aria-label={`Actions for ${source.name}`}>
         <EllipsisVerticalIcon className="h-5 w-5" />
       </Menu.Button>
-      <Menu.Items className="absolute right-0 z-20 mt-1 w-36 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 focus:outline-none">
+      {/* Anchored: drawn outside the list's card and flipped upward near the bottom, so the last row's menu is not cut off. */}
+      <Menu.Items
+        anchor="bottom end"
+        className="z-50 w-36 rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 [--anchor-gap:4px] focus:outline-none"
+      >
         <Menu.Item>
           {({ active }) => (
             <button type="button" onClick={onEdit} className={classNames('block w-full px-3 py-2 text-left text-sm', active ? 'bg-gray-100 text-gray-900' : 'text-gray-700')}>

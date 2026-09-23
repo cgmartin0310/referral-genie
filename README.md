@@ -2,7 +2,7 @@
 
 Finds, verifies, and works referral sources for outpatient therapy clinics, then faxes them.
 
-A **referral source** is a pediatrician, primary care physician, nurse practitioner, or the organization they work for, pulled from the NPI registry by county, enriched with Google Places, and researched on its own website for fax, referral email, and referral forms. A **clinic** is one of your sites; it keeps a referral list chosen from those sources. A **campaign** faxes a clinic's list, one page per fax machine.
+A **referral source** is a pediatrician, primary care physician, or the organization they work for, pulled from the NPI registry by county, enriched with Google Places, and researched on its own website for fax, referral email, and referral forms. A **clinic** is one of your sites; it keeps a referral list chosen from those sources. A **campaign** faxes a clinic's list, one page per fax machine.
 
 ## How it works
 

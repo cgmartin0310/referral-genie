@@ -12,8 +12,6 @@ export const DEFAULT_MONTHLY_RATE: Record<string, number> = {
   pediatrics: 1,
   pcp_family_medicine: 0.5,
   pcp_general_practice: 0.5,
-  pediatrics_np: 0.75,
-  pcp_np_pa: 0.35,
 };
 
 const LOW_FACTOR = 0.6;

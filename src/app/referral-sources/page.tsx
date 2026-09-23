@@ -51,8 +51,6 @@ const SHORT: Record<string, string> = {
   pediatrics: 'Pediatrics',
   pcp_family_medicine: 'Family medicine',
   pcp_general_practice: 'General practice',
-  pediatrics_np: 'Pediatric NP',
-  pcp_np_pa: 'Nurse practitioner',
   clinic_center: 'Clinic / health center',
 };
 
@@ -429,7 +427,7 @@ function SourceList({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void
             <BuildingOffice2Icon className="mx-auto h-10 w-10 text-gray-300" />
             <p className="mt-3 text-sm font-medium text-gray-900">No referral sources yet</p>
             <p className="mt-1 text-sm text-gray-500">
-              Pick a county and pull its pediatricians, primary care physicians, and nurse practitioners from NPI.
+              Pick a county and pull its pediatricians and primary care physicians from NPI.
             </p>
             <button
               type="button"
@@ -547,8 +545,8 @@ export default function ReferralSourcesPage() {
           <span>
             <span className="block text-sm font-semibold text-gray-900">Pull referral sources for a county</span>
             <span className="block text-sm text-gray-500">
-              Pediatricians, primary care physicians, and nurse practitioners from NPI, matched to Google Places, then
-              researched for fax, email, and referral details.
+              Pediatricians and primary care physicians from NPI, matched to Google Places, then researched for fax,
+              email, and referral details.
             </span>
           </span>
           <ChevronDownIcon className={classNames('h-5 w-5 shrink-0 text-gray-400 transition-transform', pulling && 'rotate-180')} />

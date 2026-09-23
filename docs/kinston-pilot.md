@@ -24,7 +24,7 @@ Re-runs upsert on `(organizationId, npiNumber)`. Fields a person edited in the C
 
 ## Taxonomy allow-list
 
-Eighteen NUCC codes: seven physician codes (internal medicine was removed; adult internists rarely refer to pediatric therapy), five nurse practitioner codes (physician assistants were removed; the PA taxonomy carries no specialty, so an OB/GYN PA is indistinguishable from a primary care one), and six clinic/center organization codes. A row is kept only when the **primary** taxonomy is on this list. Organization rows are never counted as providers; they name the practice and carry its fax.
+Thirteen NUCC codes: seven physician codes (family medicine, general practice, pediatrics; internal medicine was removed because adult internists rarely refer to pediatric therapy) and and six clinic/center organization codes. A row is kept only when the **primary** taxonomy is on this list. Organization rows are never counted as providers; they name the practice and carry its fax.
 
 | Code | Display name |
 |------|----------------|
@@ -35,11 +35,6 @@ Eighteen NUCC codes: seven physician codes (internal medicine was removed; adult
 | 208000000X | Pediatrics |
 | 2080A0000X | Pediatrics, Adolescent Medicine |
 | 2080P0006X | Pediatrics, Developmental - Behavioral Pediatrics |
-| 363LP0200X | Nurse Practitioner, Pediatrics |
-| 363LF0000X | Nurse Practitioner, Family |
-| 363LP2300X | Nurse Practitioner, Primary Care |
-| 363LA2200X | Nurse Practitioner, Adult Health |
-| 363LG0600X | Nurse Practitioner, Gerontology |
 | 261QP2300X | Clinic/Center, Primary Care |
 | 261QR1300X | Clinic/Center, Rural Health |
 | 261QF0400X | Clinic/Center, FQHC |
@@ -121,4 +116,4 @@ npx tsx scripts/seed-county.ts --county lenoir-nc
 
 After a finished run, **Referral sources** lists Lenoir County rows with source type, NPI, and a Places status of matched, unmatched, or quarantined. Open a row for taxonomy, FIPS, place id, rating, review count, business status, lat/lng, provenance, and the duplicate flag. Matched rows have those Places fields filled in. Unmatched rows were sent to Places and did not clear the address or phone check. Quarantined rows were not sent.
 
-A Read API pull on 2026-09-21 kept 81 NPIs (64 individuals, 17 organizations): family medicine, internal medicine, and general practice. A later unfiltered scan found eight pediatricians the description search had missed, although Kinston Pediatric Associates PA, which registers its office under the PO Box ZIP 28502, is only reachable from the NPI file. Many kept rows share a clinic main phone number. The duplicate pass flags that cluster and does not merge the NPIs.
+A Read API pull on 2026-09-21 kept 81 NPIs (64 individuals, 17 organizations): family medicine, internal medicine, and general practice. The NPI file finds eight pediatricians the API's description search had missed, including Kinston Pediatric Associates PA, which registers its office under the PO Box ZIP 28502. Nurse practitioners and physician assistants are excluded for now; the NP and PA codes do not reliably say whether the person is in primary care. Many kept rows share a clinic main phone number. The duplicate pass flags that cluster and does not merge the NPIs.

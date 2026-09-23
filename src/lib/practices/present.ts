@@ -6,8 +6,6 @@ export const SOURCE_TYPE_SHORT: Record<string, string> = {
   pediatrics: 'Pediatrics',
   pcp_family_medicine: 'Family medicine',
   pcp_general_practice: 'General practice',
-  pediatrics_np: 'Pediatric NP',
-  pcp_np_pa: 'Nurse practitioner',
   clinic_center: 'Clinic / health center',
 };
 

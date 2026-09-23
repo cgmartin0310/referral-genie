@@ -387,7 +387,7 @@ async function formPractices(run: CountyIngestRun, summary: IngestSummary): Prom
       primaryTaxonomyCode: true, taxonomyCodes: true, sourceType: true,
       address: true, city: true, state: true, zipCode: true,
       countyName: true, countyFips: true, contactPhone: true,
-      faxNumber: true, placeId: true, placeName: true,
+      faxNumber: true, placeId: true, placeName: true, website: true, rating: true, reviewCount: true,
     },
   });
 
@@ -407,6 +407,9 @@ async function formPractices(run: CountyIngestRun, summary: IngestSummary): Prom
       countyFips: built.countyFips,
       phone: built.phone,
       faxNumber: built.faxNumber,
+      website: built.website,
+      rating: built.rating,
+      reviewCount: built.reviewCount,
       orgNpis: built.orgNpis,
       providerCount: built.providerCount,
       taxonomyMix: asJson(built.taxonomyMix),

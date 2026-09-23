@@ -205,7 +205,28 @@ function SourceRow({
                 </span>
               )}
             </p>
-            <p className="truncate text-sm text-gray-500">{addressLine}</p>
+            <p className="truncate text-sm text-gray-500">
+              {addressLine}
+              {source.website && (
+                <>
+                  {' · '}
+                  <a
+                    href={source.website}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-green-700 hover:underline"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {source.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+                  </a>
+                </>
+              )}
+              {source.rating != null && (
+                <span className="ml-2 text-xs text-gray-500" title="Google rating">
+                  ★ {source.rating.toFixed(1)}{source.reviewCount ? ` (${source.reviewCount})` : ''}
+                </span>
+              )}
+            </p>
           </div>
         </div>
 
@@ -218,6 +239,7 @@ function SourceRow({
           ) : (
             <p className="text-sm text-gray-400">No fax</p>
           )}
+          {source.phone && <p className="text-xs text-gray-500">{formatFax(source.phone)}</p>}
         </div>
 
         <div className="col-span-6 mt-2 lg:col-span-3 lg:mt-0">

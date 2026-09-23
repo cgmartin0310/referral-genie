@@ -35,6 +35,9 @@ export interface PracticeSourceRow {
   faxNumber: string | null;
   placeId: string | null;
   placeName?: string | null;
+  website?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
 }
 
 export interface BuiltProvider {
@@ -62,6 +65,9 @@ export interface BuiltPractice {
   countyFips: string | null;
   phone: string | null;
   faxNumber: string | null;
+  website: string | null;
+  rating: number | null;
+  reviewCount: number | null;
   orgNpis: string[];
   providers: BuiltProvider[];
   /** NPI-1 members only. An org-only location is 0 and is not an estimate of 0. */
@@ -134,6 +140,16 @@ function practiceName(orgs: PracticeSourceRow[], members: PracticeSourceRow[], f
   return { name: address ?? members[0]?.name ?? 'Unnamed practice', ambiguous: false };
 }
 
+/** The member whose Places listing has the most reviews; that is the one people see. */
+function bestListing(rows: PracticeSourceRow[]): PracticeSourceRow | null {
+  let best: PracticeSourceRow | null = null;
+  for (const row of rows) {
+    if (row.rating == null) continue;
+    if (!best || (row.reviewCount ?? 0) > (best.reviewCount ?? 0)) best = row;
+  }
+  return best;
+}
+
 /** One provider as their own referral source. */
 function soloPractice(row: PracticeSourceRow): BuiltPractice {
   return {
@@ -149,6 +165,9 @@ function soloPractice(row: PracticeSourceRow): BuiltPractice {
     countyFips: row.countyFips,
     phone: row.contactPhone,
     faxNumber: row.faxNumber,
+    website: row.website ?? null,
+    rating: row.rating ?? null,
+    reviewCount: row.reviewCount ?? null,
     orgNpis: [],
     providers: [
       {
@@ -196,6 +215,7 @@ export function buildPractices(rows: PracticeSourceRow[]): BuiltPractice[] {
     }
     const faxNumber = modal(members.map((row) => row.faxNumber));
     const { name, ambiguous } = practiceName(orgs, members, faxNumber);
+    const listing = bestListing(members);
 
     const taxonomyMix: Record<string, number> = {};
     for (const person of people) {
@@ -216,6 +236,10 @@ export function buildPractices(rows: PracticeSourceRow[]): BuiltPractice[] {
       countyFips: modal(members.map((row) => row.countyFips)),
       phone: modal(members.map((row) => row.contactPhone)),
       faxNumber,
+      // Places fields: the org's listing first, else the most common among members.
+      website: modal([...orgs, ...people].map((row) => row.website ?? null)),
+      rating: listing?.rating ?? null,
+      reviewCount: listing?.reviewCount ?? null,
       orgNpis: orgs.map((row) => row.npiNumber).filter((npi): npi is string => Boolean(npi)),
       providers: people.map((row) => ({
         sourceId: row.id,

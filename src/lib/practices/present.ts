@@ -40,6 +40,9 @@ export interface PracticeView {
   countyFips: string | null;
   phone: string | null;
   faxNumber: string | null;
+  website: string | null;
+  rating: number | null;
+  reviewCount: number | null;
   orgNpis: string[];
   providerCount: number;
   taxonomyMix: Record<string, number>;
@@ -99,6 +102,9 @@ export function presentPractice(practice: PracticeWithRelations): PracticeView {
     countyFips: practice.countyFips,
     phone: practice.phone,
     faxNumber: practice.faxNumber,
+    website: practice.website,
+    rating: practice.rating,
+    reviewCount: practice.reviewCount,
     orgNpis: practice.orgNpis,
     providerCount: practice.providerCount,
     taxonomyMix,

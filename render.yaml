@@ -49,4 +49,6 @@ services:
       - key: OPENAI_COMPAT_BASE_URL
         sync: false # OpenAI-compatible base URL, for example https://api.openai.com/v1
       - key: OPENAI_COMPAT_MODEL
-        sync: false # Model name for OPENAI_COMPAT_BASE_URL. 
+        sync: false # Model name for OPENAI_COMPAT_BASE_URL.
+      - key: RESEARCH_MODEL_TIMEOUT_MS
+        sync: false # Optional. How long to wait for the research model per site. Defaults to 90000. 

@@ -82,13 +82,41 @@ export function proposalsFromModelJson(value: unknown): FieldProposal[] {
   return proposals;
 }
 
+/**
+ * Reasoning models can take a minute on a long page. One retry on a timeout;
+ * anything slower than that is reported as a model error for the site.
+ */
+const MODEL_TIMEOUT_MS = Number(process.env.RESEARCH_MODEL_TIMEOUT_MS) || 90_000;
+
+const EXPECTED_KEYS = new Set([
+  'website', 'phone', 'contactPhone', 'fax', 'faxNumber', 'numberOfProviders',
+  'referralEmail', 'contactEmail', 'referralFormUrl', 'preferredChannel',
+]);
+
 async function llmExtract(
   input: ResearchExtractInput,
   config: ResearchLlmConfig,
   fetchImpl: typeof fetch,
 ): Promise<FieldProposal[]> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await llmExtractOnce(input, config, fetchImpl);
+    } catch (error) {
+      const aborted = error instanceof Error && (error.name === 'AbortError' || /aborted/i.test(error.message));
+      if (aborted && attempt === 1) continue;
+      if (aborted) throw new Error(`Research model took longer than ${Math.round(MODEL_TIMEOUT_MS / 1000)}s twice`);
+      throw error;
+    }
+  }
+}
+
+async function llmExtractOnce(
+  input: ResearchExtractInput,
+  config: ResearchLlmConfig,
+  fetchImpl: typeof fetch,
+): Promise<FieldProposal[]> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25_000);
+  const timer = setTimeout(() => controller.abort(), MODEL_TIMEOUT_MS);
   try {
     const response = await fetchImpl(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -136,7 +164,17 @@ async function llmExtract(
     if (parsed === null) {
       throw new Error(`Research model did not return JSON: ${content.slice(0, 120).replace(/\s+/g, ' ')}`);
     }
-    return proposalsFromResearchJson(parsed);
+    const proposals = proposalsFromResearchJson(parsed);
+    if (proposals.length === 0 && parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      // All-null answers are a real "nothing here". An answer in some other
+      // shape is an integration problem and should be seen, not swallowed.
+      const keys = Object.keys(parsed as Record<string, unknown>);
+      const known = keys.filter((key) => EXPECTED_KEYS.has(key));
+      if (keys.length > 0 && known.length === 0) {
+        throw new Error(`Research model answered with unexpected keys: ${keys.slice(0, 6).join(', ')}`);
+      }
+    }
+    return proposals;
   } finally {
     clearTimeout(timer);
   }

@@ -49,6 +49,20 @@ model Organization {
   prospectDecisions  ProspectDecision[]
 }
 
+/// One outreach touch on a catalog practice (a call now; fax and AI call
+/// later), with its outcome. Paragon's log; counts only reach subscribers.
+model OutreachTouch {
+  id           String   @id @default(cuid())
+  practiceId   String
+  channel      String   @default("call")
+  outcome      String
+  notes        String?
+  actor        String?
+  createdAt    DateTime @default(now())
+
+  @@index([practiceId, createdAt])
+}
+
 /// A subscriber's decision on a catalog practice offered as a prospect.
 /// No row means proposed. Every decision is logged with who made it.
 model ProspectDecision {

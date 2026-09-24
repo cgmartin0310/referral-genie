@@ -13,6 +13,7 @@ import {
   Cog6ToothIcon,
   ShieldCheckIcon,
   GlobeAltIcon,
+  PhoneIcon,
   MegaphoneIcon,
   UserGroupIcon,
   HeartIcon,
@@ -47,6 +48,7 @@ export const navigation = [
 export const adminNavigation = [
   { name: 'Subscribers', href: '/admin/subscribers', icon: ShieldCheckIcon },
   { name: 'Source Universe', href: '/admin/universe', icon: GlobeAltIcon },
+  { name: 'Call queue', href: '/admin/calls', icon: PhoneIcon },
 ];
 
 export default function Navigation() {

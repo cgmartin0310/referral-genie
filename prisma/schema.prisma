@@ -355,6 +355,11 @@ model Practice {
   editedFields   String[] @default([])
   /// Deleted by a person. The pull keeps it deleted; Restore brings it back.
   hiddenAt       DateTime?
+  /// Asked to stop receiving faxes (the opt-out line on every page). Global:
+  /// no subscriber's campaign faxes it until Paragon removes the opt-out.
+  faxOptOutAt    DateTime?
+  /// Who recorded the opt-out (organization name), for Paragon's review.
+  faxOptOutBy    String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   organizationId String

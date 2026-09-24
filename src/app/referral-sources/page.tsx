@@ -167,8 +167,19 @@ function ClinicChips({ clinics }: { clinics: PracticeView['clinics'] }) {
   );
 }
 
-function RowMenu({ source, onEdit }: { source: PracticeView; onEdit: () => void }) {
+function RowMenu({ source, onEdit, canEdit }: { source: PracticeView; onEdit: () => void; canEdit: boolean }) {
   const queryClient = useQueryClient();
+  const optOut = useMutation({
+    mutationFn: async (optedOut: boolean) => axios.post(`/api/practices/${source.id}/opt-out`, { optedOut }),
+    onSuccess: (_result, optedOut) => {
+      toast.success(optedOut ? `${source.name} will not be faxed by any campaign` : `Opt-out removed for ${source.name}`);
+      queryClient.invalidateQueries({ queryKey: ['practices'] });
+    },
+    onError: (error: unknown) => {
+      const message = axios.isAxiosError(error) ? error.response?.data?.error : null;
+      toast.error(message || 'Could not update the opt-out');
+    },
+  });
   const remove = useMutation({
     mutationFn: async () => axios.delete(`/api/practices/${source.id}`),
     onSuccess: () => {
@@ -185,8 +196,39 @@ function RowMenu({ source, onEdit }: { source: PracticeView; onEdit: () => void 
       {/* Anchored: drawn outside the list's card and flipped upward near the bottom, so the last row's menu is not cut off. */}
       <Menu.Items
         anchor="bottom end"
-        className="z-50 w-36 rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 [--anchor-gap:4px] focus:outline-none"
+        className="z-50 w-56 rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 [--anchor-gap:4px] focus:outline-none"
       >
+        {!source.faxOptOut ? (
+          <Menu.Item>
+            {({ active }) => (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Record that ${source.name} asked to stop receiving faxes? No campaign, yours or any other subscriber's, will fax them.`)) optOut.mutate(true);
+                }}
+                className={classNames('block w-full px-3 py-2 text-left text-sm', active ? 'bg-gray-100 text-gray-900' : 'text-gray-700')}
+              >
+                Mark opted out of faxes
+              </button>
+            )}
+          </Menu.Item>
+        ) : canEdit ? (
+          <Menu.Item>
+            {({ active }) => (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Remove the fax opt-out for ${source.name}? Only do this if they asked to receive faxes again.`)) optOut.mutate(false);
+                }}
+                className={classNames('block w-full px-3 py-2 text-left text-sm', active ? 'bg-gray-100 text-gray-900' : 'text-gray-700')}
+              >
+                Remove fax opt-out
+              </button>
+            )}
+          </Menu.Item>
+        ) : null}
+        {canEdit && (
+        <>
         <Menu.Item>
           {({ active }) => (
             <button type="button" onClick={onEdit} className={classNames('block w-full px-3 py-2 text-left text-sm', active ? 'bg-gray-100 text-gray-900' : 'text-gray-700')}>
@@ -207,6 +249,8 @@ function RowMenu({ source, onEdit }: { source: PracticeView; onEdit: () => void 
             </button>
           )}
         </Menu.Item>
+        </>
+        )}
       </Menu.Items>
     </Menu>
   );
@@ -329,7 +373,14 @@ function SourceRow({
         </div>
 
         <div className="col-span-6 mt-2 whitespace-nowrap lg:col-span-2 lg:mt-0">
-          {source.faxNumber ? (
+          {source.faxOptOut ? (
+            <p
+              className="text-sm font-medium text-red-700"
+              title={`Opted out of faxes. Recorded ${new Date(source.faxOptOut.at).toLocaleDateString()}${source.faxOptOut.by ? ` by ${source.faxOptOut.by}` : ''}. No campaign faxes them.`}
+            >
+              Opted out
+            </p>
+          ) : source.faxNumber ? (
             <p className="flex items-center gap-1.5 font-mono text-sm text-gray-800">
               <PrinterIcon className="h-4 w-4 text-gray-400" />
               {formatFax(source.faxNumber)}
@@ -364,7 +415,7 @@ function SourceRow({
 
         <div className="col-span-6 mt-2 flex items-center justify-end gap-1 lg:col-span-1 lg:mt-0">
           <ClinicChips clinics={source.clinics} />
-          {canEdit && <RowMenu source={source} onEdit={onEdit} />}
+          {(canEdit || !source.faxOptOut) && <RowMenu source={source} onEdit={onEdit} canEdit={canEdit} />}
         </div>
       </div>
 

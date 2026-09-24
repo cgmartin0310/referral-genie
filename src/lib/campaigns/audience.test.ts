@@ -15,6 +15,16 @@ const person = (id: string, extra: Partial<AudiencePractice['providers'][number]
 });
 
 describe('campaign audience', () => {
+  it('leaves out a practice that asked to stop receiving faxes', () => {
+    const audience = buildAudience([
+      practice({ id: 'stop', faxOptOut: true, providers: [person('a', { faxNumber: '252-555-0111', useOwnFax: true })] }),
+      practice({ id: 'go', providers: [person('b')] }),
+    ]);
+    assert.deepEqual(audience.targets.map((target) => target.practiceId), ['go']);
+    assert.deepEqual(audience.optedOut, [{ practiceId: 'stop', practiceName: 'Practice stop' }]);
+    assert.equal(audience.practices, 1);
+  });
+
   it('sends one page to a practice however many providers work there', () => {
     const audience = buildAudience([
       practice({ id: 'hospital', providers: [person('a'), person('b'), person('c')] }),

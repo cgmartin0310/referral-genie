@@ -472,6 +472,12 @@ export default function CampaignForm({
                   have none on file, so their page goes to the office.
                 </p>
               )}
+              {(audience.optedOut?.length ?? 0) > 0 && (
+                <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                  <p className="font-medium">Opted out of faxes — will be skipped</p>
+                  <p className="mt-1">{audience.optedOut?.map((row) => row.practiceName).join(', ')}</p>
+                </div>
+              )}
               {audience.unreachable.length > 0 && (
                 <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                   <p className="font-medium">No fax on file — will be skipped</p>

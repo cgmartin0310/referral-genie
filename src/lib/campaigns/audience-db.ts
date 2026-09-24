@@ -27,6 +27,7 @@ export async function audienceForClinic(clinicId: string, organizationId: string
       id: row.practice.id,
       name: row.practice.name,
       faxNumber: row.practice.faxNumber,
+      faxOptOut: row.practice.faxOptOutAt !== null,
       providers: row.practice.providers,
     })),
   );

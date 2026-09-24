@@ -12,6 +12,8 @@ export interface AudiencePractice {
   id: string;
   name: string;
   faxNumber: string | null;
+  /** Asked to stop receiving faxes; never a target. */
+  faxOptOut?: boolean;
   providers: { id: string; name: string; faxNumber: string | null; useOwnFax: boolean }[];
 }
 
@@ -33,6 +35,8 @@ export interface Audience {
   unreachable: { practiceId: string; practiceName: string; providerNames: string[] }[];
   /** Own-line requests that fell back to the office because no line was on file. */
   fellBack: number;
+  /** Practices on the list that asked to stop receiving faxes. */
+  optedOut: { practiceId: string; practiceName: string }[];
 }
 
 export function buildAudience(practices: AudiencePractice[]): Audience {
@@ -40,8 +44,13 @@ export function buildAudience(practices: AudiencePractice[]): Audience {
   const unreachable: Audience['unreachable'] = [];
   let fellBack = 0;
   let providers = 0;
+  const optedOut: Audience['optedOut'] = [];
 
   for (const practice of practices) {
+    if (practice.faxOptOut) {
+      optedOut.push({ practiceId: practice.id, practiceName: practice.name });
+      continue;
+    }
     if (practice.providers.length === 0) {
       // Org-only or hand-added: one page to the office, if it has a fax.
       const number = normalizeFax(practice.faxNumber);
@@ -86,5 +95,5 @@ export function buildAudience(practices: AudiencePractice[]): Audience {
     }
   }
 
-  return { targets, practices: practices.length, providers, unreachable, fellBack };
+  return { targets, practices: practices.length - optedOut.length, providers, unreachable, fellBack, optedOut };
 }

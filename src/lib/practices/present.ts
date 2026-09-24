@@ -47,6 +47,8 @@ export interface PracticeView {
   editedFields: string[];
   /** Deleted by a person. */
   hidden: boolean;
+  /** Asked to stop receiving faxes; no campaign faxes it. */
+  faxOptOut: { at: string; by: string | null } | null;
   address: string | null;
   city: string | null;
   state: string | null;
@@ -122,6 +124,7 @@ export function presentPractice(practice: PracticeWithRelations, rates: Estimate
     nameAmbiguous: practice.nameAmbiguous,
     editedFields: practice.editedFields,
     hidden: practice.hiddenAt !== null,
+    faxOptOut: practice.faxOptOutAt ? { at: practice.faxOptOutAt.toISOString(), by: practice.faxOptOutBy } : null,
     address: practice.address,
     city: practice.city,
     state: practice.state,

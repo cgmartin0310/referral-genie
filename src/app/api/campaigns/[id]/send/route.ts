@@ -28,7 +28,10 @@ export async function POST(
               referralSource: true
             }
           },
-          targets: { where: { status: { in: ['PENDING', 'FAILED'] } } },
+          targets: {
+            where: { status: { in: ['PENDING', 'FAILED'] } },
+            include: { practice: { select: { faxOptOutAt: true } } },
+          },
         }
       })
     );
@@ -90,6 +93,14 @@ export async function POST(
       return cleaned;
     };
 
+    // Practices that asked to stop receiving faxes are never sent to, by any subscriber.
+    const optedOutPractices = await prisma.practice.findMany({
+      where: { faxOptOutAt: { not: null } },
+      select: { orgNpis: true, providers: { select: { npiNumber: true } } },
+    });
+    const optedOutNpis = new Set(optedOutPractices.flatMap((practice) => [...practice.orgNpis, ...practice.providers.map((provider) => provider.npiNumber)]));
+    const skipped: { name: string; reason: string }[] = [];
+
     // Start batch processing
     const results = [];
     const errors = [];
@@ -98,6 +109,11 @@ export async function POST(
     for (const connection of campaign.referralSources) {
       const { referralSource } = connection;
       
+      if (referralSource.npiNumber && optedOutNpis.has(referralSource.npiNumber)) {
+        skipped.push({ name: referralSource.name, reason: 'Opted out of faxes' });
+        continue;
+      }
+
       // Skip if no fax number
       if (!referralSource.faxNumber) {
         errors.push({
@@ -345,6 +361,14 @@ export async function POST(
     // Targets built from a clinic's referral list: one page per fax machine,
     // addressed to the practice or, on their own line, to the provider.
     for (const target of campaign.targets) {
+      if (target.practice?.faxOptOutAt) {
+        await prisma.campaignTarget.update({
+          where: { id: target.id },
+          data: { status: 'SKIPPED', response: JSON.stringify({ reason: 'Opted out of faxes' }) },
+        });
+        skipped.push({ name: target.toName, reason: 'Opted out of faxes' });
+        continue;
+      }
       const toFaxNumber = formatPhoneNumber(target.faxNumber);
       const fromFaxNumber = campaign.coverSheetFromNumber || process.env.DEFAULT_FAX_NUMBER || '19103974373';
       try {
@@ -406,9 +430,11 @@ export async function POST(
       results: {
         success: results.length,
         failed: errors.length,
+        skipped: skipped.length,
         details: {
           successful: results,
-          failed: errors
+          failed: errors,
+          skipped,
         }
       }
     });

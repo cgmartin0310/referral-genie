@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import ClerkAccount from './ClerkAccount';
+import { useTenant } from '@/lib/use-tenant';
 import { clerkPublishableKey } from '@/lib/clerk-config';
 import {
   ArrowRightOnRectangleIcon,
   BuildingOffice2Icon,
   ClockIcon,
   Cog6ToothIcon,
+  ShieldCheckIcon,
   MegaphoneIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline';
@@ -36,9 +38,15 @@ export const navigation = [
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
 ];
 
+/** Paragon's own pages, shown only to Paragon. */
+export const adminNavigation = [
+  { name: 'Subscribers', href: '/admin/subscribers', icon: ShieldCheckIcon },
+];
+
 export default function Navigation() {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const { data: me } = useTenant();
 
   return (
     <nav className="flex flex-1 flex-col">
@@ -74,11 +82,43 @@ export default function Navigation() {
           </ul>
         </li>
 
+        {me?.isParagon && (
+          <li>
+            <p className="px-2 text-xs font-semibold uppercase tracking-wide text-blue-200">Paragon admin</p>
+            <ul role="list" className="-mx-2 mt-2 space-y-1">
+              {adminNavigation.map((item) => {
+                const current = isCurrent(pathname, item.href);
+                return (
+                  <li key={item.name}>
+                    <Link
+                      href={item.href}
+                      aria-current={current ? 'page' : undefined}
+                      className={classNames(
+                        current
+                          ? 'bg-white/10 text-white border-green-400'
+                          : 'text-blue-100 hover:bg-white/5 hover:text-white border-transparent',
+                        'group flex gap-x-3 rounded-md border-l-2 p-2 pl-3 text-sm font-semibold leading-6',
+                      )}
+                    >
+                      <item.icon
+                        className={classNames(current ? 'text-green-400' : 'text-blue-200 group-hover:text-white', 'h-6 w-6 shrink-0')}
+                        aria-hidden="true"
+                      />
+                      {item.name}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        )}
+
         <li className="-mx-2 mt-auto border-t border-white/10 pt-4">
           {clerkPublishableKey && !session?.user && <ClerkAccount />}
           {session?.user?.name && (
             <p className="px-2 text-xs text-blue-200">
               Signed in as <span className="font-medium text-white">{session.user.name}</span>
+              {me && <span className="block text-blue-200/80">{me.organizationName}</span>}
             </p>
           )}
           {session?.user && (

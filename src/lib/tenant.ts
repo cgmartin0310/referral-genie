@@ -95,8 +95,8 @@ export async function currentTenant(): Promise<Tenant> {
 }
 
 /** Only Paragon changes the shared county catalog. */
-export function requireParagon(tenant: Tenant): void {
-  if (!tenant.isParagon) throw new TenantError(403, 'Only Paragon can change the shared referral source catalog.');
+export function requireParagon(tenant: Tenant, message = 'Only Paragon can change the shared referral source catalog.'): void {
+  if (!tenant.isParagon) throw new TenantError(403, message);
 }
 
 /** A route's catch: tenant errors become their status; anything else is the route's to handle. */

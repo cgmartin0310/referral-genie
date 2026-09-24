@@ -678,6 +678,10 @@ export async function createOrResumeRun(input: {
 
   // Read from the loaded NPI file when it covers this county; otherwise scan NPPES by ZIP.
   const onFile = await prisma.npiRecord.count({ where: { countyFips: county.fips, ...keptTaxonomyFilter(await pulledCodes()) } });
+  // For the change report: the practices this county had before the pull.
+  const practicesBefore = await prisma.practice.count({
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: county.fips, retiredAt: null, hiddenAt: null },
+  });
   return prisma.countyIngestRun.create({
     data: {
       organizationId: DEFAULT_ORGANIZATION_ID,
@@ -687,7 +691,7 @@ export async function createOrResumeRun(input: {
       status: 'QUEUED',
       phase: 'nppes',
       cursor: asJson({ ...emptyCursor(), source: onFile > 0 ? 'file' : 'api' }),
-      summary: asJson(emptySummary(onFile > 0 ? Math.ceil(onFile / FILE_SLICE) : county.zips.length)),
+      summary: asJson({ ...emptySummary(onFile > 0 ? Math.ceil(onFile / FILE_SLICE) : county.zips.length), practicesBefore }),
     },
   });
 }

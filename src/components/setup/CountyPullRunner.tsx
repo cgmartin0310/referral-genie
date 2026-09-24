@@ -25,6 +25,8 @@ interface CountyRun {
     discoverQueries?: number;
     discoverQueryTotal?: number;
     placesFromLookup?: number;
+    practicesBefore?: number | null;
+    npisCreated?: number;
     providersAttached?: number;
     providersUnattached?: number;
     npisUpserted: number;
@@ -307,6 +309,17 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
           {label}
         </button>
       </div>
+
+      {countyRun?.status === 'COMPLETED' && summary && (
+        <p className="mt-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+          Since the last pull: {summary.npisCreated ?? 0} new on NPI
+          {summary.retired ? `, ${summary.retired} no longer on NPI` : ''}
+          {typeof summary.practicesBefore === 'number'
+            ? `; ${summary.practicesBefore} practices before, ${summary.practicesFormed} now`
+            : ''}
+          .
+        </p>
+      )}
 
       <ol className="mt-4 divide-y divide-gray-100">
         <StageRow

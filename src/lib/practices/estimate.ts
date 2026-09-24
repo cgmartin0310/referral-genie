@@ -124,6 +124,30 @@ export function estimateMonthlyReferrals(
   };
 }
 
+function perMonth(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0$/, '');
+}
+
+/**
+ * What drives an estimate, in words: "6 Pediatrics at 1 a month each". The
+ * range is 0.6 to 1.4 times the sum, because NPI lists providers at every
+ * place they work and keeps some who have left.
+ */
+export function estimateDriverText(
+  estimate: ReferralEstimate | null,
+  labels: Record<string, string>,
+): string[] {
+  if (!estimate) return [];
+  return estimate.drivers
+    .filter((driver) => driver.providers > 0)
+    .map((driver) => {
+      const label = labels[driver.sourceType] ?? driver.sourceType;
+      return driver.ratePerMonth > 0
+        ? `${driver.providers} ${label} at ${perMonth(driver.ratePerMonth)} a month each`
+        : `${driver.providers} ${label}, no rate set`;
+    });
+}
+
 export interface EstimateTotal {
   low: number;
   high: number;

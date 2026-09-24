@@ -22,6 +22,7 @@ import EditPracticeModal from '../../components/EditPracticeModal';
 import { useTenant } from '@/lib/use-tenant';
 import CountyPullPanel from '../../components/setup/CountyPullPanel';
 import type { PracticeView, ProviderView } from '@/lib/practices/present';
+import { estimateDriverText } from '@/lib/practices/estimate';
 
 interface Clinic {
   id: string;
@@ -412,7 +413,10 @@ function SourceRow({
         </div>
 
         <div className="col-span-6 mt-2 whitespace-nowrap lg:col-span-2 lg:mt-0 lg:text-right">
-          <p className="text-sm font-semibold text-gray-900" title={disciplineText(source.estimate?.byDiscipline) || undefined}>
+          <p
+            className="text-sm font-semibold text-gray-900"
+            title={[estimateDriverText(source.estimate, SHORT).join('; '), disciplineText(source.estimate?.byDiscipline)].filter(Boolean).join('\n') || undefined}
+          >
             {estimateText(source.estimate)}
           </p>
           <p className="text-xs text-gray-500">est. referrals / mo</p>
@@ -424,6 +428,13 @@ function SourceRow({
         </div>
       </div>
 
+      {open && source.estimate && (
+        <p className="border-t border-gray-100 bg-gray-50/60 px-4 py-2 pl-[4.25rem] text-xs text-gray-600 sm:px-6 lg:pl-[4.75rem]">
+          Estimate {estimateText(source.estimate)} a month: {estimateDriverText(source.estimate, SHORT).join('; ')}
+          {disciplineText(source.estimate.byDiscipline) ? ` (${disciplineText(source.estimate.byDiscipline)})` : ''}. A range
+          of 0.6 to 1.4 times the sum, because NPI lists providers wherever they work and keeps some who have left.
+        </p>
+      )}
       {open && (
         <ul className="border-t border-gray-100 bg-gray-50/60">
           {source.providers.map((provider) => (
@@ -841,8 +852,8 @@ export default function ReferralSourcesPage() {
           <span>
             <span className="block text-sm font-semibold text-gray-900">Pull referral sources for a county</span>
             <span className="block text-sm text-gray-500">
-              Pediatricians and primary care physicians from NPI, matched to Google Places, then researched for fax,
-              email, and referral details.
+              Referring providers from the NPI file, grouped into practices, named on Google, and researched for any
+              missing fax.
             </span>
           </span>
           <ChevronDownIcon className={classNames('h-5 w-5 shrink-0 text-gray-400 transition-transform', pulling && 'rotate-180')} />

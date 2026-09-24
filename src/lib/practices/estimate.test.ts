@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { DEFAULT_ESTIMATE_RATES, estimateMonthlyReferrals, parseEstimateRates, sumEstimates } from './estimate';
+import { DEFAULT_ESTIMATE_RATES, estimateDriverText, estimateMonthlyReferrals, parseEstimateRates, sumEstimates } from './estimate';
 
 describe('referral estimate', () => {
   it('sums providers by type across disciplines at the default rates and shows a range', () => {
@@ -19,6 +19,14 @@ describe('referral estimate', () => {
     // 2 pediatricians × 0.5 speech referrals a month
     assert.equal(speech?.point, 1);
     assert.equal(estimate?.byDiscipline.length, 3);
+  });
+
+  it('says what drives an estimate', () => {
+    const estimate = estimateMonthlyReferrals({ pediatrics: 6, pcp_family_medicine: 1 });
+    assert.deepEqual(estimateDriverText(estimate, { pediatrics: 'pediatricians', pcp_family_medicine: 'family physician' }), [
+      '6 pediatricians at 1 a month each',
+      '1 family physician at 0.5 a month each',
+    ]);
   });
 
   it('is unknown, not zero, for an org-only practice', () => {

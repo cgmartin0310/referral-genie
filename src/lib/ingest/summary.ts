@@ -29,6 +29,8 @@ export interface IngestSummary {
   discoverQueryTotal: number;
   /** Listings found from an NPI record's own phone or address, after the county search. */
   placesFromLookup: number;
+  /** Practices in the county when this pull started, for the change report. */
+  practicesBefore: number | null;
   /** NPI records nested under a listing, and those Google lists nowhere. */
   providersAttached: number;
   providersUnattached: number;
@@ -64,6 +66,7 @@ export function emptySummary(nppesQueryTotal: number): IngestSummary {
     discoverQueries: 0,
     discoverQueryTotal: 0,
     placesFromLookup: 0,
+    practicesBefore: null,
     providersAttached: 0,
     providersUnattached: 0,
     npisUpserted: 0,
@@ -117,6 +120,7 @@ export function parseSummary(value: unknown): IngestSummary {
     discoverQueries: numberField(row.discoverQueries),
     discoverQueryTotal: numberField(row.discoverQueryTotal),
     placesFromLookup: numberField(row.placesFromLookup),
+    practicesBefore: typeof row.practicesBefore === 'number' ? row.practicesBefore : null,
     providersAttached: numberField(row.providersAttached),
     providersUnattached: numberField(row.providersUnattached),
     npisUpserted: numberField(row.npisUpserted),

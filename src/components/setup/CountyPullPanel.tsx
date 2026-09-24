@@ -18,7 +18,25 @@ interface CountyOption {
   seedCountyId: string | null;
   zipCount: number;
   npiRecords: number;
+  /** What the NPI file holds for this county before any pull. */
+  snapshot: {
+    providers: number;
+    organizations: number;
+    mix: Record<string, number>;
+    estimate: { low: number; high: number } | null;
+  } | null;
 }
+
+const MIX_LABEL: Record<string, string> = {
+  pediatrics: 'pediatrics',
+  pcp_family_medicine: 'family medicine',
+  pcp_general_practice: 'general practice',
+  ent: 'ENT',
+  neurology: 'neurology',
+  orthopedics: 'orthopedics',
+  sports_medicine: 'sports medicine',
+  pmr: 'PM&R',
+};
 
 interface NpiFileStatus {
   loaded: boolean;
@@ -117,6 +135,25 @@ export default function CountyPullPanel() {
           per ZIP, and cannot see practices registered under a PO Box ZIP. Load it with{' '}
           <code className="rounded bg-amber-50 px-1">npm run npi:load -- --states NC</code> on the server.
         </p>
+      )}
+
+      {county?.snapshot && (
+        <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          <p className="font-medium text-gray-900">
+            Before pulling: {county.snapshot.providers.toLocaleString()} providers and{' '}
+            {county.snapshot.organizations.toLocaleString()} organizations on the NPI file
+            {county.snapshot.estimate
+              ? `, an estimated ${county.snapshot.estimate.low}–${county.snapshot.estimate.high} referrals a month`
+              : ''}
+          </p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            {Object.entries(county.snapshot.mix)
+              .sort((left, right) => right[1] - left[1])
+              .map(([type, count]) => `${count} ${MIX_LABEL[type] ?? type}`)
+              .join(' · ')}
+            {' · '}Paragon&rsquo;s rates; a range, not a promise. The pull groups these into practices.
+          </p>
+        </div>
       )}
 
       {pullable && (

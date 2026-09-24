@@ -440,6 +440,15 @@ model Practice {
   faxOptOutAt    DateTime?
   /// Who recorded the opt-out (organization name), for Paragon's review.
   faxOptOutBy    String?
+  /// Paragon's outreach ladder: queued, outreach_active, rc_identified, engaged, graduated.
+  outreachStage  String   @default("queued")
+  stageChangedAt DateTime?
+  /// The practice's referral coordinator, once identified.
+  rcName         String?
+  rcPhone        String?
+  rcEmail        String?
+  /// Who at Paragon owns this practice's outreach.
+  assignee       String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   organizationId String

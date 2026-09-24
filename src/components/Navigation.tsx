@@ -12,6 +12,7 @@ import {
   ClockIcon,
   Cog6ToothIcon,
   ShieldCheckIcon,
+  GlobeAltIcon,
   MegaphoneIcon,
   UserGroupIcon,
   HeartIcon,
@@ -45,6 +46,7 @@ export const navigation = [
 /** Paragon's own pages, shown only to Paragon. */
 export const adminNavigation = [
   { name: 'Subscribers', href: '/admin/subscribers', icon: ShieldCheckIcon },
+  { name: 'Source Universe', href: '/admin/universe', icon: GlobeAltIcon },
 ];
 
 export default function Navigation() {

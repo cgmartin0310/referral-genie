@@ -15,6 +15,7 @@ import {
   MegaphoneIcon,
   UserGroupIcon,
   HeartIcon,
+  MapPinIcon,
 } from '@heroicons/react/24/outline';
 
 function classNames(...classes: string[]) {
@@ -35,6 +36,7 @@ export const navigation = [
   { name: 'Our Clinics', href: '/clinic-locations', icon: BuildingOffice2Icon },
   { name: 'Referral Sources', href: '/referral-sources', icon: UserGroupIcon },
   { name: 'Your Sources', href: '/relationships', icon: HeartIcon },
+  { name: 'Prospects', href: '/prospects', icon: MapPinIcon },
   { name: 'Campaigns', href: '/campaigns', icon: MegaphoneIcon },
   { name: 'Activity', href: '/interactions', icon: ClockIcon },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },

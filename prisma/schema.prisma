@@ -37,6 +37,23 @@ model Organization {
   faxSettings        FaxSettings?
   catalogSettings    CatalogSettings?
   relationships      SourceRelationship[]
+  prospectDecisions  ProspectDecision[]
+}
+
+/// A subscriber's decision on a catalog practice offered as a prospect.
+/// No row means proposed. Every decision is logged with who made it.
+model ProspectDecision {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  practiceId     String
+  /// approved or excluded.
+  status         String
+  decidedBy      String?
+  decidedAt      DateTime     @default(now())
+
+  @@unique([organizationId, practiceId])
+  @@index([organizationId])
 }
 
 /// A referral source a subscriber already works with (entered or uploaded),

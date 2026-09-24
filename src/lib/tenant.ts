@@ -21,6 +21,8 @@ export interface Tenant {
   role: TenantRole;
   isParagon: boolean;
   via: 'clerk' | 'admin-login';
+  /** Who is signed in, for decision logs: a Clerk user id or the admin username. */
+  actor: string;
 }
 
 export class TenantError extends Error {
@@ -66,6 +68,7 @@ export async function currentTenant(): Promise<Tenant> {
         role: roleFor(kind, orgRole),
         isParagon: kind === 'paragon',
         via: 'clerk',
+        actor: userId,
       };
     }
   }
@@ -80,7 +83,7 @@ export async function currentTenant(): Promise<Tenant> {
       const organization = await prisma.organization.findUnique({ where: { id: devOrg }, select: { id: true, name: true, kind: true } });
       if (organization) {
         const kind = organization.kind === 'paragon' ? 'paragon' : 'subscriber';
-        return { organizationId: organization.id, organizationName: organization.name, role: roleFor(kind, 'org:admin'), isParagon: kind === 'paragon', via: 'admin-login' };
+        return { organizationId: organization.id, organizationName: organization.name, role: roleFor(kind, 'org:admin'), isParagon: kind === 'paragon', via: 'admin-login', actor: session.user.name ?? 'admin' };
       }
     }
     return {
@@ -89,6 +92,7 @@ export async function currentTenant(): Promise<Tenant> {
       role: 'paragon_admin',
       isParagon: true,
       via: 'admin-login',
+      actor: session.user.name ?? 'admin',
     };
   }
   throw new TenantError(401, 'Sign in required');

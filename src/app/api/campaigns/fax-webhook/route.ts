@@ -46,6 +46,9 @@ export async function POST(request: NextRequest) {
     const targetId = typeof metadata.targetId === 'string' ? metadata.targetId : null;
     if (targetId && faxId && status) {
       const targetStatus = mapFaxStatus(status);
+      // Only final outcomes are recorded. A page still in progress stays SENT,
+      // never PENDING, which the next send would fax again.
+      if (targetStatus === 'PENDING') return NextResponse.json({ success: true });
       await prisma.campaignTarget.updateMany({
         where: { id: { startsWith: targetId } },
         data: {

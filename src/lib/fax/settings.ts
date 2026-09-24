@@ -1,8 +1,5 @@
-import { randomUUID } from 'crypto';
-import { mkdir, readFile, writeFile } from 'fs/promises';
-import { join } from 'path';
 import prisma from '../prisma';
-import { optOutLine, stampPdf, type OptOutSettings } from './opt-out';
+import { optOutLine, type OptOutSettings } from './opt-out';
 
 /** Each subscriber's own sender and opt-out numbers; faxes carry its name, never another's. */
 export async function loadFaxSettings(organizationId: string): Promise<OptOutSettings> {
@@ -23,29 +20,6 @@ export async function saveFaxSettings(input: Partial<OptOutSettings>, organizati
     update: data,
   });
   return loadFaxSettings(organizationId);
-}
-
-export class FaxDocumentError extends Error {}
-
-/**
- * The campaign document with the opt-out line on every page, written next to
- * the original under public/uploads. Returns its path. Only PDFs can be
- * stamped; a Word file must be saved as PDF first.
- */
-export async function stampedDocumentPath(documentUrl: string, line: string): Promise<string> {
-  const path = documentUrl.replace(/^https?:\/\/[^/]+/, '');
-  if (!/^\/uploads\/[^/]+\.pdf$/i.test(path)) {
-    throw new FaxDocumentError('The fax document must be a PDF so the opt-out line can go on every page. Save it as PDF and upload it again.');
-  }
-  const uploads = join(process.cwd(), 'public', 'uploads');
-  const bytes = await readFile(join(uploads, path.slice('/uploads/'.length))).catch(() => {
-    throw new FaxDocumentError('The fax document is missing on the server. Upload it again.');
-  });
-  const stamped = await stampPdf(bytes, line);
-  await mkdir(uploads, { recursive: true });
-  const name = `optout-${randomUUID()}.pdf`;
-  await writeFile(join(uploads, name), stamped);
-  return `/uploads/${name}`;
 }
 
 export { optOutLine };

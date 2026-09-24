@@ -44,6 +44,7 @@ model Organization {
   discoveredPlaces   DiscoveredPlace[]
   estimateSettings   EstimateSettings?
   faxSettings        FaxSettings?
+  faxDocuments       FaxDocument[]
   catalogSettings    CatalogSettings?
   relationships      SourceRelationship[]
   prospectDecisions  ProspectDecision[]
@@ -169,6 +170,21 @@ model FaxSettings {
   optOutPhone    String?
   optOutFax      String?
   updatedAt      DateTime     @updatedAt
+}
+
+/// A campaign's fax document, kept in the database: files written to the
+/// server's disk are lost on every deploy.
+model FaxDocument {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  contentType    String
+  size           Int
+  bytes          Bytes
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
 }
 
 /// The referral estimate's rate table: disciplines, and referrals per

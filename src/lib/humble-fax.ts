@@ -20,7 +20,9 @@ interface HumbleFaxResponse {
 
 interface HumbleFaxSendParams {
   to: string;
-  documentUrl: string;
+  /** The file itself; preferred over documentUrl, which HumbleFax's attachment is downloaded from. */
+  document?: { fileName: string; bytes: Buffer };
+  documentUrl?: string;
   callbackUrl?: string;
   metadata?: Record<string, any>;
   coverSheet?: {
@@ -98,7 +100,7 @@ export class HumbleFaxClient {
     try {
       console.log('Sending fax with params:', {
         to: params.to,
-        documentUrl: params.documentUrl,
+        document: params.document ? `${params.document.fileName} (${params.document.bytes.length} bytes)` : params.documentUrl,
         metadata: params.metadata,
         coverSheet: params.coverSheet
       });
@@ -148,9 +150,10 @@ export class HumbleFaxClient {
       console.log(`Successfully created temporary fax with ID: ${tmpFaxId}`);
       
       // Step 2: Upload attachment from document URL
-      if (params.documentUrl) {
-        console.log(`Uploading attachment from URL: ${params.documentUrl}`);
-        const uploadResult = await this.uploadAttachment(tmpFaxId, params.documentUrl);
+      if (params.document || params.documentUrl) {
+        const uploadResult = params.document
+          ? await this.uploadAttachmentBytes(tmpFaxId, params.document.fileName, params.document.bytes)
+          : await this.uploadAttachment(tmpFaxId, params.documentUrl!);
         
         if (!uploadResult.success) {
           console.error('Failed to upload attachment:', uploadResult.error);
@@ -212,23 +215,25 @@ export class HumbleFaxClient {
   async sendFaxDirect(params: HumbleFaxSendParams): Promise<HumbleFaxResponse> {
     try {
       console.log('Attempting direct fax send with attachment...');
-      
+      if (!params.documentUrl) return { success: false, error: 'No document URL' };
+      const documentUrl = params.documentUrl;
+
       // Download and prepare the file
-      const fileName = params.documentUrl.split('/').pop() || 'document.pdf';
+      const fileName = documentUrl.split('/').pop() || 'document.pdf';
       const tempFilePath = join(tmpdir(), fileName);
       
       try {
         // Try to download the file
-        const fileResponse = await axios.get(params.documentUrl, { responseType: 'stream' });
+        const fileResponse = await axios.get(documentUrl, { responseType: 'stream' });
         const writer = createWriteStream(tempFilePath);
         await pipeline(fileResponse.data, writer);
         console.log(`Successfully downloaded file to: ${tempFilePath}`);
       } catch (downloadError) {
-        console.error('Failed to download file from URL:', params.documentUrl);
+        console.error('Failed to download file from URL:', documentUrl);
         
         // If download fails, try to read from local filesystem
-        if (params.documentUrl.startsWith('/uploads/')) {
-          const localPath = join(process.cwd(), 'public', params.documentUrl);
+        if (documentUrl.startsWith('/uploads/')) {
+          const localPath = join(process.cwd(), 'public', documentUrl);
           console.log(`Attempting to read from local path: ${localPath}`);
           
           try {
@@ -238,7 +243,7 @@ export class HumbleFaxClient {
             console.log(`Successfully read file from local filesystem`);
           } catch (localError) {
             console.error('Failed to read file from local filesystem:', localError);
-            throw new Error(`File not accessible: ${params.documentUrl}`);
+            throw new Error(`File not accessible: ${documentUrl}`);
           }
         } else {
           throw downloadError;
@@ -421,6 +426,32 @@ export class HumbleFaxClient {
     }
   }
   
+  /** Attach a file held in memory to a temporary fax. */
+  async uploadAttachmentBytes(tmpFaxId: string, fileName: string, bytes: Buffer): Promise<HumbleFaxResponse> {
+    try {
+      const form = new FormData();
+      form.append('file', bytes, { filename: fileName, contentType: 'application/pdf' });
+      const response = await axios.post(`${this.apiUrl}/attachment/${tmpFaxId}`, form, {
+        auth: { username: this.apiKey, password: this.apiSecret },
+        headers: form.getHeaders(),
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      });
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('Error uploading attachment:', error);
+      if (axios.isAxiosError(error) && error.response) {
+        return {
+          success: false,
+          error: error.response.data?.error || error.response.data?.message || `Attachment upload failed (${error.response.status})`,
+          status: String(error.response.status),
+          details: error.response.data,
+        };
+      }
+      return { success: false, error: error instanceof Error ? error.message : 'Attachment upload failed' };
+    }
+  }
+
   /**
    * Upload an attachment to a temporary fax
    * @param tmpFaxId The ID of the temporary fax

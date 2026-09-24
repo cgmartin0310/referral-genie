@@ -197,7 +197,8 @@ export default function CampaignForm({
       toast.success('Document uploaded successfully');
     } catch (error) {
       console.error('Error uploading file:', error);
-      toast.error('Failed to upload document');
+      const message = axios.isAxiosError(error) ? error.response?.data?.error : null;
+      toast.error(message || 'Failed to upload document');
     } finally {
       setIsLoading(false);
     }

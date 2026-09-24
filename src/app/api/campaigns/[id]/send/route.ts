@@ -1,6 +1,7 @@
 import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
 import { optOutLine, withOptOut } from '@/lib/fax/opt-out';
-import { FaxDocumentError, loadFaxSettings, stampedDocumentPath } from '@/lib/fax/settings';
+import { loadFaxSettings } from '@/lib/fax/settings';
+import { FaxDocumentError, stampedCampaignDocument } from '@/lib/fax/documents';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../../../lib/prisma';
 import { executeWithRetry } from '../../../../../lib/db-helpers';
@@ -11,7 +12,7 @@ const humbleFaxClient = new HumbleFaxClient();
 
 // Send campaign to selected referral sources
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -24,6 +25,7 @@ export async function POST(
         where: { id, organizationId: tenant.organizationId },
         include: {
           referralSources: {
+            where: { status: { in: ['PENDING', 'FAILED'] } },
             include: {
               referralSource: true
             }
@@ -63,20 +65,19 @@ export async function POST(
         { status: 400 }
       );
     }
-    let stampedPath: string;
+    // The document comes from the database, is stamped once, and is attached
+    // to each fax as bytes; nothing depends on files on the server's disk.
+    let document: { fileName: string; bytes: Buffer };
     try {
-      stampedPath = await stampedDocumentPath(campaign.documentUrl, optOut);
+      document = await stampedCampaignDocument(campaign, tenant.organizationId, optOut, (url) =>
+        prisma.campaign.update({ where: { id: campaign.id }, data: { documentUrl: url } }),
+      );
     } catch (error) {
       const denied = tenantErrorResponse(error);
       if (denied) return denied;
       if (error instanceof FaxDocumentError) return NextResponse.json({ error: error.message }, { status: 400 });
       throw error;
     }
-
-    // Get the absolute URL for the document
-    const host = request.headers.get('host') || '';
-    const protocol = host.includes('localhost') ? 'http' : 'https';
-    const documentUrl = `${protocol}://${host}${stampedPath}`;
 
     // Format phone number for HumbleFax API
     const formatPhoneNumber = (phoneNumber?: string): string | undefined => {
@@ -125,18 +126,12 @@ export async function POST(
       }
 
       try {
-        // First update status to SENDING
-        await prisma.campaignToReferralSource.update({
-          where: {
-            campaignId_referralSourceId: {
-              campaignId: campaign.id,
-              referralSourceId: referralSource.id
-            }
-          },
-          data: {
-            status: 'SENDING'
-          }
+        // Claim it: a second send running at the same time skips it.
+        const claimed = await prisma.campaignToReferralSource.updateMany({
+          where: { campaignId: campaign.id, referralSourceId: referralSource.id, status: { in: ['PENDING', 'FAILED'] } },
+          data: { status: 'SENDING' },
         });
+        if (claimed.count === 0) continue;
         
         // Format fax numbers correctly - this is critical for the API
         const toFaxNumber = formatPhoneNumber(referralSource.faxNumber || undefined);
@@ -150,25 +145,10 @@ export async function POST(
           campaignName: campaign.name
         };
 
-        // Log the exact values being used for debugging
-        console.log('Sending fax with full details:', {
-          to: toFaxNumber || referralSource.faxNumber,
-          documentUrl,
-          coverSheet: {
-            includeCoversheet: campaign.includeCoverSheet === true,
-            fromName,
-            fromNumber: fromFaxNumber,
-            companyInfo: campaign.coverSheetCompanyInfo || "",
-            toName: referralSource.contactPerson || referralSource.name || "Provider",
-            subject: campaign.coverSheetSubject || "Referral Information",
-            message: withOptOut(campaign.coverSheetMessage || "Please see attached referral information.", optOut),
-          }
-        });
-
         // Send the fax using HumbleFax with cover sheet settings
         const result = await humbleFaxClient.sendFax({
           to: toFaxNumber || referralSource.faxNumber,
-          documentUrl,
+          document,
           metadata,
           // Add cover sheet information from campaign settings (from database)
           coverSheet: campaign.includeCoverSheet ? {
@@ -372,10 +352,15 @@ export async function POST(
       const toFaxNumber = formatPhoneNumber(target.faxNumber);
       const fromFaxNumber = campaign.coverSheetFromNumber || process.env.DEFAULT_FAX_NUMBER || '19103974373';
       try {
-        await prisma.campaignTarget.update({ where: { id: target.id }, data: { status: 'SENDING' } });
+        // Claim it: a second send running at the same time skips it.
+        const claimed = await prisma.campaignTarget.updateMany({
+          where: { id: target.id, status: { in: ['PENDING', 'FAILED'] } },
+          data: { status: 'SENDING' },
+        });
+        if (claimed.count === 0) continue;
         const result = await humbleFaxClient.sendFax({
           to: toFaxNumber || target.faxNumber,
-          documentUrl,
+          document,
           metadata: { campaignId: campaign.id.substring(0, 10), targetId: target.id, campaignName: campaign.name },
           coverSheet: campaign.includeCoverSheet ? {
             includeCoversheet: true,

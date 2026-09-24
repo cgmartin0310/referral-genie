@@ -8,6 +8,16 @@ import MainLayout from '../../../../components/layout/MainLayout';
 import { formatDate } from '../../../../lib/utils';
 import { DocumentIcon, PaperAirplaneIcon, PencilIcon } from '@heroicons/react/24/outline';
 
+function failureReason(response: string | null | undefined): string | null {
+  if (!response) return null;
+  try {
+    const parsed = JSON.parse(response);
+    return typeof parsed?.error === 'string' ? parsed.error : null;
+  } catch {
+    return null;
+  }
+}
+
 // ViewCampaignPage component - NOT async, use hooks instead
 export default function ViewCampaignPage() {
   const router = useRouter();
@@ -43,19 +53,30 @@ export default function ViewCampaignPage() {
     try {
       const { data } = await axios.post(`/api/campaigns/${campaignId}/send`);
       setResults(data.results);
-      toast.success('Campaign sent successfully!');
+      const { success, failed } = data.results;
+      if (failed > 0) toast.error(`${success} sent, ${failed} failed. See the errors below.`);
+      else if (success > 0) toast.success(`${success} fax${success === 1 ? '' : 'es'} sent.`);
+      else toast('Nothing left to send.');
         
       // Refresh campaign data to show updated status
       const { data: updatedCampaign } = await axios.get(`/api/campaigns/${campaignId}`);
       setCampaign(updatedCampaign);
     } catch (error) {
       console.error('Error sending campaign:', error);
-      toast.error('Failed to send campaign');
+      // The server says what to fix: a missing opt-out line, a document to upload again.
+      const message = axios.isAxiosError(error) ? error.response?.data?.error : null;
+      toast.error(message || 'Failed to send campaign', { duration: 10000 });
     } finally {
       setSending(false);
     }
   };
   
+  // Pages not yet sent, or that failed, can be sent (again).
+  const unsent = campaign
+    ? [...(campaign.targets ?? []), ...(campaign.referralSources ?? [])].filter((row: any) => row.status === 'PENDING' || row.status === 'FAILED').length
+    : 0;
+  const canSend = !sending && (campaign?.status !== 'ACTIVE' || unsent > 0);
+
   // Redirect to campaigns list
   const goBack = () => {
     router.push('/campaigns');
@@ -113,14 +134,18 @@ export default function ViewCampaignPage() {
             <button
               type="button"
               onClick={sendCampaign}
-            disabled={sending || campaign.status === 'ACTIVE'}
+            disabled={!canSend}
             className={`ml-3 inline-flex items-center rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 ${
-              sending || campaign.status === 'ACTIVE'
+              !canSend
                 ? 'bg-indigo-400 cursor-not-allowed'
                 : 'bg-indigo-600 hover:bg-indigo-500'
               }`}
             >
-            {sending ? 'Sending...' : 'Send Campaign'}
+            {sending
+              ? 'Sending... keep this page open'
+              : campaign.status === 'ACTIVE' && unsent > 0
+                ? `Send the ${unsent} unsent`
+                : 'Send Campaign'}
             </button>
           </div>
         </div>
@@ -196,6 +221,9 @@ export default function ViewCampaignPage() {
                         }`}>
                           {target.status}
                         </span>
+                        {target.status === 'FAILED' && failureReason(target.response) && (
+                          <div className="mt-1 max-w-xs whitespace-normal text-xs text-red-600">{failureReason(target.response)}</div>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-500">
                         {target.sentAt ? formatDate(target.sentAt) : '-'}

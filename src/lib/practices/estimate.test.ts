@@ -48,6 +48,15 @@ describe('referral estimate', () => {
     assert.equal(total.byDiscipline.length, 3);
   });
 
+  it('gives a provider type a saved table predates its default rate, and keeps a saved 0', () => {
+    const parsed = parseEstimateRates({
+      disciplines: [{ key: 'st', label: 'Speech therapy' }],
+      rates: { st: { pediatrics: 1, pcp_family_medicine: 0 } },
+    });
+    assert.equal(parsed.rates.st.ent, 0.3);
+    assert.equal(parsed.rates.st.pcp_family_medicine, 0);
+  });
+
   it('cleans a saved table and falls back to the defaults when it is empty', () => {
     assert.deepEqual(parseEstimateRates(null), DEFAULT_ESTIMATE_RATES);
     const parsed = parseEstimateRates({

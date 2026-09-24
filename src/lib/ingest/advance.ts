@@ -7,6 +7,7 @@ import type { RawHit } from '../nppes/types';
 import { fetchNppesPage } from '../nppes/api';
 import { advanceScanCursor, searchDescriptionAt } from './scan';
 import { hitFromNpiRecord, withRecordZips, keptTaxonomyFilter, FILE_SLICE } from './npi-file';
+import { pulledCodes } from '../catalog-settings';
 import {
   findCandidates,
   googlePlacesClient,
@@ -150,8 +151,9 @@ async function keepHit(
   county: CountyMarket,
   summary: IngestSummary,
   ids: Set<string>,
+  allowed: Set<string>,
 ): Promise<void> {
-  const decision = classifyHit(hit, county);
+  const decision = classifyHit(hit, county, allowed);
   if (decision.action === 'drop') {
     if (decision.reason === 'not_allow_list') summary.droppedNotAllowList += 1;
     if (decision.reason === 'secondary_only') summary.excludedSecondaryOnly += 1;
@@ -198,8 +200,9 @@ async function stepNppesFile(
   cursor: IngestCursor,
   county: CountyMarket,
 ): Promise<CountyIngestRun> {
+  const allowed = await pulledCodes();
   const records = await prisma.npiRecord.findMany({
-    where: { countyFips: county.fips, ...keptTaxonomyFilter() },
+    where: { countyFips: county.fips, ...keptTaxonomyFilter(allowed) },
     orderBy: { npi: 'asc' },
     skip: cursor.skip,
     take: FILE_SLICE,
@@ -213,7 +216,7 @@ async function stepNppesFile(
   const ids = await categoryIds();
   const scoped = withRecordZips(county, records);
   for (const record of records) {
-    await keepHit(hitFromNpiRecord(record), scoped, summary, ids);
+    await keepHit(hitFromNpiRecord(record), scoped, summary, ids, allowed);
   }
 
   cursor.skip += FILE_SLICE;
@@ -249,8 +252,9 @@ async function stepNppes(
   }
 
   const ids = await categoryIds();
+  const allowed = await pulledCodes();
   for (const hit of page.results) {
-    await keepHit(hit, county, summary, ids);
+    await keepHit(hit, county, summary, ids, allowed);
   }
 
   const moved = advanceScanCursor(cursor, county.zips.length, { rawCount: page.rawCount });
@@ -673,7 +677,7 @@ export async function createOrResumeRun(input: {
   await prisma.discoveredPlace.deleteMany({ where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: county.fips } });
 
   // Read from the loaded NPI file when it covers this county; otherwise scan NPPES by ZIP.
-  const onFile = await prisma.npiRecord.count({ where: { countyFips: county.fips, ...keptTaxonomyFilter() } });
+  const onFile = await prisma.npiRecord.count({ where: { countyFips: county.fips, ...keptTaxonomyFilter(await pulledCodes()) } });
   return prisma.countyIngestRun.create({
     data: {
       organizationId: DEFAULT_ORGANIZATION_ID,

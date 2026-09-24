@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_ESTIMATE_RATES, ESTIMATE_PROVIDER_TYPES } from '@/lib/practices/estimate';
 import { loadEstimateRates, saveEstimateRates } from '@/lib/practices/estimate-settings';
 import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
+import { loadCatalogGroups } from '@/lib/catalog-settings';
+
+/** Rows for the specialties the catalog pulls; others have no providers to count. */
+async function providerTypes() {
+  const on = new Set<string>(await loadCatalogGroups());
+  return ESTIMATE_PROVIDER_TYPES.filter((row) => on.has(row.sourceType));
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +18,7 @@ export async function GET() {
     const tenant = await currentTenant();
     return NextResponse.json({
       settings: await loadEstimateRates(tenant.organizationId),
-      providerTypes: ESTIMATE_PROVIDER_TYPES,
+      providerTypes: await providerTypes(),
       defaults: DEFAULT_ESTIMATE_RATES,
     });
   } catch (error) {
@@ -27,7 +34,7 @@ export async function PUT(request: NextRequest) {
   try {
     const tenant = await currentTenant();
     const settings = await saveEstimateRates(await request.json(), tenant.organizationId);
-    return NextResponse.json({ settings, providerTypes: ESTIMATE_PROVIDER_TYPES, defaults: DEFAULT_ESTIMATE_RATES });
+    return NextResponse.json({ settings, providerTypes: await providerTypes(), defaults: DEFAULT_ESTIMATE_RATES });
   } catch (error) {
     const denied = tenantErrorResponse(error);
     if (denied) return denied;

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { listCounties, getCounty } from '@/lib/nppes/counties';
 import { advanceCountyIngest, createOrResumeRun, latestRun, presentRun } from '@/lib/ingest/advance';
-import { TAXONOMY_ALLOW_LIST } from '@/lib/nppes/taxonomies';
+import { pulledCodes } from '@/lib/catalog-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       : 0;
     return NextResponse.json({
       counties: countyPayload(),
-      taxonomyCount: TAXONOMY_ALLOW_LIST.length,
+      taxonomyCount: (await pulledCodes()).size,
       latestRun: latest ? presentRun(latest) : null,
       placesPending,
     });

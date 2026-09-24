@@ -106,10 +106,9 @@ export function isQuarantined(flags: string[]): boolean {
  * Keep a single NPPES record when its primary taxonomy is on the allow-list.
  * Secondary-only matches and non-PCP/peds hits are dropped, not upserted.
  */
-export function classifyHit(hit: RawHit, county: CountyMarket): KeepDecision {
+export function classifyHit(hit: RawHit, county: CountyMarket, allowed: Set<string> = allowListCodes()): KeepDecision {
   if (!hit.npi) return { action: 'drop', reason: 'missing_npi' };
 
-  const allowed = allowListCodes();
   const taxonomies = new Map<string, { desc: string | null; primary: boolean }>();
   for (const taxonomy of hit.taxonomies) {
     const prior = taxonomies.get(taxonomy.code);

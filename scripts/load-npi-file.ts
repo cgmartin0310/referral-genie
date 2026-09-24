@@ -27,7 +27,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient({ log: ['error', 'warn'] });
 import { parseCsvLine, headerIndex } from '../src/lib/npi/csv';
 import { CityCountyMap, countyForZip, zip5 } from '../src/lib/npi/county-map';
-import { allowListCodes } from '../src/lib/nppes/taxonomies';
+import { catalogCodes } from '../src/lib/nppes/taxonomies';
 
 const FILES_PAGE = 'https://download.cms.gov/nppes/NPI_Files.html';
 const BATCH = 1000;
@@ -124,7 +124,8 @@ async function main() {
   const load = await prisma.npiLoad.create({ data: { fileName } });
   const loadedAt = load.startedAt;
   const loadId = load.id;
-  const allowed = allowListCodes();
+  // Every specialty the catalog could pull, so turning one on in Settings needs no reload of code.
+  const allowed = catalogCodes();
   const cities = new CityCountyMap();
   let header: ((name: string) => number) | null = null;
   let cols: Record<string, number> = {};

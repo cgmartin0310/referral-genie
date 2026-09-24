@@ -10,8 +10,8 @@ export const FILE_SLICE = 100;
  * Only rows the current taxonomy list keeps. The file may have been loaded
  * under an older, wider list; counts and pulls must not include the rest.
  */
-export function keptTaxonomyFilter(): { primaryTaxonomyCode: { in: string[] } } {
-  return { primaryTaxonomyCode: { in: [...allowListCodes()] } };
+export function keptTaxonomyFilter(codes: Set<string> = allowListCodes()): { primaryTaxonomyCode: { in: string[] } } {
+  return { primaryTaxonomyCode: { in: [...codes] } };
 }
 
 /** Shape a loaded NPI file row like an NPPES API hit so one classifier serves both. */

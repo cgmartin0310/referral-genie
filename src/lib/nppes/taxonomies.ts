@@ -23,9 +23,36 @@ export type TaxonomyGroup =
   | 'pcp_family_medicine'
   | 'pcp_general_practice'
   | 'pediatrics'
-  | 'clinic_center';
+  | 'clinic_center'
+  | 'ent'
+  | 'neurology'
+  | 'orthopedics'
+  | 'sports_medicine'
+  | 'pmr';
 
-export const TAXONOMY_ALLOW_LIST: TaxonomyCode[] = [
+/**
+ * Specialties the catalog can pull, per the Referral360 spec's discipline
+ * map (ST: pediatrics, family medicine, ENT, neurology; OT: those plus hand
+ * surgery; PT: those plus orthopedics, sports medicine, PM&R). Paragon turns
+ * each on in Settings; the NPI file load keeps them all so turning one on
+ * needs only a reload, not a code change.
+ */
+export const TAXONOMY_GROUPS: { group: TaxonomyGroup; label: string; organizations: boolean }[] = [
+  { group: 'pediatrics', label: 'Pediatrics', organizations: false },
+  { group: 'pcp_family_medicine', label: 'Family medicine', organizations: false },
+  { group: 'pcp_general_practice', label: 'General practice', organizations: false },
+  { group: 'ent', label: 'ENT (otolaryngology)', organizations: false },
+  { group: 'neurology', label: 'Neurology', organizations: false },
+  { group: 'orthopedics', label: 'Orthopedics and hand surgery', organizations: false },
+  { group: 'sports_medicine', label: 'Sports medicine', organizations: false },
+  { group: 'pmr', label: 'Physical medicine and rehabilitation', organizations: false },
+  { group: 'clinic_center', label: 'Clinics and health centers (organizations)', organizations: true },
+];
+
+/** What the catalog pulls until Paragon changes it. */
+export const DEFAULT_CATALOG_GROUPS: TaxonomyGroup[] = ['pediatrics', 'pcp_family_medicine', 'pcp_general_practice', 'clinic_center'];
+
+export const TAXONOMY_CATALOG: TaxonomyCode[] = [
   // Family medicine's adult-medicine (207QA0505X) and geriatric (207QG0300X)
   // subtypes are left out: they see adults only, and in practice work as
   // internists (often in hospitals).
@@ -41,7 +68,22 @@ export const TAXONOMY_ALLOW_LIST: TaxonomyCode[] = [
   { code: '261QP0905X', description: 'Clinic/Center, Public Health, State or Local', group: 'clinic_center' },
   { code: '261QP0904X', description: 'Clinic/Center, Public Health, Federal', group: 'clinic_center' },
   { code: '261QM1300X', description: 'Clinic/Center, Multi-Specialty', group: 'clinic_center' },
+  // Specialists from the spec's discipline map. Off until Paragon turns them on.
+  { code: '207Y00000X', description: 'Otolaryngology', group: 'ent' },
+  { code: '207YP0228X', description: 'Otolaryngology, Pediatric Otolaryngology', group: 'ent' },
+  { code: '2084N0400X', description: 'Psychiatry & Neurology, Neurology', group: 'neurology' },
+  { code: '2084N0402X', description: 'Psychiatry & Neurology, Neurology with Special Qualifications in Child Neurology', group: 'neurology' },
+  { code: '207X00000X', description: 'Orthopaedic Surgery', group: 'orthopedics' },
+  { code: '207XS0106X', description: 'Orthopaedic Surgery, Hand Surgery', group: 'orthopedics' },
+  { code: '207XP3100X', description: 'Orthopaedic Surgery, Pediatric Orthopaedic Surgery', group: 'orthopedics' },
+  { code: '207XX0005X', description: 'Orthopaedic Surgery, Sports Medicine', group: 'sports_medicine' },
+  { code: '207QS0010X', description: 'Family Medicine, Sports Medicine', group: 'sports_medicine' },
+  { code: '2080S0010X', description: 'Pediatrics, Sports Medicine', group: 'sports_medicine' },
+  { code: '208100000X', description: 'Physical Medicine & Rehabilitation', group: 'pmr' },
 ];
+
+/** The codes the catalog pulls by default (the list before specialties could be turned on). */
+export const TAXONOMY_ALLOW_LIST: TaxonomyCode[] = TAXONOMY_CATALOG.filter((row) => DEFAULT_CATALOG_GROUPS.includes(row.group));
 
 export const TAXONOMY_SEARCHES: { search: string; why: string }[] = [
   { search: 'Family Medicine', why: 'Family medicine PCPs (adult and geriatric subtypes are dropped by code)' },
@@ -59,24 +101,43 @@ export const SOURCE_TYPE_LABELS: Record<TaxonomyGroup, string> = {
   pcp_family_medicine: 'PCP - Family Medicine',
   pcp_general_practice: 'PCP - General Practice',
   clinic_center: 'Clinic / Health Center',
+  ent: 'ENT',
+  neurology: 'Neurology',
+  orthopedics: 'Orthopedics',
+  sports_medicine: 'Sports Medicine',
+  pmr: 'Physical Medicine & Rehabilitation',
 };
 
-/** Stable ReferralCategory ids seeded in the graph migration. */
-export const CATEGORY_ID_BY_SOURCE_TYPE: Record<TaxonomyGroup, string> = {
+/** Stable ReferralCategory ids seeded in the graph migration. Specialists have none. */
+export const CATEGORY_ID_BY_SOURCE_TYPE: Partial<Record<TaxonomyGroup, string>> = {
   pediatrics: 'cat_pediatrician',
   pcp_family_medicine: 'cat_pcp_family_medicine',
   pcp_general_practice: 'cat_pcp_general_practice',
   clinic_center: 'cat_clinic_center',
 };
 
-const byCode = new Map(TAXONOMY_ALLOW_LIST.map((row) => [row.code, row]));
+const byCode = new Map(TAXONOMY_CATALOG.map((row) => [row.code, row]));
 
 export function taxonomyByCode(code: string): TaxonomyCode | undefined {
   return byCode.get(code);
 }
 
-export function allowListCodes(): Set<string> {
-  return new Set(TAXONOMY_ALLOW_LIST.map((row) => row.code));
+/** The codes of the specialties turned on (the defaults when none are given). */
+export function allowListCodes(groups: readonly string[] = DEFAULT_CATALOG_GROUPS): Set<string> {
+  const on = new Set(groups);
+  return new Set(TAXONOMY_CATALOG.filter((row) => on.has(row.group)).map((row) => row.code));
+}
+
+/** Every code the catalog could pull. The NPI file load keeps all of them. */
+export function catalogCodes(): Set<string> {
+  return new Set(TAXONOMY_CATALOG.map((row) => row.code));
+}
+
+/** Only known specialty groups, in list order; the defaults when nothing usable is given. */
+export function cleanCatalogGroups(value: unknown): TaxonomyGroup[] {
+  const wanted = new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
+  const groups = TAXONOMY_GROUPS.map((row) => row.group).filter((group) => wanted.has(group));
+  return groups.length > 0 ? groups : DEFAULT_CATALOG_GROUPS;
 }
 
 export function sourceTypeLabel(sourceType: string | null | undefined): string {

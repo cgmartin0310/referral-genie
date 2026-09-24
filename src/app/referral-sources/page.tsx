@@ -55,6 +55,11 @@ const SHORT: Record<string, string> = {
   pcp_family_medicine: 'Family medicine',
   pcp_general_practice: 'General practice',
   clinic_center: 'Clinic / health center',
+  ent: 'ENT',
+  neurology: 'Neurology',
+  orthopedics: 'Orthopedics',
+  sports_medicine: 'Sports medicine',
+  pmr: 'PM&R',
   // Types no longer pulled; rows formed under an older list can still carry them.
   pcp_internal_medicine: 'Internal medicine',
   pediatrics_np: 'Pediatric NP',

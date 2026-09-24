@@ -35,6 +35,17 @@ model Organization {
   discoveredPlaces   DiscoveredPlace[]
   estimateSettings   EstimateSettings?
   faxSettings        FaxSettings?
+  catalogSettings    CatalogSettings?
+}
+
+/// Which specialties the shared county catalog pulls (Paragon's choice).
+model CatalogSettings {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  /// Specialty groups from lib/nppes/taxonomies (TAXONOMY_GROUPS).
+  enabledGroups  String[]     @default([])
+  updatedAt      DateTime     @updatedAt
 }
 
 /// Who outbound faxes come from, and the free phone and fax a recipient uses

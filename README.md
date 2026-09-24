@@ -42,7 +42,7 @@ Pulls read the NPI dissemination file from the `NpiRecord` table. Load it once, 
 npm run npi:load -- --states NC,SC,VA
 ```
 
-It downloads the monthly file from CMS (about 1.2 GB), streams it, keeps referral-source taxonomies, and places each practice ZIP in a county: the HUD USPS ZIP–County crosswalk first, the Census ZCTA crosswalk second, and the town for ZIPs in neither (which is how a PO Box ZIP is placed). `--states` keeps the table to the states you serve; the whole country is about 930,000 rows and 330 MB. Needs `unzip` on the box.
+It downloads the monthly file from CMS (about 1.2 GB), streams it, keeps every specialty the catalog can pull (Paragon turns each on under **Settings → Specialties in the catalog**; a file loaded before a specialty existed needs one reload before that specialty is pulled), and places each practice ZIP in a county: the HUD USPS ZIP–County crosswalk first, the Census ZCTA crosswalk second, and the town for ZIPs in neither (which is how a PO Box ZIP is placed). `--states` keeps the table to the states you serve; the whole country is about 930,000 rows and 330 MB. Needs `unzip` on the box.
 
 The crosswalk data files are built by [scripts/build-zip-county.py](scripts/build-zip-county.py) (HUD workbook) and [scripts/build-zcta-county.mjs](scripts/build-zcta-county.mjs) (Census file).
 

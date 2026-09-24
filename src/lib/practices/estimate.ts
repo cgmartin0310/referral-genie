@@ -27,6 +27,11 @@ export const ESTIMATE_PROVIDER_TYPES: { sourceType: string; label: string }[] = 
   { sourceType: 'pediatrics', label: 'Pediatrics' },
   { sourceType: 'pcp_family_medicine', label: 'Family medicine' },
   { sourceType: 'pcp_general_practice', label: 'General practice' },
+  { sourceType: 'ent', label: 'ENT' },
+  { sourceType: 'neurology', label: 'Neurology' },
+  { sourceType: 'orthopedics', label: 'Orthopedics' },
+  { sourceType: 'sports_medicine', label: 'Sports medicine' },
+  { sourceType: 'pmr', label: 'Physical medicine & rehabilitation' },
 ];
 
 /**
@@ -40,10 +45,13 @@ export const DEFAULT_ESTIMATE_RATES: EstimateRates = {
     { key: 'ot', label: 'Occupational therapy' },
     { key: 'st', label: 'Speech therapy' },
   ],
+  // Specialists follow the spec's discipline map: ENT refers speech; neurology
+  // all three; orthopedics, sports medicine, and PM&R physical therapy, with
+  // hand surgery (under orthopedics) some OT. Placeholders like the rest.
   rates: {
-    pt: { pediatrics: 0.2, pcp_family_medicine: 0.25, pcp_general_practice: 0.25 },
-    ot: { pediatrics: 0.3, pcp_family_medicine: 0.1, pcp_general_practice: 0.1 },
-    st: { pediatrics: 0.5, pcp_family_medicine: 0.15, pcp_general_practice: 0.15 },
+    pt: { pediatrics: 0.2, pcp_family_medicine: 0.25, pcp_general_practice: 0.25, neurology: 0.1, orthopedics: 0.4, sports_medicine: 0.3, pmr: 0.3 },
+    ot: { pediatrics: 0.3, pcp_family_medicine: 0.1, pcp_general_practice: 0.1, neurology: 0.1, orthopedics: 0.1, pmr: 0.1 },
+    st: { pediatrics: 0.5, pcp_family_medicine: 0.15, pcp_general_practice: 0.15, ent: 0.3, neurology: 0.1 },
   },
 };
 
@@ -168,7 +176,9 @@ export function parseEstimateRates(value: unknown): EstimateRates {
     rates[discipline.key] = {};
     for (const { sourceType } of ESTIMATE_PROVIDER_TYPES) {
       const raw = row && typeof row === 'object' ? (row as Record<string, unknown>)[sourceType] : undefined;
-      const number = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : 0;
+      // A provider type the saved table predates starts at its default rate; a saved 0 stays 0.
+      const fallback = DEFAULT_ESTIMATE_RATES.rates[discipline.key]?.[sourceType] ?? 0;
+      const number = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : raw === undefined ? fallback : 0;
       rates[discipline.key][sourceType] = Number.isFinite(number) ? Math.min(20, Math.max(0, round2(number))) : 0;
     }
   }

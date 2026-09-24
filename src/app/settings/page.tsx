@@ -7,6 +7,8 @@ import { toast } from 'react-hot-toast';
 import { PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import MainLayout from '@/components/layout/MainLayout';
 import FaxOptOutSettings from '@/components/FaxOptOutSettings';
+import CatalogSpecialtySettings from '@/components/CatalogSpecialtySettings';
+import { useTenant } from '@/lib/use-tenant';
 import type { EstimateRates } from '@/lib/practices/estimate';
 
 interface RatesResponse {
@@ -56,6 +58,7 @@ function formatRate(value: number): string {
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
+  const { data: me } = useTenant();
   const { data, isLoading } = useQuery({
     queryKey: ['estimate-rates'],
     queryFn: async () => (await axios.get<RatesResponse>('/api/estimate-rates')).data,
@@ -231,6 +234,8 @@ export default function SettingsPage() {
       </section>
 
       <FaxOptOutSettings />
+
+      {me?.isParagon && <CatalogSpecialtySettings />}
     </MainLayout>
   );
 }

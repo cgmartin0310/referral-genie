@@ -37,7 +37,7 @@ export interface SourceWrite {
 
 function categoryIdFor(sourceType: string): string | null {
   if (sourceType in CATEGORY_ID_BY_SOURCE_TYPE) {
-    return CATEGORY_ID_BY_SOURCE_TYPE[sourceType as TaxonomyGroup];
+    return CATEGORY_ID_BY_SOURCE_TYPE[sourceType as TaxonomyGroup] ?? null;
   }
   return null;
 }

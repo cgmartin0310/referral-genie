@@ -443,9 +443,12 @@ export async function formPracticesForCounty(countyFips: string, countyName: str
   let providersLinked = 0;
 
   for (const built of practices) {
+    const listing = built.placeId ? placeById.get(built.placeId) : undefined;
     const shape: Record<string, unknown> = {
       placeId: built.placeId,
       placeName: built.placeName,
+      latitude: listing?.latitude ?? null,
+      longitude: listing?.longitude ?? null,
       formedBy: built.formedBy,
       name: built.name,
       nameAmbiguous: built.nameAmbiguous,

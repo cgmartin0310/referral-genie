@@ -355,6 +355,12 @@ function SourceRow({
             <p className="truncate text-sm text-gray-500">
               {listedAt && <span className="text-gray-700">{listedAt} · </span>}
               {addressLine}
+              {source.nearest && (
+                <span className="text-gray-500" title={`Nearest of your clinics: ${source.nearest.clinicName}`}>
+                  {' · '}
+                  {source.nearest.miles} mi from {source.nearest.clinicName}
+                </span>
+              )}
               {source.website && (
                 <>
                   {' · '}

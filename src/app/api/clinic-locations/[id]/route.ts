@@ -2,6 +2,7 @@ import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { presentMarketCounty } from '@/lib/geo/market';
+import { clinicProfileFrom, locateAddress } from '@/lib/geo/locate';
 
 // GET single clinic location
 export async function GET(
@@ -87,9 +88,24 @@ export async function PUT(
       }
     }
 
+    // Re-locate the clinic when its address changes (or was never located).
+    const addressChanged = ['address', 'city', 'state', 'zipCode'].some(
+      (field) => data[field] !== undefined && data[field] !== existing[field as 'address' | 'city' | 'state' | 'zipCode'],
+    );
+    const located = addressChanged || existing.latitude == null
+      ? await locateAddress([
+          data.address ?? existing.address,
+          data.city ?? existing.city,
+          data.state ?? existing.state,
+          data.zipCode ?? existing.zipCode,
+        ])
+      : null;
+
     const clinicLocation = await prisma.clinicLocation.update({
       where: { id },
       data: {
+        ...clinicProfileFrom(data),
+        ...(located ?? (addressChanged ? { latitude: null, longitude: null } : {})),
         ...(data.name !== undefined && { name: data.name }),
         ...(data.address !== undefined && { address: data.address }),
         ...(data.city !== undefined && { city: data.city }),

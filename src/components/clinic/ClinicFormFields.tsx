@@ -1,5 +1,9 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
+import { PAYER_OPTIONS } from '@/lib/clinic-options';
+
 export interface ClinicFormValues {
   name: string;
   address: string;
@@ -9,6 +13,11 @@ export interface ClinicFormValues {
   phoneNumber: string;
   faxNumber: string;
   isActive: boolean;
+  /** Discipline keys from Settings > Referral estimates. Empty means all. */
+  disciplines: string[];
+  pediatric: boolean;
+  payersAccepted: string[];
+  acceptingNewPatients: boolean;
 }
 
 export function emptyClinicForm(): ClinicFormValues {
@@ -21,6 +30,10 @@ export function emptyClinicForm(): ClinicFormValues {
     phoneNumber: '',
     faxNumber: '',
     isActive: true,
+    disciplines: [],
+    pediatric: true,
+    payersAccepted: [],
+    acceptingNewPatients: true,
   };
 }
 
@@ -33,6 +46,10 @@ export function clinicToForm(clinic: {
   phoneNumber: string | null;
   faxNumber: string | null;
   isActive: boolean;
+  disciplines?: string[];
+  pediatric?: boolean;
+  payersAccepted?: string[];
+  acceptingNewPatients?: boolean;
 }): ClinicFormValues {
   return {
     name: clinic.name,
@@ -43,6 +60,10 @@ export function clinicToForm(clinic: {
     phoneNumber: clinic.phoneNumber || '',
     faxNumber: clinic.faxNumber || '',
     isActive: clinic.isActive,
+    disciplines: clinic.disciplines ?? [],
+    pediatric: clinic.pediatric ?? true,
+    payersAccepted: clinic.payersAccepted ?? [],
+    acceptingNewPatients: clinic.acceptingNewPatients ?? true,
   };
 }
 
@@ -60,6 +81,12 @@ export default function ClinicFormFields({
 }) {
   const id = (name: string) => `${idPrefix}${name}`;
   const set = (patch: Partial<ClinicFormValues>) => onChange({ ...values, ...patch });
+  // The subscriber's disciplines, as named in Settings > Referral estimates.
+  const { data: rates } = useQuery({
+    queryKey: ['estimate-rates'],
+    queryFn: async () => (await axios.get<{ settings: { disciplines: { key: string; label: string }[] } }>('/api/estimate-rates')).data,
+  });
+  const toggle = (list: string[], item: string) => (list.includes(item) ? list.filter((row) => row !== item) : [...list, item]);
 
   return (
     <div className="space-y-4">
@@ -155,6 +182,62 @@ export default function ClinicFormFields({
           onChange={(event) => set({ faxNumber: event.target.value })}
           className={inputClass}
         />
+      </div>
+
+      <fieldset>
+        <legend className="block text-sm font-medium text-gray-700">Disciplines</legend>
+        <p className="text-xs text-gray-500">Only these count toward this clinic&rsquo;s estimates. None checked counts all.</p>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+          {(rates?.settings.disciplines ?? []).map((discipline) => (
+            <label key={discipline.key} className="inline-flex items-center gap-2 text-sm text-gray-800">
+              <input
+                type="checkbox"
+                checked={values.disciplines.includes(discipline.key)}
+                onChange={() => set({ disciplines: toggle(values.disciplines, discipline.key) })}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              {discipline.label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend className="block text-sm font-medium text-gray-700">Payers accepted</legend>
+        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2">
+          {PAYER_OPTIONS.map((payer) => (
+            <label key={payer} className="inline-flex items-center gap-2 text-sm text-gray-800">
+              <input
+                type="checkbox"
+                checked={values.payersAccepted.includes(payer)}
+                onChange={() => set({ payersAccepted: toggle(values.payersAccepted, payer) })}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              {payer}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div className="flex flex-wrap gap-x-6 gap-y-2">
+        <label className="inline-flex items-center gap-2 text-sm text-gray-900">
+          <input
+            type="checkbox"
+            checked={values.pediatric}
+            onChange={(event) => set({ pediatric: event.target.checked })}
+            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          Sees children
+        </label>
+        <label className="inline-flex items-center gap-2 text-sm text-gray-900">
+          <input
+            type="checkbox"
+            checked={values.acceptingNewPatients}
+            onChange={(event) => set({ acceptingNewPatients: event.target.checked })}
+            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          Accepting new patients
+        </label>
       </div>
 
       <div className="flex items-center">

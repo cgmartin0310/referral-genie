@@ -29,6 +29,11 @@ export async function GET(request: NextRequest) {
     const tenant = await currentTenant();
     const rates = await loadEstimateRates(tenant.organizationId);
     const practiceInclude = practiceIncludeFor(tenant.organizationId);
+    // The viewer's clinics with a place, for 'N mi from ...' on each row.
+    const clinics = await prisma.clinicLocation.findMany({
+      where: { organizationId: tenant.organizationId, isActive: true, latitude: { not: null } },
+      select: { id: true, name: true, latitude: true, longitude: true },
+    });
 
     if (deleted) {
       // Deleting and restoring catalog rows is Paragon's.
@@ -87,7 +92,7 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const practices = rows.map((row) => presentPractice(row, rates));
+    const practices = rows.map((row) => presentPractice(row, rates, clinics));
     const estimate = sumEstimates(practices.map((practice) => practice.estimate));
 
     return NextResponse.json({

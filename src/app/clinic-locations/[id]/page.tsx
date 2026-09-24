@@ -25,6 +25,10 @@ interface ClinicLocation {
   faxNumber: string | null;
   isActive: boolean;
   marketCounties: MarketCountyView[];
+  disciplines?: string[];
+  pediatric?: boolean;
+  payersAccepted?: string[];
+  acceptingNewPatients?: boolean;
 }
 
 interface ReferralListResponse {
@@ -193,6 +197,11 @@ function ReferralList({ clinic }: { clinic: ClinicLocation }) {
 /* ------------------------------------------------------------------ */
 
 export default function ClinicPage() {
+  const { data: estimateSettings } = useQuery({
+    queryKey: ['estimate-rates'],
+    queryFn: async () => (await axios.get<{ settings: { disciplines: { key: string; label: string }[] } }>('/api/estimate-rates')).data,
+  });
+  const disciplineLabels = Object.fromEntries((estimateSettings?.settings.disciplines ?? []).map((row) => [row.key, row.label]));
   const params = useParams<{ id: string }>();
   const id = params.id;
   const queryClient = useQueryClient();
@@ -252,6 +261,16 @@ export default function ClinicPage() {
               <p className="mt-1 text-sm text-gray-600">{addressLine(clinic)}</p>
               <p className="mt-0.5 text-sm text-gray-500">
                 Phone {clinic.phoneNumber || '—'} · Fax {clinic.faxNumber ? formatFax(clinic.faxNumber) : '—'}
+              </p>
+              <p className="mt-0.5 text-sm text-gray-500">
+                {(clinic.disciplines?.length ?? 0) > 0
+                  ? (clinic.disciplines ?? []).map((key) => disciplineLabels[key] ?? key).join(', ')
+                  : 'All disciplines'}
+                {' · '}
+                {clinic.pediatric === false ? 'Adults' : 'Sees children'}
+                {' · '}
+                {clinic.acceptingNewPatients === false ? 'Not accepting new patients' : 'Accepting new patients'}
+                {(clinic.payersAccepted?.length ?? 0) > 0 && ` · ${clinic.payersAccepted?.join(', ')}`}
               </p>
             </div>
             <button

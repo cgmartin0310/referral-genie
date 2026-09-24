@@ -148,6 +148,13 @@ export function estimateDriverText(
     });
 }
 
+/** The rate table narrowed to the disciplines a clinic offers (all of them when it names none it knows). */
+export function ratesForDisciplines(settings: EstimateRates, keys: readonly string[] | null | undefined): EstimateRates {
+  const wanted = new Set(keys ?? []);
+  const disciplines = settings.disciplines.filter((discipline) => wanted.has(discipline.key));
+  return disciplines.length > 0 ? { disciplines, rates: settings.rates } : settings;
+}
+
 export interface EstimateTotal {
   low: number;
   high: number;

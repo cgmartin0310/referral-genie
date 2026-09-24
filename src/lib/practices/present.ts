@@ -1,6 +1,7 @@
 import type { Practice, Provider } from '@prisma/client';
 import { estimateMonthlyReferrals, DEFAULT_ESTIMATE_RATES, type EstimateRates, type ReferralEstimate } from './estimate';
 import { resolveFaxTarget } from './fax';
+import { nearestClinic, type Located } from '../geo/distance';
 
 export const SOURCE_TYPE_SHORT: Record<string, string> = {
   pediatrics: 'Pediatrics',
@@ -54,6 +55,8 @@ export interface PracticeView {
   hidden: boolean;
   /** Asked to stop receiving faxes; no campaign faxes it. */
   faxOptOut: { at: string; by: string | null } | null;
+  /** The viewer's nearest clinic and how far, when both have a place. */
+  nearest: { clinicId: string; clinicName: string; miles: number } | null;
   address: string | null;
   city: string | null;
   state: string | null;
@@ -119,7 +122,11 @@ export function practiceKind(practice: Pick<Practice, 'orgNpis' | 'practiceKey' 
   return practice.practiceKey.startsWith('npi:') ? 'provider' : 'listing';
 }
 
-export function presentPractice(practice: PracticeWithRelations, rates: EstimateRates = DEFAULT_ESTIMATE_RATES): PracticeView {
+export function presentPractice(
+  practice: PracticeWithRelations,
+  rates: EstimateRates = DEFAULT_ESTIMATE_RATES,
+  clinics: Located[] = [],
+): PracticeView {
   const taxonomyMix = mixOf(practice.taxonomyMix);
   return {
     id: practice.id,
@@ -130,6 +137,7 @@ export function presentPractice(practice: PracticeWithRelations, rates: Estimate
     editedFields: practice.editedFields,
     hidden: practice.hiddenAt !== null,
     faxOptOut: practice.faxOptOutAt ? { at: practice.faxOptOutAt.toISOString(), by: practice.faxOptOutBy } : null,
+    nearest: nearestClinic(practice, clinics),
     address: practice.address,
     city: practice.city,
     state: practice.state,

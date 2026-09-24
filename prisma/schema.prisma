@@ -117,6 +117,15 @@ model ClinicLocation {
   phoneNumber     String?
   faxNumber       String?
   isActive        Boolean          @default(true)
+  /// Discipline keys from the subscriber's estimate settings (pt, ot, st, ...). Empty means all.
+  disciplines     String[]         @default([])
+  /// Sees children.
+  pediatric       Boolean          @default(true)
+  payersAccepted  String[]         @default([])
+  acceptingNewPatients Boolean     @default(true)
+  /// From the address, through Google Places, for distance to practices.
+  latitude        Float?
+  longitude       Float?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   organizationId  String
@@ -335,6 +344,9 @@ model Practice {
   placeId        String?
   /// Business name on the Google Places listing, when matched.
   placeName      String?
+  /// From the Google listing, for distance to a subscriber's clinics.
+  latitude       Float?
+  longitude      Float?
   name           String
   /// Several org NPIs sit here and the name had to be chosen.
   nameAmbiguous  Boolean  @default(false)

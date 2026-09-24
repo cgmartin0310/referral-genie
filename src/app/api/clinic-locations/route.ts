@@ -2,7 +2,8 @@ import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { presentMarketCounty } from '@/lib/geo/market';
-import { estimateMonthlyReferrals, sumEstimates, type EstimateRates } from '@/lib/practices/estimate';
+import { estimateMonthlyReferrals, ratesForDisciplines, sumEstimates, type EstimateRates } from '@/lib/practices/estimate';
+import { clinicProfileFrom, locateAddress } from '@/lib/geo/locate';
 import { loadEstimateRates } from '@/lib/practices/estimate-settings';
 
 const clinicInclude = {
@@ -23,11 +24,13 @@ function serializeClinic<
   T extends {
     marketCounties: { id: string; countyFips: string; countyName: string; state: string }[];
     clinicPractices?: ListedPractice[];
+    disciplines?: string[];
   },
 >(clinic: T, rates: EstimateRates) {
   const { marketCounties, clinicPractices = [], ...rest } = clinic;
   const estimates = clinicPractices.map((row) =>
-    estimateMonthlyReferrals(row.practice.taxonomyMix as Record<string, number> | null, rates),
+    // Only the disciplines this clinic offers count toward its estimate.
+    estimateMonthlyReferrals(row.practice.taxonomyMix as Record<string, number> | null, ratesForDisciplines(rates, clinic.disciplines)),
   );
   return {
     ...rest,
@@ -102,6 +105,8 @@ export async function POST(request: NextRequest) {
         phoneNumber: data.phoneNumber || null,
         faxNumber: data.faxNumber || null,
         isActive: data.isActive !== undefined ? data.isActive : true,
+        ...clinicProfileFrom(data),
+        ...((await locateAddress([data.address, data.city, data.state, data.zipCode])) ?? {}),
       },
     });
 

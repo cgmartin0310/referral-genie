@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { DEFAULT_ESTIMATE_RATES, estimateDriverText, estimateMonthlyReferrals, parseEstimateRates, sumEstimates } from './estimate';
+import { DEFAULT_ESTIMATE_RATES, estimateDriverText, estimateMonthlyReferrals, parseEstimateRates, ratesForDisciplines, sumEstimates } from './estimate';
 
 describe('referral estimate', () => {
   it('sums providers by type across disciplines at the default rates and shows a range', () => {
@@ -27,6 +27,15 @@ describe('referral estimate', () => {
       '6 pediatricians at 1 a month each',
       '1 family physician at 0.5 a month each',
     ]);
+  });
+
+  it('counts only the disciplines a clinic offers', () => {
+    const speechOnly = estimateMonthlyReferrals({ pediatrics: 4 }, ratesForDisciplines(DEFAULT_ESTIMATE_RATES, ['st']));
+    // 4 pediatricians x 0.5 speech referrals a month
+    assert.equal(speechOnly?.point, 2);
+    assert.deepEqual(speechOnly?.byDiscipline.map((row) => row.key), ['st']);
+    assert.equal(ratesForDisciplines(DEFAULT_ESTIMATE_RATES, []).disciplines.length, 3);
+    assert.equal(ratesForDisciplines(DEFAULT_ESTIMATE_RATES, ['unknown']).disciplines.length, 3);
   });
 
   it('is unknown, not zero, for an org-only practice', () => {

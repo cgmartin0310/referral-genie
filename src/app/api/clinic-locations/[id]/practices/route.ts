@@ -3,7 +3,7 @@ import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { practiceIncludeFor, presentPractice } from '@/lib/practices/present';
-import { sumEstimates } from '@/lib/practices/estimate';
+import { ratesForDisciplines, sumEstimates } from '@/lib/practices/estimate';
 import { loadEstimateRates } from '@/lib/practices/estimate-settings';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ type Params = { params: Promise<{ id: string }> };
 async function clinicOr404(id: string, organizationId: string) {
   return prisma.clinicLocation.findFirst({
     where: { id, organizationId: organizationId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, disciplines: true },
   });
 }
 
@@ -35,7 +35,8 @@ export async function GET(_request: NextRequest, { params }: Params) {
       include: { practice: { include: practiceIncludeFor(tenant.organizationId) } },
       orderBy: { practice: { providerCount: 'desc' } },
     });
-    const rates = await loadEstimateRates(tenant.organizationId);
+    // Only the disciplines this clinic offers count toward its estimates.
+    const rates = ratesForDisciplines(await loadEstimateRates(tenant.organizationId), clinic.disciplines);
     const practices = rows.map((row) => presentPractice(row.practice, rates));
     return NextResponse.json({
       clinic,

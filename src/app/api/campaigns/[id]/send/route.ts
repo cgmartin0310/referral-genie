@@ -1,10 +1,10 @@
+import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
 import { optOutLine, withOptOut } from '@/lib/fax/opt-out';
 import { FaxDocumentError, loadFaxSettings, stampedDocumentPath } from '@/lib/fax/settings';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../../../lib/prisma';
 import { executeWithRetry } from '../../../../../lib/db-helpers';
 import { HumbleFaxClient } from '../../../../../lib/humble-fax';
-import { DEFAULT_ORGANIZATION_ID } from '../../../../../lib/org';
 
 // Setup the HumbleFax client
 const humbleFaxClient = new HumbleFaxClient();
@@ -15,12 +15,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const tenant = await currentTenant();
     const { id } = await params;
     
     // Get the campaign with referral sources
     const campaign = await executeWithRetry(() =>
       prisma.campaign.findFirst({
-        where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
+        where: { id, organizationId: tenant.organizationId },
         include: {
           referralSources: {
             include: {
@@ -49,7 +50,7 @@ export async function POST(
 
     // Every page carries the opt-out line: who sent it and a free phone and
     // fax to stop further faxes. Nothing goes out until those are set.
-    const optOut = optOutLine(await loadFaxSettings());
+    const optOut = optOutLine(await loadFaxSettings(tenant.organizationId));
     if (!optOut) {
       return NextResponse.json(
         { error: 'Set the sender name, opt-out phone, and opt-out fax in Settings before sending. Every fax page carries them.' },
@@ -60,6 +61,8 @@ export async function POST(
     try {
       stampedPath = await stampedDocumentPath(campaign.documentUrl, optOut);
     } catch (error) {
+      const denied = tenantErrorResponse(error);
+      if (denied) return denied;
       if (error instanceof FaxDocumentError) return NextResponse.json({ error: error.message }, { status: 400 });
       throw error;
     }
@@ -269,6 +272,8 @@ export async function POST(
                 console.log(`Response text: ${await response.text()}`);
               }
             } catch (error) {
+              const denied = tenantErrorResponse(error);
+              if (denied) return denied;
               console.error(`Error in delayed status check:`, error);
               // If check fails, don't change the status - it remains as SENT
             }
@@ -306,6 +311,8 @@ export async function POST(
           });
         }
       } catch (error) {
+        const denied = tenantErrorResponse(error);
+        if (denied) return denied;
         console.error(`Error sending fax to ${referralSource.name}:`, error);
         
         // Update status to FAILED
@@ -368,6 +375,8 @@ export async function POST(
           errors.push({ targetId: target.id, name: target.toName, error: result.error || 'Unknown error' });
         }
       } catch (error) {
+        const denied = tenantErrorResponse(error);
+        if (denied) return denied;
         const message = error instanceof Error ? error.message : 'Unknown error';
         await prisma.campaignTarget.update({
           where: { id: target.id },
@@ -401,6 +410,8 @@ export async function POST(
       }
     });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error sending campaign:', error);
     return NextResponse.json(
       { error: 'Failed to send campaign', details: error instanceof Error ? error.message : 'Unknown error' },

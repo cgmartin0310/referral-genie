@@ -1,6 +1,7 @@
+import { currentTenant, tenantErrorResponse, requireParagon } from '@/lib/tenant';
+import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 import { practiceUrl } from '@/lib/research/html';
 import { readResearchLlmConfig, researchConfigMessage } from '@/lib/research/llm';
 import {
@@ -21,6 +22,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    const tenant = await currentTenant();
     const clinicId = request.nextUrl.searchParams.get('clinicId');
     const sourceId = request.nextUrl.searchParams.get('sourceId');
     const countyFips = request.nextUrl.searchParams.get('countyFips')?.trim() || null;
@@ -44,6 +46,8 @@ export async function GET(request: NextRequest) {
       const latest = await latestResearchRun(scopeKey);
       latestRun = latest ? presentResearchRun(latest) : null;
     } catch (error) {
+      const denied = tenantErrorResponse(error);
+      if (denied) return denied;
       console.error('Error loading research run:', error);
       runError = error instanceof Error ? error.message : 'Failed to load the latest research run';
     }
@@ -54,6 +58,8 @@ export async function GET(request: NextRequest) {
       configError: readResearchLlmConfig() ? null : researchConfigMessage(),
     });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     const message = error instanceof Error ? error.message : 'Failed to load research';
     const status = message.includes('not found') ? 404 : 400;
     return NextResponse.json({ error: message }, { status });
@@ -62,6 +68,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const tenant = await currentTenant();
+    requireParagon(tenant);
     const body = await request.json() as {
       clinicId?: string;
       sourceId?: string;
@@ -94,6 +102,8 @@ export async function POST(request: NextRequest) {
     const step = await advanceResearchRun(run.id);
     return NextResponse.json(step);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     const message = error instanceof Error ? error.message : 'Research failed';
     const status = message.includes('not found') ? 404 : 500;
     return NextResponse.json({ error: message }, { status });
@@ -107,7 +117,7 @@ async function clinicCounts(clinicId: string): Promise<{ sourceCount: number; wi
 async function countsForIds(ids: string[]): Promise<{ sourceCount: number; withWebsite: number }> {
   if (ids.length === 0) return { sourceCount: 0, withWebsite: 0 };
   const rows = await prisma.referralSource.findMany({
-    where: { organizationId: DEFAULT_ORGANIZATION_ID, id: { in: ids } },
+    where: { organizationId: CATALOG_ORGANIZATION_ID, id: { in: ids } },
     select: { website: true },
   });
   return {
@@ -118,7 +128,7 @@ async function countsForIds(ids: string[]): Promise<{ sourceCount: number; withW
 
 async function sourceCounts(sourceId: string): Promise<{ sourceCount: number; withWebsite: number }> {
   const row = await prisma.referralSource.findFirst({
-    where: { id: sourceId, organizationId: DEFAULT_ORGANIZATION_ID },
+    where: { id: sourceId, organizationId: CATALOG_ORGANIZATION_ID },
     select: { website: true },
   });
   return { sourceCount: row ? 1 : 0, withWebsite: row && practiceUrl(row.website) ? 1 : 0 };

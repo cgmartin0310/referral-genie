@@ -1,7 +1,8 @@
+import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
+import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 import { presentProvider } from '@/lib/practices/present';
 
 export const dynamic = 'force-dynamic';
@@ -9,12 +10,13 @@ export const dynamic = 'force-dynamic';
 /** Providers with the practice they work at and where a fax to them goes. */
 export async function GET(request: NextRequest) {
   try {
+    const tenant = await currentTenant();
     const params = request.nextUrl.searchParams;
     const countyFips = params.get('countyFips')?.trim() || null;
     const q = params.get('q')?.trim() || null;
 
     const where: Prisma.ProviderWhereInput = {
-      organizationId: DEFAULT_ORGANIZATION_ID,
+      organizationId: CATALOG_ORGANIZATION_ID,
       ...(countyFips ? { countyFips } : {}),
       ...(q
         ? {
@@ -37,6 +39,8 @@ export async function GET(request: NextRequest) {
       providers: rows.map((row) => presentProvider(row, row.practice)),
     });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error listing providers:', error);
     return NextResponse.json({ error: 'Failed to load providers' }, { status: 500 });
   }

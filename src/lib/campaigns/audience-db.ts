@@ -1,18 +1,17 @@
 import prisma from '../prisma';
-import { DEFAULT_ORGANIZATION_ID } from '../org';
 import { buildAudience, type Audience, type AudienceTarget } from './audience';
 
 /** The faxes a campaign to this clinic's referral list would send. Null when the clinic is unknown. */
-export async function audienceForClinic(clinicId: string): Promise<Audience | null> {
+export async function audienceForClinic(clinicId: string, organizationId: string): Promise<Audience | null> {
   const clinic = await prisma.clinicLocation.findFirst({
-    where: { id: clinicId, organizationId: DEFAULT_ORGANIZATION_ID },
+    where: { id: clinicId, organizationId },
     select: { id: true },
   });
   if (!clinic) return null;
 
   const rows = await prisma.clinicPractice.findMany({
     // A deleted referral source or a removed provider is not faxed.
-    where: { clinicLocationId: clinicId, organizationId: DEFAULT_ORGANIZATION_ID, practice: { hiddenAt: null } },
+    where: { clinicLocationId: clinicId, organizationId, practice: { hiddenAt: null } },
     include: {
       practice: {
         include: {
@@ -34,9 +33,9 @@ export async function audienceForClinic(clinicId: string): Promise<Audience | nu
 }
 
 /** Rows for CampaignTarget.createMany. */
-export function targetRows(campaignId: string, targets: AudienceTarget[]) {
+export function targetRows(campaignId: string, targets: AudienceTarget[], organizationId: string) {
   return targets.map((target) => ({
-    organizationId: DEFAULT_ORGANIZATION_ID,
+    organizationId,
     campaignId,
     practiceId: target.practiceId,
     practiceName: target.practiceName,

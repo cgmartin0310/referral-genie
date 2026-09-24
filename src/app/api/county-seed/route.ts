@@ -1,6 +1,7 @@
+import { currentTenant, tenantErrorResponse, requireParagon } from '@/lib/tenant';
+import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 import { listCounties, getCounty } from '@/lib/nppes/counties';
 import { advanceCountyIngest, createOrResumeRun, latestRun, presentRun } from '@/lib/ingest/advance';
 import { TAXONOMY_ALLOW_LIST } from '@/lib/nppes/taxonomies';
@@ -19,13 +20,14 @@ function countyPayload() {
 
 export async function GET(request: NextRequest) {
   try {
+    const tenant = await currentTenant();
     const countyId = request.nextUrl.searchParams.get('countyId') || 'lenoir-nc';
     const county = getCounty(countyId);
     const latest = await latestRun(county.id);
     const placesPending = latest
       ? await prisma.referralSource.count({
           where: {
-            organizationId: DEFAULT_ORGANIZATION_ID,
+            organizationId: CATALOG_ORGANIZATION_ID,
             countyFips: latest.countyFips,
             placesMatchStatus: 'pending',
           },
@@ -38,6 +40,8 @@ export async function GET(request: NextRequest) {
       placesPending,
     });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     const message = error instanceof Error ? error.message : 'Failed to load the referral source pull';
     return NextResponse.json({ error: message }, { status: 400 });
   }
@@ -45,6 +49,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const tenant = await currentTenant();
+    requireParagon(tenant);
     const body = (await request.json()) as {
       countyId?: string;
       runId?: string;
@@ -57,6 +63,8 @@ export async function POST(request: NextRequest) {
     const step = await advanceCountyIngest(run.id);
     return NextResponse.json(step);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     const message = error instanceof Error ? error.message : 'Referral source pull failed';
     const status = message.startsWith('Unknown county') || message.includes('not found') ? 400 : 500;
     return NextResponse.json({ error: message }, { status });

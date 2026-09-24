@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
-import { practiceInclude, presentPractice } from '@/lib/practices/present';
+import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
+import { practiceIncludeFor, presentPractice } from '@/lib/practices/present';
+import { currentTenant, requireParagon, tenantErrorResponse } from '@/lib/tenant';
 import { loadEstimateRates } from '@/lib/practices/estimate-settings';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ function clean(field: Editable, value: string): string | null {
 }
 
 async function load(id: string) {
-  return prisma.practice.findFirst({ where: { id, organizationId: DEFAULT_ORGANIZATION_ID } });
+  return prisma.practice.findFirst({ where: { id, organizationId: CATALOG_ORGANIZATION_ID } });
 }
 
 /**
@@ -27,6 +28,9 @@ async function load(id: string) {
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // The shared catalog is Paragon's to edit and delete.
+    const tenant = await currentTenant();
+    requireParagon(tenant);
     const { id } = await params;
     const existing = await load(id);
     if (!existing) return NextResponse.json({ error: 'Referral source not found' }, { status: 404 });
@@ -47,14 +51,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     if (typeof body.hidden === 'boolean') data.hiddenAt = body.hidden ? new Date() : null;
     if (Object.keys(data).length === 0) {
-      const unchanged = await prisma.practice.findUniqueOrThrow({ where: { id }, include: practiceInclude });
-      return NextResponse.json(presentPractice(unchanged, await loadEstimateRates()));
+      const unchanged = await prisma.practice.findUniqueOrThrow({ where: { id }, include: practiceIncludeFor(tenant.organizationId) });
+      return NextResponse.json(presentPractice(unchanged, await loadEstimateRates(tenant.organizationId)));
     }
     data.editedFields = [...edited];
 
-    const updated = await prisma.practice.update({ where: { id }, data, include: practiceInclude });
-    return NextResponse.json(presentPractice(updated, await loadEstimateRates()));
+    const updated = await prisma.practice.update({ where: { id }, data, include: practiceIncludeFor(tenant.organizationId) });
+    return NextResponse.json(presentPractice(updated, await loadEstimateRates(tenant.organizationId)));
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error updating referral source:', error);
     return NextResponse.json({ error: 'Failed to update the referral source' }, { status: 500 });
   }
@@ -63,12 +69,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 /** Delete: hidden from the list and kept deleted by later pulls. Restore with PATCH { hidden: false }. */
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // The shared catalog is Paragon's to edit and delete.
+    const tenant = await currentTenant();
+    requireParagon(tenant);
     const { id } = await params;
     const existing = await load(id);
     if (!existing) return NextResponse.json({ error: 'Referral source not found' }, { status: 404 });
     await prisma.practice.update({ where: { id }, data: { hiddenAt: new Date() } });
     return NextResponse.json({ ok: true });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error deleting referral source:', error);
     return NextResponse.json({ error: 'Failed to delete the referral source' }, { status: 500 });
   }

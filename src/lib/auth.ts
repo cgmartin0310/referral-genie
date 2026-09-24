@@ -60,6 +60,10 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        // Only a token minted with the secret carries this; lib/tenant honors it outside production.
+        if (typeof token.tenantOrganizationId === 'string') {
+          (session.user as { tenantOrganizationId?: string }).tenantOrganizationId = token.tenantOrganizationId;
+        }
       }
       return session;
     },

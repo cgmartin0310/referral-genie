@@ -1,6 +1,7 @@
+import { currentTenant, tenantErrorResponse, requireParagon } from '@/lib/tenant';
+import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 import { presentProvider } from '@/lib/practices/present';
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const tenant = await currentTenant();
+    requireParagon(tenant);
     const { id } = await params;
     const body = (await request.json()) as { useOwnFax?: unknown; faxNumber?: unknown; hidden?: unknown };
 
@@ -38,7 +41,7 @@ export async function PATCH(
     }
 
     const existing = await prisma.provider.findFirst({
-      where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
+      where: { id, organizationId: CATALOG_ORGANIZATION_ID },
       select: { id: true, practiceId: true },
     });
     if (!existing) return NextResponse.json({ error: 'Provider not found' }, { status: 404 });
@@ -51,6 +54,8 @@ export async function PATCH(
     if (data.hiddenAt !== undefined && existing.practiceId) await recount(existing.practiceId);
     return NextResponse.json(presentProvider(updated, updated.practice));
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error updating provider:', error);
     return NextResponse.json({ error: 'Failed to update provider' }, { status: 500 });
   }

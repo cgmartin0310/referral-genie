@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
-import { practiceInclude, presentPractice, presentProvider } from '@/lib/practices/present';
+import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
+import { practiceIncludeFor, presentPractice, presentProvider } from '@/lib/practices/present';
+import { currentTenant, requireParagon, tenantErrorResponse } from '@/lib/tenant';
 import { sumEstimates } from '@/lib/practices/estimate';
 import { loadEstimateRates } from '@/lib/practices/estimate-settings';
 import { addressClusterKey } from '@/lib/ingest/duplicates';
@@ -25,18 +26,22 @@ export async function GET(request: NextRequest) {
     const notOnClinicId = params.get('notOnClinicId')?.trim() || null;
     const q = params.get('q')?.trim() || null;
     const deleted = params.get('deleted') === '1';
-    const rates = await loadEstimateRates();
+    const tenant = await currentTenant();
+    const rates = await loadEstimateRates(tenant.organizationId);
+    const practiceInclude = practiceIncludeFor(tenant.organizationId);
 
     if (deleted) {
+      // Deleting and restoring catalog rows is Paragon's.
+      requireParagon(tenant);
       // What a person deleted or removed, for restoring.
       const [rows, providers] = await Promise.all([
         prisma.practice.findMany({
-          where: { organizationId: DEFAULT_ORGANIZATION_ID, hiddenAt: { not: null } },
+          where: { organizationId: CATALOG_ORGANIZATION_ID, hiddenAt: { not: null } },
           include: practiceInclude,
           orderBy: { hiddenAt: 'desc' },
         }),
         prisma.provider.findMany({
-          where: { organizationId: DEFAULT_ORGANIZATION_ID, hiddenAt: { not: null } },
+          where: { organizationId: CATALOG_ORGANIZATION_ID, hiddenAt: { not: null } },
           include: { practice: { select: { id: true, name: true, faxNumber: true } } },
           orderBy: { hiddenAt: 'desc' },
         }),
@@ -48,14 +53,14 @@ export async function GET(request: NextRequest) {
     }
 
     const where: Prisma.PracticeWhereInput = {
-      organizationId: DEFAULT_ORGANIZATION_ID,
+      organizationId: CATALOG_ORGANIZATION_ID,
       hiddenAt: null,
       // A clinic's own list still shows a row a later pull retired; the catalog does not.
       ...(clinicId ? {} : { retiredAt: null }),
       ...(countyFips ? { countyFips } : {}),
       ...(hasFax ? { faxNumber: { not: null } } : {}),
-      ...(clinicId ? { clinicPractices: { some: { clinicLocationId: clinicId } } } : {}),
-      ...(notOnClinicId ? { clinicPractices: { none: { clinicLocationId: notOnClinicId } } } : {}),
+      ...(clinicId ? { clinicPractices: { some: { clinicLocationId: clinicId, organizationId: tenant.organizationId } } } : {}),
+      ...(notOnClinicId ? { clinicPractices: { none: { clinicLocationId: notOnClinicId, organizationId: tenant.organizationId } } } : {}),
       ...(q
         ? {
             OR: [
@@ -76,7 +81,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.practice.groupBy({
         by: ['countyFips', 'countyName'],
-        where: { organizationId: DEFAULT_ORGANIZATION_ID, countyFips: { not: null }, retiredAt: null, hiddenAt: null },
+        where: { organizationId: CATALOG_ORGANIZATION_ID, countyFips: { not: null }, retiredAt: null, hiddenAt: null },
         _count: { _all: true },
         orderBy: { countyName: 'asc' },
       }),
@@ -102,6 +107,8 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error listing practices:', error);
     return NextResponse.json({ error: 'Failed to load referral sources' }, { status: 500 });
   }
@@ -114,6 +121,9 @@ function text(value: unknown): string | null {
 /** Add a practice by hand, for a referral source that has no NPI. */
 export async function POST(request: NextRequest) {
   try {
+    // A hand-added practice joins the shared catalog, which is Paragon's to change.
+    const tenant = await currentTenant();
+    requireParagon(tenant);
     const body = (await request.json()) as Record<string, unknown>;
     const name = text(body.name);
     if (!name) return NextResponse.json({ error: 'Practice name is required' }, { status: 400 });
@@ -123,7 +133,7 @@ export async function POST(request: NextRequest) {
     const practiceKey = addressClusterKey(address, zipCode, text(body.city)) ?? `manual:${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
     const existing = await prisma.practice.findUnique({
-      where: { organizationId_practiceKey: { organizationId: DEFAULT_ORGANIZATION_ID, practiceKey } },
+      where: { organizationId_practiceKey: { organizationId: CATALOG_ORGANIZATION_ID, practiceKey } },
       select: { id: true, name: true },
     });
     if (existing) {
@@ -135,7 +145,7 @@ export async function POST(request: NextRequest) {
 
     const created = await prisma.practice.create({
       data: {
-        organizationId: DEFAULT_ORGANIZATION_ID,
+        organizationId: CATALOG_ORGANIZATION_ID,
         practiceKey,
         name,
         address,
@@ -147,10 +157,12 @@ export async function POST(request: NextRequest) {
         providerCount: 0,
         taxonomyMix: {},
       },
-      include: practiceInclude,
+      include: practiceIncludeFor(tenant.organizationId),
     });
-    return NextResponse.json(presentPractice(created, await loadEstimateRates()), { status: 201 });
+    return NextResponse.json(presentPractice(created, await loadEstimateRates(tenant.organizationId)), { status: 201 });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error creating practice:', error);
     return NextResponse.json({ error: 'Failed to add the practice' }, { status: 500 });
   }

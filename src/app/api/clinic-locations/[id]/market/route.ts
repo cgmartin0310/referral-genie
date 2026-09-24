@@ -1,13 +1,13 @@
+import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 import { presentMarketCounty, resolveMarketFips } from '@/lib/geo/market';
 
 export const dynamic = 'force-dynamic';
 
-async function loadClinic(id: string) {
+async function loadClinic(id: string, organizationId: string) {
   return prisma.clinicLocation.findFirst({
-    where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
+    where: { id, organizationId: organizationId },
     include: {
       marketCounties: {
         orderBy: [{ state: 'asc' }, { countyName: 'asc' }],
@@ -21,8 +21,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const tenant = await currentTenant();
     const { id } = await params;
-    const clinic = await loadClinic(id);
+    const clinic = await loadClinic(id, tenant.organizationId);
     if (!clinic) {
       return NextResponse.json({ error: 'Clinic not found' }, { status: 404 });
     }
@@ -32,6 +33,8 @@ export async function GET(
       counties: clinic.marketCounties.map((row) => presentMarketCounty(row)),
     });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error fetching clinic market:', error);
     return NextResponse.json({ error: 'Failed to load the market' }, { status: 500 });
   }
@@ -42,8 +45,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const tenant = await currentTenant();
     const { id } = await params;
-    const clinic = await loadClinic(id);
+    const clinic = await loadClinic(id, tenant.organizationId);
     if (!clinic) {
       return NextResponse.json({ error: 'Clinic not found' }, { status: 404 });
     }
@@ -78,6 +82,8 @@ export async function PUT(
       counties: saved.map((row) => presentMarketCounty(row)),
     });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error saving clinic market:', error);
     return NextResponse.json({ error: 'Failed to save the market' }, { status: 500 });
   }

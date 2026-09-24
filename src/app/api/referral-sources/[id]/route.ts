@@ -1,3 +1,5 @@
+import { currentTenant, tenantErrorResponse, requireParagon } from '@/lib/tenant';
+import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client';
@@ -5,7 +7,6 @@ import prisma from '../../../../lib/prisma';
 import { executeWithRetry } from '../../../../lib/db-helpers';
 import { authOptions } from '../../../../lib/auth';
 import { normalizeNpiNumber } from '../../../../lib/npi';
-import { DEFAULT_ORGANIZATION_ID } from '../../../../lib/org';
 import { changedOverridableFields, userEditProvenance } from '../../../../lib/provenance';
 
 // Get a single referral source
@@ -14,6 +15,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const tenant = await currentTenant();
     // For Next.js 15.3.1, we need to await params
     const { id } = await params;
     
@@ -21,7 +23,7 @@ export async function GET(
       prisma.referralSource.findFirst({
         where: {
           id,
-          organizationId: DEFAULT_ORGANIZATION_ID,
+          organizationId: CATALOG_ORGANIZATION_ID,
         },
         include: {
           clinicLocation: true,
@@ -39,6 +41,8 @@ export async function GET(
 
     return NextResponse.json(referralSource);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error fetching referral source:', error);
     return NextResponse.json(
       { error: 'Failed to fetch referral source' },
@@ -76,6 +80,8 @@ export async function PUT(
   } = {};
 
   try {
+    const tenant = await currentTenant();
+    requireParagon(tenant);
     // For Next.js 15.3.1, we need to await params
     const { id } = await params;
     
@@ -86,7 +92,7 @@ export async function PUT(
       prisma.referralSource.findFirst({
         where: {
           id,
-          organizationId: DEFAULT_ORGANIZATION_ID,
+          organizationId: CATALOG_ORGANIZATION_ID,
         },
       })
     );
@@ -146,6 +152,8 @@ export async function PUT(
 
     return NextResponse.json(referralSource);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error updating referral source:', error);
     console.error('Attempted to update with data:', data);
 
@@ -173,6 +181,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const tenant = await currentTenant();
+    requireParagon(tenant);
     // For Next.js 15.3.1, we need to await params
     const { id } = await params;
     
@@ -181,7 +191,7 @@ export async function DELETE(
       prisma.referralSource.findFirst({
         where: {
           id,
-          organizationId: DEFAULT_ORGANIZATION_ID,
+          organizationId: CATALOG_ORGANIZATION_ID,
         },
       })
     );
@@ -227,6 +237,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error deleting referral source:', error);
     return NextResponse.json(
       { error: 'Failed to delete referral source', details: error instanceof Error ? error.message : 'Unknown error' },

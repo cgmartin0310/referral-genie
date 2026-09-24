@@ -1,15 +1,17 @@
+import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
+import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextResponse } from 'next/server';
 import prisma from '../../../lib/prisma';
 import { executeWithRetry } from '../../../lib/db-helpers';
 import { parseLocalDate } from '../../../lib/utils';
-import { DEFAULT_ORGANIZATION_ID } from '../../../lib/org';
 import { audienceForClinic, targetRows } from '@/lib/campaigns/audience-db';
 
 export async function GET() {
   try {
+    const tenant = await currentTenant();
     const campaigns = await executeWithRetry(() => 
       prisma.campaign.findMany({
-        where: { organizationId: DEFAULT_ORGANIZATION_ID },
+        where: { organizationId: tenant.organizationId },
         orderBy: {
           createdAt: 'desc'
         },
@@ -26,6 +28,8 @@ export async function GET() {
     
     return NextResponse.json(campaigns);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error fetching campaigns:', error);
     return NextResponse.json(
       { error: 'Failed to fetch campaigns' },
@@ -50,6 +54,7 @@ export async function POST(request: Request) {
   } = { name: '', type: '' };
   
   try {
+    const tenant = await currentTenant();
     data = await request.json();
     
     if (!data.name) {
@@ -70,7 +75,7 @@ export async function POST(request: Request) {
     const audienceClinicId = typeof data.audienceClinicId === 'string' && data.audienceClinicId.trim()
       ? data.audienceClinicId.trim()
       : null;
-    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId) : null;
+    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId, tenant.organizationId) : null;
     if (audienceClinicId && !audience) {
       return NextResponse.json({ error: 'Clinic not found' }, { status: 400 });
     }
@@ -87,7 +92,7 @@ export async function POST(request: Request) {
       
       // Create the campaign
       const campaignData = {
-        organizationId: DEFAULT_ORGANIZATION_ID,
+        organizationId: tenant.organizationId,
         name: data.name,
         description: data.description || null,
         startDate: data.startDate ? parseLocalDate(data.startDate.toString()) : new Date(),
@@ -114,7 +119,7 @@ export async function POST(request: Request) {
       if (data.referralSourceIds && data.referralSourceIds.length > 0) {
         const allowed = await tx.referralSource.findMany({
           where: {
-            organizationId: DEFAULT_ORGANIZATION_ID,
+            organizationId: CATALOG_ORGANIZATION_ID,
             id: { in: data.referralSourceIds },
           },
           select: { id: true },
@@ -123,7 +128,7 @@ export async function POST(request: Request) {
           allowed.map((source) =>
             tx.campaignToReferralSource.create({
               data: {
-                organizationId: DEFAULT_ORGANIZATION_ID,
+                organizationId: tenant.organizationId,
                 campaignId: newCampaign.id,
                 referralSourceId: source.id,
                 status: 'PENDING'
@@ -134,7 +139,7 @@ export async function POST(request: Request) {
       }
       
       if (audience && audience.targets.length > 0) {
-        await tx.campaignTarget.createMany({ data: targetRows(newCampaign.id, audience.targets) });
+        await tx.campaignTarget.createMany({ data: targetRows(newCampaign.id, audience.targets, tenant.organizationId) });
       }
 
       return newCampaign;
@@ -142,6 +147,8 @@ export async function POST(request: Request) {
     
     return NextResponse.json(campaign);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error creating campaign:', error);
     console.error('Attempted data:', data);
     

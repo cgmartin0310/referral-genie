@@ -142,7 +142,13 @@ export function presentPractice(practice: PracticeWithRelations, rates: Estimate
   };
 }
 
-export const practiceInclude = {
-  providers: { where: { hiddenAt: null }, orderBy: { name: 'asc' as const } },
-  clinicPractices: { select: { clinicLocation: { select: { id: true, name: true } } } },
-};
+/** A practice with its providers and the viewer's own clinics listing it (never another subscriber's). */
+export function practiceIncludeFor(organizationId: string) {
+  return {
+    providers: { where: { hiddenAt: null }, orderBy: { name: 'asc' as const } },
+    clinicPractices: {
+      where: { organizationId },
+      select: { clinicLocation: { select: { id: true, name: true } } },
+    },
+  };
+}

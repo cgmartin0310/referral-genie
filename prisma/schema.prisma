@@ -14,6 +14,10 @@ model Organization {
   id                 String                     @id @default(cuid())
   name               String
   slug               String                     @unique
+  /// The Clerk organization this subscriber signs in as.
+  clerkOrgId         String?                    @unique
+  /// "paragon" runs the program and owns the shared county catalog; everyone else is a "subscriber".
+  kind               String                     @default("subscriber")
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
   clinicLocations    ClinicLocation[]

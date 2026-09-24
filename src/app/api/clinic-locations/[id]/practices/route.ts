@@ -1,7 +1,8 @@
+import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
+import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
-import { practiceInclude, presentPractice } from '@/lib/practices/present';
+import { practiceIncludeFor, presentPractice } from '@/lib/practices/present';
 import { sumEstimates } from '@/lib/practices/estimate';
 import { loadEstimateRates } from '@/lib/practices/estimate-settings';
 
@@ -9,9 +10,9 @@ export const dynamic = 'force-dynamic';
 
 type Params = { params: Promise<{ id: string }> };
 
-async function clinicOr404(id: string) {
+async function clinicOr404(id: string, organizationId: string) {
   return prisma.clinicLocation.findFirst({
-    where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
+    where: { id, organizationId: organizationId },
     select: { id: true, name: true },
   });
 }
@@ -24,16 +25,17 @@ function idList(value: unknown): string[] {
 /** The clinic's referral list: practices a person has added to it. */
 export async function GET(_request: NextRequest, { params }: Params) {
   try {
+    const tenant = await currentTenant();
     const { id } = await params;
-    const clinic = await clinicOr404(id);
+    const clinic = await clinicOr404(id, tenant.organizationId);
     if (!clinic) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 });
 
     const rows = await prisma.clinicPractice.findMany({
-      where: { clinicLocationId: id, organizationId: DEFAULT_ORGANIZATION_ID },
-      include: { practice: { include: practiceInclude } },
+      where: { clinicLocationId: id, organizationId: tenant.organizationId },
+      include: { practice: { include: practiceIncludeFor(tenant.organizationId) } },
       orderBy: { practice: { providerCount: 'desc' } },
     });
-    const rates = await loadEstimateRates();
+    const rates = await loadEstimateRates(tenant.organizationId);
     const practices = rows.map((row) => presentPractice(row.practice, rates));
     return NextResponse.json({
       clinic,
@@ -45,6 +47,8 @@ export async function GET(_request: NextRequest, { params }: Params) {
       },
     });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error loading clinic referral list:', error);
     return NextResponse.json({ error: 'Failed to load referral list' }, { status: 500 });
   }
@@ -53,8 +57,9 @@ export async function GET(_request: NextRequest, { params }: Params) {
 /** Add practices to the clinic's list. Already-listed practices are skipped. */
 export async function POST(request: NextRequest, { params }: Params) {
   try {
+    const tenant = await currentTenant();
     const { id } = await params;
-    const clinic = await clinicOr404(id);
+    const clinic = await clinicOr404(id, tenant.organizationId);
     if (!clinic) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 });
 
     const body = (await request.json()) as { practiceIds?: unknown };
@@ -64,14 +69,14 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
 
     const valid = await prisma.practice.findMany({
-      where: { id: { in: practiceIds }, organizationId: DEFAULT_ORGANIZATION_ID },
+      where: { id: { in: practiceIds }, organizationId: CATALOG_ORGANIZATION_ID },
       select: { id: true },
     });
     const result = await prisma.clinicPractice.createMany({
       data: valid.map((row) => ({
         clinicLocationId: id,
         practiceId: row.id,
-        organizationId: DEFAULT_ORGANIZATION_ID,
+        organizationId: tenant.organizationId,
       })),
       skipDuplicates: true,
     });
@@ -81,6 +86,8 @@ export async function POST(request: NextRequest, { params }: Params) {
       unknown: practiceIds.length - valid.length,
     });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error adding practices to clinic:', error);
     return NextResponse.json({ error: 'Failed to add practices' }, { status: 500 });
   }
@@ -89,8 +96,9 @@ export async function POST(request: NextRequest, { params }: Params) {
 /** Remove practices from the clinic's list. The practices themselves stay. */
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
+    const tenant = await currentTenant();
     const { id } = await params;
-    const clinic = await clinicOr404(id);
+    const clinic = await clinicOr404(id, tenant.organizationId);
     if (!clinic) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 });
 
     const body = (await request.json()) as { practiceIds?: unknown };
@@ -99,10 +107,12 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Choose at least one practice' }, { status: 400 });
     }
     const result = await prisma.clinicPractice.deleteMany({
-      where: { clinicLocationId: id, organizationId: DEFAULT_ORGANIZATION_ID, practiceId: { in: practiceIds } },
+      where: { clinicLocationId: id, organizationId: tenant.organizationId, practiceId: { in: practiceIds } },
     });
     return NextResponse.json({ removed: result.count });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error removing practices from clinic:', error);
     return NextResponse.json({ error: 'Failed to remove practices' }, { status: 500 });
   }

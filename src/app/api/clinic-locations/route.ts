@@ -1,6 +1,6 @@
+import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { DEFAULT_ORGANIZATION_ID } from '@/lib/org';
 import { presentMarketCounty } from '@/lib/geo/market';
 import { estimateMonthlyReferrals, sumEstimates, type EstimateRates } from '@/lib/practices/estimate';
 import { loadEstimateRates } from '@/lib/practices/estimate-settings';
@@ -43,17 +43,20 @@ function serializeClinic<
 // GET all clinic locations
 export async function GET() {
   try {
+    const tenant = await currentTenant();
     const clinicLocations = await prisma.clinicLocation.findMany({
-      where: { organizationId: DEFAULT_ORGANIZATION_ID },
+      where: { organizationId: tenant.organizationId },
       orderBy: {
         name: 'asc',
       },
       include: clinicInclude,
     });
 
-    const rates = await loadEstimateRates();
+    const rates = await loadEstimateRates(tenant.organizationId);
     return NextResponse.json(clinicLocations.map((clinic) => serializeClinic(clinic, rates)));
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error fetching clinic locations:', error);
     return NextResponse.json(
       { error: 'Failed to fetch clinic locations' },
@@ -65,6 +68,7 @@ export async function GET() {
 // POST - Create new clinic location
 export async function POST(request: NextRequest) {
   try {
+    const tenant = await currentTenant();
     const data = await request.json();
 
     // Validate required fields
@@ -77,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     // Check if name already exists
     const existing = await prisma.clinicLocation.findFirst({
-      where: { name: data.name, organizationId: DEFAULT_ORGANIZATION_ID }
+      where: { name: data.name, organizationId: tenant.organizationId }
     });
 
     if (existing) {
@@ -89,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     const clinicLocation = await prisma.clinicLocation.create({
       data: {
-        organizationId: DEFAULT_ORGANIZATION_ID,
+        organizationId: tenant.organizationId,
         name: data.name,
         address: data.address || null,
         city: data.city || null,
@@ -103,6 +107,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(clinicLocation, { status: 201 });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error creating clinic location:', error);
     return NextResponse.json(
       { error: 'Failed to create clinic location' },

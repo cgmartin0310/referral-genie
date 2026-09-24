@@ -1,16 +1,18 @@
+import { currentTenant, tenantErrorResponse, requireParagon } from '@/lib/tenant';
+import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '../../../lib/prisma';
 import { executeWithRetry } from '../../../lib/db-helpers';
 import { normalizeNpiNumber } from '../../../lib/npi';
-import { DEFAULT_ORGANIZATION_ID } from '../../../lib/org';
 import { emptyProvenance } from '../../../lib/provenance';
 
 export async function GET() {
   try {
+    const tenant = await currentTenant();
     const referralSources = await executeWithRetry(() => 
       prisma.referralSource.findMany({
-        where: { organizationId: DEFAULT_ORGANIZATION_ID },
+        where: { organizationId: CATALOG_ORGANIZATION_ID },
         include: {
           clinicLocation: true,
           category: true,
@@ -23,6 +25,8 @@ export async function GET() {
     
     return NextResponse.json(referralSources);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error fetching referral sources:', error);
     return NextResponse.json(
       { error: 'Failed to fetch referral sources' },
@@ -54,6 +58,8 @@ export async function POST(request: Request) {
   } = { name: '' }; // Initialize with empty name to avoid linter error
   
   try {
+    const tenant = await currentTenant();
+    requireParagon(tenant);
     data = await request.json();
     
     if (!data.name) {
@@ -66,7 +72,7 @@ export async function POST(request: Request) {
     const referralSource = await executeWithRetry(() => 
       prisma.referralSource.create({
         data: {
-          organizationId: DEFAULT_ORGANIZATION_ID,
+          organizationId: CATALOG_ORGANIZATION_ID,
           name: data.name,
           address: data.address || null,
           city: data.city || null,
@@ -96,6 +102,8 @@ export async function POST(request: Request) {
     
     return NextResponse.json(referralSource);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error creating referral source:', error);
     
     // Log the request data for debugging

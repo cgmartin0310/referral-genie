@@ -1,18 +1,20 @@
+import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
+import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../lib/prisma';
 import { executeWithRetry } from '../../../lib/db-helpers';
-import { DEFAULT_ORGANIZATION_ID } from '../../../lib/org';
 
 // GET all interactions
 export async function GET(request: NextRequest) {
   try {
+    const tenant = await currentTenant();
     // Check for query parameters
     const searchParams = request.nextUrl.searchParams;
     const referralSourceId = searchParams.get('referralSourceId');
 
     // Build the where clause based on query parameters
     const where: { organizationId: string; referralSourceId?: string } = {
-      organizationId: DEFAULT_ORGANIZATION_ID,
+      organizationId: tenant.organizationId,
     };
     if (referralSourceId) {
       where.referralSourceId = referralSourceId;
@@ -38,6 +40,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(interactions);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error fetching interactions:', error);
     return NextResponse.json(
       { error: 'Failed to fetch interactions' },
@@ -49,6 +53,7 @@ export async function GET(request: NextRequest) {
 // POST a new interaction
 export async function POST(request: NextRequest) {
   try {
+    const tenant = await currentTenant();
     const data = await request.json();
 
     // Validate required fields
@@ -74,7 +79,7 @@ export async function POST(request: NextRequest) {
     }
 
     const source = await prisma.referralSource.findFirst({
-      where: { id: data.referralSourceId, organizationId: DEFAULT_ORGANIZATION_ID },
+      where: { id: data.referralSourceId, organizationId: CATALOG_ORGANIZATION_ID },
       select: { id: true },
     });
     if (!source) {
@@ -85,7 +90,7 @@ export async function POST(request: NextRequest) {
     const interaction = await executeWithRetry(() =>
       prisma.interaction.create({
         data: {
-          organizationId: DEFAULT_ORGANIZATION_ID,
+          organizationId: tenant.organizationId,
           referralSourceId: data.referralSourceId,
           type: data.type,
           date: new Date(data.date),
@@ -105,6 +110,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(interaction);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error creating interaction:', error);
     return NextResponse.json(
       { error: 'Failed to create interaction' },

@@ -1,9 +1,10 @@
+import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
+import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextRequest, NextResponse } from 'next/server';
 import { audienceForClinic, targetRows } from '@/lib/campaigns/audience-db';
 import prisma from '../../../../lib/prisma';
 import { executeWithRetry } from '../../../../lib/db-helpers';
 import { parseLocalDate } from '../../../../lib/utils';
-import { DEFAULT_ORGANIZATION_ID } from '../../../../lib/org';
 
 // Get a single campaign with its referral sources
 export async function GET(
@@ -11,11 +12,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const tenant = await currentTenant();
     const { id } = await params;
     
     const campaign = await executeWithRetry(() =>
       prisma.campaign.findFirst({
-        where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
+        where: { id, organizationId: tenant.organizationId },
         include: {
           referralSources: {
             include: {
@@ -35,6 +37,8 @@ export async function GET(
     // Return campaign with all fields including cover sheet settings
     return NextResponse.json(campaign);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error fetching campaign:', error);
     return NextResponse.json(
       { error: 'Failed to fetch campaign' },
@@ -63,6 +67,7 @@ export async function PUT(
   } = {};
 
   try {
+    const tenant = await currentTenant();
     const { id } = await params;
     
     data = await request.json();
@@ -70,7 +75,7 @@ export async function PUT(
     // Check if campaign exists
     const exists = await executeWithRetry(() =>
       prisma.campaign.findFirst({
-        where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
+        where: { id, organizationId: tenant.organizationId },
       })
     );
 
@@ -86,7 +91,7 @@ export async function PUT(
     const audienceClinicId = typeof data.audienceClinicId === 'string' && data.audienceClinicId.trim()
       ? data.audienceClinicId.trim()
       : null;
-    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId) : null;
+    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId, tenant.organizationId) : null;
     if (audienceClinicId && !audience) {
       return NextResponse.json({ error: 'Clinic not found' }, { status: 400 });
     }
@@ -144,13 +149,13 @@ export async function PUT(
         // Add new connections
         const idsToAdd = newIds.filter(sourceId => !currentIds.includes(sourceId));
         const allowed = idsToAdd.length === 0 ? [] : await tx.referralSource.findMany({
-          where: { organizationId: DEFAULT_ORGANIZATION_ID, id: { in: idsToAdd } },
+          where: { organizationId: CATALOG_ORGANIZATION_ID, id: { in: idsToAdd } },
           select: { id: true },
         });
         for (const source of allowed) {
           await tx.campaignToReferralSource.create({
             data: {
-              organizationId: DEFAULT_ORGANIZATION_ID,
+              organizationId: tenant.organizationId,
               campaignId: id,
               referralSourceId: source.id,
               status: 'PENDING',
@@ -163,7 +168,7 @@ export async function PUT(
         // Pages already sent stay as the record of what went out.
         await tx.campaignTarget.deleteMany({ where: { campaignId: id, status: { in: ['PENDING', 'FAILED'] } } });
         if (audience && audience.targets.length > 0) {
-          await tx.campaignTarget.createMany({ data: targetRows(id, audience.targets) });
+          await tx.campaignTarget.createMany({ data: targetRows(id, audience.targets, tenant.organizationId) });
         }
       }
 
@@ -172,6 +177,8 @@ export async function PUT(
 
     return NextResponse.json(updatedCampaign);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error updating campaign:', error);
     console.error('Attempted data:', data);
 
@@ -192,12 +199,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const tenant = await currentTenant();
     const { id } = await params;
     
     // Check if campaign exists
     const exists = await executeWithRetry(() =>
       prisma.campaign.findFirst({
-        where: { id, organizationId: DEFAULT_ORGANIZATION_ID },
+        where: { id, organizationId: tenant.organizationId },
       })
     );
 
@@ -223,6 +231,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error deleting campaign:', error);
     return NextResponse.json(
       { error: 'Failed to delete campaign' },

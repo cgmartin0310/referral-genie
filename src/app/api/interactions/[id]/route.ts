@@ -1,7 +1,7 @@
+import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '../../../../lib/prisma';
 import { executeWithRetry } from '../../../../lib/db-helpers';
-import { DEFAULT_ORGANIZATION_ID } from '../../../../lib/org';
 
 // Get a single interaction
 export async function GET(
@@ -9,13 +9,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const tenant = await currentTenant();
     const { id } = await params;
     
     const interaction = await executeWithRetry(() =>
       prisma.interaction.findFirst({
         where: {
           id,
-          organizationId: DEFAULT_ORGANIZATION_ID,
+          organizationId: tenant.organizationId,
         },
         include: {
           referralSource: {
@@ -37,6 +38,8 @@ export async function GET(
 
     return NextResponse.json(interaction);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error fetching interaction:', error);
     return NextResponse.json(
       { error: 'Failed to fetch interaction' },
@@ -51,6 +54,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const tenant = await currentTenant();
     const { id } = await params;
     const data = await request.json();
 
@@ -59,7 +63,7 @@ export async function PUT(
       prisma.interaction.findFirst({
         where: {
           id,
-          organizationId: DEFAULT_ORGANIZATION_ID,
+          organizationId: tenant.organizationId,
         },
       })
     );
@@ -97,6 +101,8 @@ export async function PUT(
 
     return NextResponse.json(interaction);
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error updating interaction:', error);
     return NextResponse.json(
       { error: 'Failed to update interaction', details: error instanceof Error ? error.message : 'Unknown error' },
@@ -111,6 +117,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const tenant = await currentTenant();
     const { id } = await params;
     
     // Check if interaction exists
@@ -118,7 +125,7 @@ export async function DELETE(
       prisma.interaction.findFirst({
         where: {
           id,
-          organizationId: DEFAULT_ORGANIZATION_ID,
+          organizationId: tenant.organizationId,
         },
       })
     );
@@ -141,6 +148,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
     console.error('Error deleting interaction:', error);
     return NextResponse.json(
       { error: 'Failed to delete interaction', details: error instanceof Error ? error.message : 'Unknown error' },

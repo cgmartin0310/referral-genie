@@ -144,3 +144,23 @@ export function sourceTypeLabel(sourceType: string | null | undefined): string {
   if (!sourceType) return '';
   return SOURCE_TYPE_LABELS[sourceType as TaxonomyGroup] ?? sourceType;
 }
+
+/**
+ * Therapy practices Paragon recruits as subscribers (the spec's CO Universe):
+ * physical, occupational, and speech therapists, and the clinics they run.
+ * Separate from the referral catalog; the NPI file load keeps them too.
+ */
+export const ACQUISITION_TAXONOMIES: { code: string; description: string; discipline: 'pt' | 'ot' | 'st' | 'clinic'; pediatric: boolean }[] = [
+  { code: '225100000X', description: 'Physical Therapist', discipline: 'pt', pediatric: false },
+  { code: '2251P0200X', description: 'Physical Therapist, Pediatrics', discipline: 'pt', pediatric: true },
+  { code: '225X00000X', description: 'Occupational Therapist', discipline: 'ot', pediatric: false },
+  { code: '225XP0200X', description: 'Occupational Therapist, Pediatrics', discipline: 'ot', pediatric: true },
+  { code: '235Z00000X', description: 'Speech-Language Pathologist', discipline: 'st', pediatric: false },
+  { code: '261QP2000X', description: 'Clinic/Center, Physical Therapy', discipline: 'clinic', pediatric: false },
+  { code: '261QR0400X', description: 'Clinic/Center, Rehabilitation', discipline: 'clinic', pediatric: false },
+  { code: '261QH0700X', description: 'Clinic/Center, Hearing and Speech', discipline: 'clinic', pediatric: false },
+];
+
+export function acquisitionCodes(): Set<string> {
+  return new Set(ACQUISITION_TAXONOMIES.map((row) => row.code));
+}

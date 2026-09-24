@@ -14,6 +14,7 @@ import {
   ShieldCheckIcon,
   GlobeAltIcon,
   PhoneIcon,
+  BriefcaseIcon,
   MegaphoneIcon,
   UserGroupIcon,
   HeartIcon,
@@ -49,6 +50,7 @@ export const adminNavigation = [
   { name: 'Subscribers', href: '/admin/subscribers', icon: ShieldCheckIcon },
   { name: 'Source Universe', href: '/admin/universe', icon: GlobeAltIcon },
   { name: 'Call queue', href: '/admin/calls', icon: PhoneIcon },
+  { name: 'Clinic owners', href: '/admin/co-leads', icon: BriefcaseIcon },
 ];
 
 export default function Navigation() {

@@ -49,6 +49,37 @@ model Organization {
   prospectDecisions  ProspectDecision[]
 }
 
+/// A therapy practice Paragon may recruit as a subscriber (CO Universe),
+/// built from the NPI file for a county. Separate from the referral catalog.
+model CoLead {
+  id           String   @id @default(cuid())
+  /// Identity within the county: org:<npi>, the address group, or npi:<npi> for a solo therapist.
+  key          String
+  countyFips   String
+  countyName   String?
+  name         String
+  address      String?
+  city         String?
+  zipCode      String?
+  phone        String?
+  faxNumber    String?
+  orgNpis      String[] @default([])
+  /// Therapists here by discipline: { pt, ot, st }.
+  therapists   Json
+  pediatric    Boolean  @default(false)
+  /// queued, outreach_active, engaged, signup_started, converted, not_interested.
+  stage        String   @default("queued")
+  notes        String?
+  assignee     String?
+  /// No longer on the NPI file at the last pull; kept for its history.
+  retiredAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([countyFips, key])
+  @@index([countyFips])
+}
+
 /// One outreach touch on a catalog practice (a call now; fax and AI call
 /// later), with its outcome. Paragon's log; counts only reach subscribers.
 model OutreachTouch {

@@ -6,7 +6,7 @@ import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import MainLayout from '@/components/layout/MainLayout';
 import { useTenant } from '@/lib/use-tenant';
-import { CO_STAGES } from '@/lib/acquisition/leads';
+import { CO_STAGES } from '@/lib/acquisition/stages';
 
 interface Lead {
   id: string;

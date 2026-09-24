@@ -20,14 +20,7 @@ export interface LeadRecord {
   fax: string | null;
 }
 
-export const CO_STAGES = [
-  { key: 'queued', label: 'Queued' },
-  { key: 'outreach_active', label: 'Outreach active' },
-  { key: 'engaged', label: 'Engaged' },
-  { key: 'signup_started', label: 'Signup started' },
-  { key: 'converted', label: 'Converted' },
-  { key: 'not_interested', label: 'Not interested' },
-] as const;
+export { CO_STAGES } from './stages';
 
 export interface BuiltLead {
   key: string;

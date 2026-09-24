@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { acquisitionCodes } from '@/lib/nppes/taxonomies';
 import { currentTenant, requireParagon, tenantErrorResponse } from '@/lib/tenant';
-import { CO_STAGES } from '@/lib/acquisition/leads';
+import { CO_STAGES } from '@/lib/acquisition/stages';
 
 export const dynamic = 'force-dynamic';
 

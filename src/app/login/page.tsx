@@ -46,6 +46,13 @@ export default function LoginPage() {
           <p className="mt-2 text-center text-sm text-gray-600">
             Enter your credentials to access the application
           </p>
+          {process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && (
+            <p className="mt-2 text-center text-sm">
+              <a href="/sign-in" className="font-medium text-green-700 hover:text-green-600">
+                Sign in with your Referral360 account instead
+              </a>
+            </p>
+          )}
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <input type="hidden" name="remember" value="true" />

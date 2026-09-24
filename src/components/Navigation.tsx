@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
+import ClerkAccount from './ClerkAccount';
+import { clerkPublishableKey } from '@/lib/clerk-config';
 import {
   ArrowRightOnRectangleIcon,
   BuildingOffice2Icon,
@@ -73,11 +75,13 @@ export default function Navigation() {
         </li>
 
         <li className="-mx-2 mt-auto border-t border-white/10 pt-4">
+          {clerkPublishableKey && !session?.user && <ClerkAccount />}
           {session?.user?.name && (
             <p className="px-2 text-xs text-blue-200">
               Signed in as <span className="font-medium text-white">{session.user.name}</span>
             </p>
           )}
+          {session?.user && (
           <button
             type="button"
             onClick={() => signOut({ callbackUrl: '/login' })}
@@ -86,6 +90,7 @@ export default function Navigation() {
             <ArrowRightOnRectangleIcon className="h-6 w-6 shrink-0 text-blue-200 group-hover:text-white" aria-hidden="true" />
             Sign out
           </button>
+          )}
         </li>
       </ul>
     </nav>

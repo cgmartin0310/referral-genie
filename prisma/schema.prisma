@@ -18,6 +18,15 @@ model Organization {
   clerkOrgId         String?                    @unique
   /// "paragon" runs the program and owns the shared county catalog; everyone else is a "subscriber".
   kind               String                     @default("subscriber")
+  /// Onboarding: the practice owner and the day-to-day contact.
+  ownerName          String?
+  ownerPhone         String?
+  ownerEmail         String?
+  contactName        String?
+  contactPhone       String?
+  contactEmail       String?
+  /// When the subscriber finished onboarding.
+  onboardedAt        DateTime?
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
   clinicLocations    ClinicLocation[]

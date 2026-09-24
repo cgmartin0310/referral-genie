@@ -89,6 +89,11 @@ export default function DashboardPage() {
     queryKey: ['practices', ''],
     queryFn: async () => (await axios.get<PracticeTotals>('/api/practices')).data,
   });
+  const { data: onboarding } = useQuery({
+    queryKey: ['onboarding'],
+    queryFn: async () =>
+      (await axios.get<{ isParagon: boolean; onboardedAt: string | null; done: number; total: number }>('/api/onboarding')).data,
+  });
 
   const totals = practices?.totals;
   const listed = clinics?.reduce(
@@ -103,6 +108,18 @@ export default function DashboardPage() {
     <MainLayout>
       <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Dashboard</h1>
       <p className="mt-1 text-sm text-gray-600">Your clinics, the practices that refer to them, and what to expect.</p>
+
+      {onboarding && !onboarding.isParagon && !onboarding.onboardedAt && (
+        <Link
+          href="/onboarding"
+          className="mt-4 flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-5 py-3 text-sm text-green-900 hover:bg-green-100"
+        >
+          <span>
+            <strong>Finish setting up Referral360.</strong> {onboarding.done} of {onboarding.total} steps done.
+          </span>
+          <span className="font-semibold">Continue &rarr;</span>
+        </Link>
+      )}
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatTile label="Our clinics" value={clinics?.length ?? '—'} href="/clinic-locations" />

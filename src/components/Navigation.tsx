@@ -14,6 +14,7 @@ import {
   ShieldCheckIcon,
   MegaphoneIcon,
   UserGroupIcon,
+  HeartIcon,
 } from '@heroicons/react/24/outline';
 
 function classNames(...classes: string[]) {
@@ -33,6 +34,7 @@ function isCurrent(pathname: string, href: string): boolean {
 export const navigation = [
   { name: 'Our Clinics', href: '/clinic-locations', icon: BuildingOffice2Icon },
   { name: 'Referral Sources', href: '/referral-sources', icon: UserGroupIcon },
+  { name: 'Your Sources', href: '/relationships', icon: HeartIcon },
   { name: 'Campaigns', href: '/campaigns', icon: MegaphoneIcon },
   { name: 'Activity', href: '/interactions', icon: ClockIcon },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },

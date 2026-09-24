@@ -36,6 +36,46 @@ model Organization {
   estimateSettings   EstimateSettings?
   faxSettings        FaxSettings?
   catalogSettings    CatalogSettings?
+  relationships      SourceRelationship[]
+}
+
+/// A referral source a subscriber already works with (entered or uploaded),
+/// matched to the shared catalog when it can be. Private to the subscriber.
+model SourceRelationship {
+  id               String   @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  clinicLocationId String?
+  /// The catalog practice this is, when matched.
+  practiceId       String?
+  /// How it matched the catalog: npi, fax, phone, or name.
+  matchedBy        String?
+  name             String
+  practiceName     String?
+  npi              String?
+  specialty        String?
+  phone            String?
+  fax              String?
+  email            String?
+  address          String?
+  city             String?
+  state            String?
+  zip              String?
+  /// practice, physician, school, or other.
+  type             String   @default("practice")
+  lastReferral     String?
+  referralVolume   String?
+  strength         String?
+  origin           String?
+  /// Trust Relationship Score, 0 to 100. Analytics only.
+  trs              Int      @default(0)
+  /// upload or manual.
+  createdFrom      String   @default("manual")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([practiceId])
 }
 
 /// Which specialties the shared county catalog pulls (Paragon's choice).

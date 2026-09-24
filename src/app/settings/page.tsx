@@ -121,7 +121,7 @@ export default function SettingsPage() {
           <h2 className="text-base font-semibold text-gray-900">Referral estimates</h2>
           <p className="mt-1 max-w-3xl text-sm text-gray-600">
             How many referrals one provider of each type sends a month, for each therapy discipline. Every estimate in
-            Referral Genie adds these up over a practice&rsquo;s providers and shows the result as a range.
+            Referral360 adds these up over a practice&rsquo;s providers and shows the result as a range.
           </p>
         </div>
 

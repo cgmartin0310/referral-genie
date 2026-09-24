@@ -50,7 +50,10 @@ export async function POST(
 
     // Every page carries the opt-out line: who sent it and a free phone and
     // fax to stop further faxes. Nothing goes out until those are set.
-    const optOut = optOutLine(await loadFaxSettings(tenant.organizationId));
+    const faxSettings = await loadFaxSettings(tenant.organizationId);
+    const optOut = optOutLine(faxSettings);
+    // The cover sheet is from the subscriber: its sender name unless the campaign names someone.
+    const fromName = (campaign.coverSheetFromName || faxSettings.senderName).trim();
     if (!optOut) {
       return NextResponse.json(
         { error: 'Set the sender name, opt-out phone, and opt-out fax in Settings before sending. Every fax page carries them.' },
@@ -137,7 +140,7 @@ export async function POST(
           documentUrl,
           coverSheet: {
             includeCoversheet: campaign.includeCoverSheet === true,
-            fromName: campaign.coverSheetFromName || "Referral Genie",
+            fromName,
             fromNumber: fromFaxNumber,
             companyInfo: campaign.coverSheetCompanyInfo || "",
             toName: referralSource.contactPerson || referralSource.name || "Provider",
@@ -154,7 +157,7 @@ export async function POST(
           // Add cover sheet information from campaign settings (from database)
           coverSheet: campaign.includeCoverSheet ? {
             includeCoversheet: true,
-            fromName: campaign.coverSheetFromName || "Referral Genie", 
+            fromName, 
             fromNumber: fromFaxNumber,
             companyInfo: campaign.coverSheetCompanyInfo || "",
             toName: referralSource.contactPerson || referralSource.name || "Provider",
@@ -352,7 +355,7 @@ export async function POST(
           metadata: { campaignId: campaign.id.substring(0, 10), targetId: target.id, campaignName: campaign.name },
           coverSheet: campaign.includeCoverSheet ? {
             includeCoversheet: true,
-            fromName: campaign.coverSheetFromName || "Referral Genie",
+            fromName,
             fromNumber: fromFaxNumber,
             companyInfo: campaign.coverSheetCompanyInfo || "",
             toName: target.toName,

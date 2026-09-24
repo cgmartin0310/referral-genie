@@ -1,4 +1,6 @@
-# Referral Genie
+# Referral360
+
+The repository and Render service are still named referral-genie.
 
 Finds, verifies, and works referral sources for outpatient therapy clinics, then faxes them.
 

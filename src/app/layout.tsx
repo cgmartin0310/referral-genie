@@ -8,7 +8,7 @@ import { clerkEnabled } from "@/lib/clerk-config";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Referral Genie",
+  title: "Referral360",
   description: "Manage and track your referral sources and campaigns",
 };
 

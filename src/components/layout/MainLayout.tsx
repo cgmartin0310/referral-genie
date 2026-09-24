@@ -12,7 +12,7 @@ function Brand() {
   return (
     <div className="flex h-16 shrink-0 items-center">
       <span className="text-xl font-semibold tracking-tight text-white">
-        Referral<span className="text-green-400">Genie</span>
+        Referral<span className="text-green-400">360</span>
       </span>
     </div>
   );
@@ -80,7 +80,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             <span className="sr-only">Open sidebar</span>
             <Bars3Icon className="h-6 w-6" aria-hidden="true" />
           </button>
-          <span className="text-base font-semibold text-gray-900">Referral Genie</span>
+          <span className="text-base font-semibold text-gray-900">Referral360</span>
         </div>
 
         <main className="py-8">

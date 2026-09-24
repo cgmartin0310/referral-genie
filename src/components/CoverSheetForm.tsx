@@ -23,7 +23,7 @@ export default function CoverSheetForm({ campaignId, defaultValues, onSuccess }:
   
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues: {
-      coverSheetFromName: defaultValues?.coverSheetFromName || 'Referral Genie',
+      coverSheetFromName: defaultValues?.coverSheetFromName || '',
       coverSheetFromNumber: defaultValues?.coverSheetFromNumber || '',
       coverSheetCompanyInfo: defaultValues?.coverSheetCompanyInfo || '',
       coverSheetSubject: defaultValues?.coverSheetSubject || 'Referral Information',

@@ -120,7 +120,7 @@ export class HumbleFaxClient {
       const tmpFaxParams: CreateTmpFaxParams = {
         recipients: [this.formatPhoneNumber(params.to) || params.to],
         includeCoversheet,
-        fromName: String(params.coverSheet?.fromName || "Referral Genie"),
+        fromName: String(params.coverSheet?.fromName || ""),
         toName: String(params.coverSheet?.toName || "Provider"),
         subject: String(params.coverSheet?.subject || "Referral Information"),
         message: String(params.coverSheet?.message || "Please see the attached referral information."),

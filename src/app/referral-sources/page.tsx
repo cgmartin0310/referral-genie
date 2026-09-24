@@ -19,6 +19,7 @@ import {
 import MainLayout from '../../components/layout/MainLayout';
 import AddPracticeModal from '../../components/AddPracticeModal';
 import EditPracticeModal from '../../components/EditPracticeModal';
+import { useTenant } from '@/lib/use-tenant';
 import CountyPullPanel from '../../components/setup/CountyPullPanel';
 import type { PracticeView, ProviderView } from '@/lib/practices/present';
 
@@ -241,11 +242,14 @@ function SourceRow({
   selected,
   onToggle,
   onEdit,
+  canEdit,
 }: {
   source: PracticeView;
   selected: boolean;
   onToggle: () => void;
   onEdit: () => void;
+  /** Paragon edits the shared catalog; subscribers pick from it. */
+  canEdit: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const group = isGroup(source);
@@ -360,7 +364,7 @@ function SourceRow({
 
         <div className="col-span-6 mt-2 flex items-center justify-end gap-1 lg:col-span-1 lg:mt-0">
           <ClinicChips clinics={source.clinics} />
-          <RowMenu source={source} onEdit={onEdit} />
+          {canEdit && <RowMenu source={source} onEdit={onEdit} />}
         </div>
       </div>
 
@@ -380,9 +384,13 @@ function SourceRow({
                 <SendsTo provider={provider} />
               </div>
               <div className="col-span-12 mt-1 flex items-center justify-end gap-2 lg:col-span-1 lg:mt-0">
-                <span className="text-xs text-gray-500">Own fax</span>
-                <OwnFaxToggle provider={provider} />
-                <RemoveProvider provider={provider} />
+                {canEdit && (
+                  <>
+                    <span className="text-xs text-gray-500">Own fax</span>
+                    <OwnFaxToggle provider={provider} />
+                    <RemoveProvider provider={provider} />
+                  </>
+                )}
               </div>
             </li>
           ))}
@@ -394,7 +402,7 @@ function SourceRow({
 
 /* ------------------------------------------------------------------ */
 
-function SourceList({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void }) {
+function SourceList({ clinics, onPull, canEdit }: { clinics: Clinic[]; onPull: () => void; canEdit: boolean }) {
   const queryClient = useQueryClient();
   const [q, setQ] = useState('');
   const [countyFips, setCountyFips] = useState('');
@@ -507,6 +515,7 @@ function SourceList({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void
             />
             Not yet on list
           </label>
+          {canEdit && (
           <label className="inline-flex items-center gap-2 text-sm text-gray-700">
             <input
               type="checkbox"
@@ -516,6 +525,7 @@ function SourceList({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void
             />
             Show deleted
           </label>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -543,7 +553,7 @@ function SourceList({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void
       </div>
 
       <EditPracticeModal practice={editing} onClose={() => setEditing(null)} />
-      {showDeleted ? (
+      {showDeleted && canEdit ? (
         <DeletedList />
       ) : (
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -568,15 +578,19 @@ function SourceList({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void
             <BuildingOffice2Icon className="mx-auto h-10 w-10 text-gray-300" />
             <p className="mt-3 text-sm font-medium text-gray-900">No referral sources yet</p>
             <p className="mt-1 text-sm text-gray-500">
-              Pick a county and pull its pediatricians and primary care physicians from NPI.
+              {canEdit
+                ? 'Pick a county and pull its pediatricians and primary care physicians from NPI.'
+                : 'Paragon adds counties to the catalog. Nothing matches these filters yet.'}
             </p>
-            <button
-              type="button"
-              onClick={onPull}
-              className="mt-4 inline-flex items-center rounded-md bg-[#0B2A5B] px-3 py-2 text-sm font-semibold text-white hover:bg-[#123a7a]"
-            >
-              Pull a county
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={onPull}
+                className="mt-4 inline-flex items-center rounded-md bg-[#0B2A5B] px-3 py-2 text-sm font-semibold text-white hover:bg-[#123a7a]"
+              >
+                Pull a county
+              </button>
+            )}
           </div>
         ) : (
           <ul role="list" className="divide-y divide-gray-200">
@@ -587,6 +601,7 @@ function SourceList({ clinics, onPull }: { clinics: Clinic[]; onPull: () => void
                 selected={selected.has(source.id)}
                 onToggle={() => toggle(source.id)}
                 onEdit={() => setEditing(source)}
+                canEdit={canEdit}
               />
             ))}
           </ul>
@@ -685,11 +700,13 @@ export default function ReferralSourcesPage() {
   });
 
   const stats = totals?.totals;
+  const { data: me } = useTenant();
+  const isParagon = me?.isParagon === true;
 
   // Nothing pulled yet: open the county pull so the first step is on screen.
   useEffect(() => {
-    if (stats && stats.practices === 0) setPulling(true);
-  }, [stats]);
+    if (stats && stats.practices === 0 && isParagon) setPulling(true);
+  }, [stats, isParagon]);
 
   const openPull = () => {
     setPulling(true);
@@ -706,6 +723,7 @@ export default function ReferralSourcesPage() {
             open a row to see them. Check sources and add them to a clinic’s referral list.
           </p>
         </div>
+        {isParagon && (
         <Menu as="div" className="relative mt-4 sm:mt-0">
           <Menu.Button className="inline-flex items-center gap-1 rounded-md bg-[#0B2A5B] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#123a7a]">
             <PlusIcon className="h-4 w-4" /> Add source <ChevronDownIcon className="h-4 w-4" />
@@ -733,6 +751,7 @@ export default function ReferralSourcesPage() {
             </Menu.Item>
           </Menu.Items>
         </Menu>
+        )}
       </div>
       <AddPracticeModal open={adding} onClose={() => setAdding(false)} />
 
@@ -755,6 +774,7 @@ export default function ReferralSourcesPage() {
         />
       </div>
 
+      {isParagon && (
       <div id="pull-county" className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <button
           type="button"
@@ -777,9 +797,10 @@ export default function ReferralSourcesPage() {
           </div>
         )}
       </div>
+      )}
 
       <div className="mt-6">
-        <SourceList clinics={clinics ?? []} onPull={openPull} />
+        <SourceList clinics={clinics ?? []} onPull={openPull} canEdit={isParagon} />
       </div>
     </MainLayout>
   );

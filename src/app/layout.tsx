@@ -27,7 +27,7 @@ export default function RootLayout({
             signUpUrl="/sign-up"
             afterSignOutUrl="/sign-in"
           >
-            <Providers>{children}</Providers>
+            <Providers clerk>{children}</Providers>
           </ClerkProvider>
         ) : (
           <Providers>{children}</Providers>

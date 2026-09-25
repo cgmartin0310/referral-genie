@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import { CAMPAIGN_TYPES } from '../lib/constants';
 import { formatDateForInput } from '../lib/utils';
 import type { Audience } from '../lib/campaigns/audience';
+import { OUTREACH_TIERS, TIER_INFO, type OutreachTier } from '../lib/referral-list/tiers';
 
 function formatFax(value: string): string {
   const digits = value.replace(/\D/g, '').slice(-10);
@@ -43,6 +44,8 @@ interface CampaignFormProps {
   selectedReferralSources?: ReferralSource[];
   /** Clinic whose referral list is the audience. */
   audienceClinicId?: string | null;
+  /** Tiers on that list to fax; empty means everyone but Not a fit. */
+  audienceTiers?: string[];
 }
 
 export default function CampaignForm({ 
@@ -50,6 +53,7 @@ export default function CampaignForm({
   defaultValues,
   selectedReferralSources = [],
   audienceClinicId: initialAudienceClinicId = null,
+  audienceTiers: initialAudienceTiers = [],
 }: CampaignFormProps) {
   const router = useRouter();
   const isEditMode = !!campaignId;
@@ -75,6 +79,12 @@ export default function CampaignForm({
   // Audience: a clinic's referral list, previewed as the pages it will send.
   const [clinics, setClinics] = useState<{ id: string; name: string }[]>([]);
   const [audienceClinicId, setAudienceClinicId] = useState<string>(initialAudienceClinicId ?? '');
+  // Which tiers to fax. All three checked is the whole list (Not a fit never is).
+  const [tiers, setTiers] = useState<OutreachTier[]>(() => {
+    const chosen = OUTREACH_TIERS.filter((tier) => initialAudienceTiers.includes(tier));
+    return chosen.length > 0 ? chosen : [...OUTREACH_TIERS];
+  });
+  const tierParam = tiers.length === OUTREACH_TIERS.length ? [] : tiers;
   const [audience, setAudience] = useState<Audience | null>(null);
   const [audienceLoading, setAudienceLoading] = useState(false);
   // The per-source picker stays for campaigns that were built with it.
@@ -95,7 +105,7 @@ export default function CampaignForm({
     let cancelled = false;
     setAudienceLoading(true);
     axios
-      .get<Audience>(`/api/campaigns/audience?clinicId=${encodeURIComponent(audienceClinicId)}`)
+      .get<Audience>('/api/campaigns/audience', { params: { clinicId: audienceClinicId, tiers: tierParam.join(',') || undefined } })
       .then(({ data }) => {
         if (!cancelled) setAudience(data);
       })
@@ -106,7 +116,8 @@ export default function CampaignForm({
     return () => {
       cancelled = true;
     };
-  }, [audienceClinicId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audienceClinicId, tierParam.join(',')]);
   
   const {
     register,
@@ -231,6 +242,7 @@ export default function CampaignForm({
       documentName: uploadedDocument?.name || null,
       referralSourceIds: selectedSourceIds,
       audienceClinicId: audienceClinicId || null,
+      audienceTiers: tierParam,
     };
     
     setIsLoading(true);
@@ -449,6 +461,30 @@ export default function CampaignForm({
               ))}
             </select>
           </div>
+
+          {audienceClinicId && (
+            <fieldset className="mt-4">
+              <legend className="block text-sm font-medium text-gray-700">Who on the list</legend>
+              <div className="mt-2 flex flex-wrap gap-4">
+                {OUTREACH_TIERS.map((tier) => (
+                  <label key={tier} className="flex items-center gap-2 text-sm text-gray-700" title={TIER_INFO[tier].outreach}>
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                      checked={tiers.includes(tier)}
+                      onChange={() => setTiers((current) => {
+                        const next = current.includes(tier) ? current.filter((item) => item !== tier) : [...current, tier];
+                        return next.length === 0 ? current : OUTREACH_TIERS.filter((item) => next.includes(item));
+                      })}
+                    />
+                    {TIER_INFO[tier].label}
+                    {tier === 'cold' && <span className="text-xs text-gray-500">(and not yet scored)</span>}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Practices scored Not a fit are never faxed.</p>
+            </fieldset>
+          )}
 
           {audienceClinicId && (audienceLoading ? (
             <p className="mt-4 text-sm text-gray-500">Building the send list…</p>

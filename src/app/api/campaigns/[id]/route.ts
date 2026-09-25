@@ -2,6 +2,7 @@ import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
 import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextRequest, NextResponse } from 'next/server';
 import { audienceForClinic, targetRows } from '@/lib/campaigns/audience-db';
+import { parseAudienceTiers } from '@/lib/referral-list/tiers';
 import prisma from '../../../../lib/prisma';
 import { executeWithRetry } from '../../../../lib/db-helpers';
 import { parseLocalDate } from '../../../../lib/utils';
@@ -64,6 +65,7 @@ export async function PUT(
     documentName?: string | null;
     referralSourceIds?: string[];
     audienceClinicId?: string | null;
+    audienceTiers?: unknown;
   } = {};
 
   try {
@@ -86,12 +88,16 @@ export async function PUT(
       );
     }
 
-    // Audience change: null clears it, a clinic id rebuilds the pending targets.
-    const audienceGiven = data.audienceClinicId !== undefined;
-    const audienceClinicId = typeof data.audienceClinicId === 'string' && data.audienceClinicId.trim()
-      ? data.audienceClinicId.trim()
-      : null;
-    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId, tenant.organizationId) : null;
+    // Audience change (the clinic or its tiers): null clears it, a clinic id
+    // rebuilds the pending targets.
+    const audienceGiven = data.audienceClinicId !== undefined || data.audienceTiers !== undefined;
+    const audienceClinicId = data.audienceClinicId === undefined
+      ? exists.audienceClinicId
+      : typeof data.audienceClinicId === 'string' && data.audienceClinicId.trim() ? data.audienceClinicId.trim() : null;
+    const audienceTiers = !audienceClinicId
+      ? []
+      : data.audienceTiers === undefined ? parseAudienceTiers(exists.audienceTiers) : parseAudienceTiers(data.audienceTiers);
+    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId, tenant.organizationId, audienceTiers) : null;
     if (audienceClinicId && !audience) {
       return NextResponse.json({ error: 'Clinic not found' }, { status: 400 });
     }
@@ -107,7 +113,7 @@ export async function PUT(
         status: data.status,
         type: data.type,
         content: data.content,
-        ...(audienceGiven ? { audienceClinicId } : {}),
+        ...(audienceGiven ? { audienceClinicId, audienceTiers } : {}),
       };
 
       // Add document fields if provided

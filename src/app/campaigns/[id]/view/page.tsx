@@ -7,6 +7,7 @@ import { useRouter, useParams } from 'next/navigation';
 import MainLayout from '../../../../components/layout/MainLayout';
 import { formatDate } from '../../../../lib/utils';
 import { DocumentIcon, PaperAirplaneIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { TIER_INFO, type Tier } from '../../../../lib/referral-list/tiers';
 
 function failureReason(response: string | null | undefined): string | null {
   if (!response) return null;
@@ -182,7 +183,11 @@ export default function ViewCampaignPage() {
             <h3 className="text-lg font-medium text-gray-900">
               Faxes{' '}
               {campaign.audienceClinic && (
-                <span className="ml-2 text-sm font-normal text-gray-500">to {campaign.audienceClinic.name}’s referral list</span>
+                <span className="ml-2 text-sm font-normal text-gray-500">
+                  to {campaign.audienceClinic.name}’s referral list
+                  {campaign.audienceTiers?.length > 0 &&
+                    ` · ${campaign.audienceTiers.map((tier: string) => (tier === 'cold' ? 'Cold and not yet scored' : TIER_INFO[tier as Tier]?.label ?? tier)).join(', ')}`}
+                </span>
               )}
             </h3>
             <p className="mt-1 text-sm text-gray-500">

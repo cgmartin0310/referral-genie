@@ -1,9 +1,9 @@
 import prisma from '../prisma';
 import { buildAudience, type Audience, type AudienceTarget } from './audience';
-import { FAXABLE_TIER } from '../referral-list/tiers';
+import { audienceTierFilter, type OutreachTier } from '../referral-list/tiers';
 
 /** The faxes a campaign to this clinic's referral list would send. Null when the clinic is unknown. */
-export async function audienceForClinic(clinicId: string, organizationId: string): Promise<Audience | null> {
+export async function audienceForClinic(clinicId: string, organizationId: string, tiers: readonly OutreachTier[] = []): Promise<Audience | null> {
   const clinic = await prisma.clinicLocation.findFirst({
     where: { id: clinicId, organizationId },
     select: { id: true },
@@ -12,7 +12,8 @@ export async function audienceForClinic(clinicId: string, organizationId: string
 
   const rows = await prisma.clinicPractice.findMany({
     // A deleted referral source, a removed provider, and a practice scored Not a fit are not faxed.
-    where: { clinicLocationId: clinicId, organizationId, practice: { hiddenAt: null }, ...FAXABLE_TIER },
+    // Only the chosen tiers (Cold takes in not-yet-scored); never Not a fit.
+    where: { clinicLocationId: clinicId, organizationId, practice: { hiddenAt: null }, ...audienceTierFilter(tiers) },
     include: {
       practice: {
         include: {

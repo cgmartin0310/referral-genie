@@ -5,6 +5,7 @@ import prisma from '../../../lib/prisma';
 import { executeWithRetry } from '../../../lib/db-helpers';
 import { parseLocalDate } from '../../../lib/utils';
 import { audienceForClinic, targetRows } from '@/lib/campaigns/audience-db';
+import { parseAudienceTiers } from '@/lib/referral-list/tiers';
 
 export async function GET() {
   try {
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
     documentName?: string | null;
     referralSourceIds?: string[];
     audienceClinicId?: string | null;
+    audienceTiers?: unknown;
   } = { name: '', type: '' };
   
   try {
@@ -75,7 +77,8 @@ export async function POST(request: Request) {
     const audienceClinicId = typeof data.audienceClinicId === 'string' && data.audienceClinicId.trim()
       ? data.audienceClinicId.trim()
       : null;
-    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId, tenant.organizationId) : null;
+    const audienceTiers = audienceClinicId ? parseAudienceTiers(data.audienceTiers) : [];
+    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId, tenant.organizationId, audienceTiers) : null;
     if (audienceClinicId && !audience) {
       return NextResponse.json({ error: 'Clinic not found' }, { status: 400 });
     }
@@ -101,6 +104,7 @@ export async function POST(request: Request) {
         type: data.type,
         content: data.content || null,
         audienceClinicId,
+        audienceTiers,
       };
 
       // Add the document fields if available

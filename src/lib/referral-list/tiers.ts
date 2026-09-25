@@ -27,3 +27,24 @@ export function tierFromTrustScore(trs: number): Tier {
 
 /** Prisma filter for list entries a campaign may fax: unscored, or scored as anything but Not a fit. */
 export const FAXABLE_TIER = { OR: [{ tier: null }, { tier: { not: 'not_fit' } }] };
+
+/** Tiers a campaign can be aimed at. Not a fit is never faxed. */
+export const OUTREACH_TIERS = ['trusted', 'warm', 'cold'] as const;
+export type OutreachTier = (typeof OUTREACH_TIERS)[number];
+
+/** A campaign's chosen tiers, cleaned. All three (or none) means the whole list. */
+export function parseAudienceTiers(value: unknown): OutreachTier[] {
+  const chosen = Array.isArray(value) ? value.filter((item): item is OutreachTier => (OUTREACH_TIERS as readonly string[]).includes(item)) : [];
+  const unique = OUTREACH_TIERS.filter((tier) => chosen.includes(tier));
+  return unique.length === OUTREACH_TIERS.length ? [] : unique;
+}
+
+/**
+ * Prisma filter for the list entries a campaign faxes: the chosen tiers, where
+ * Cold takes in practices not scored yet; with no tiers chosen, everything
+ * but Not a fit.
+ */
+export function audienceTierFilter(tiers: readonly OutreachTier[]) {
+  if (tiers.length === 0) return FAXABLE_TIER;
+  return { OR: [...tiers.map((tier) => ({ tier })), ...(tiers.includes('cold') ? [{ tier: null }] : [])] };
+}

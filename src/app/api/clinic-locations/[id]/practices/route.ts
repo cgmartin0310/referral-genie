@@ -5,6 +5,9 @@ import prisma from '@/lib/prisma';
 import { practiceIncludeFor, presentPractice } from '@/lib/practices/present';
 import { ratesForDisciplines, sumEstimates } from '@/lib/practices/estimate';
 import { loadEstimateRates } from '@/lib/practices/estimate-settings';
+import { parseTier } from '@/lib/referral-list/tiers';
+
+const ADDED_FROM = new Set(['market', 'manual', 'import']);
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +25,7 @@ function idList(value: unknown): string[] {
   return [...new Set(value.filter((item): item is string => typeof item === 'string' && item.trim() !== ''))];
 }
 
-/** The clinic's referral list: practices a person has added to it. */
+/** The clinic's referral list, each practice with the subscriber's tier. */
 export async function GET(_request: NextRequest, { params }: Params) {
   try {
     const tenant = await currentTenant();
@@ -37,7 +40,14 @@ export async function GET(_request: NextRequest, { params }: Params) {
     });
     // Only the disciplines this clinic offers count toward its estimates.
     const rates = ratesForDisciplines(await loadEstimateRates(tenant.organizationId), clinic.disciplines);
-    const practices = rows.map((row) => presentPractice(row.practice, rates));
+    const practices = rows.map((row) => ({
+      ...presentPractice(row.practice, rates),
+      tier: parseTier(row.tier),
+      tierSetAt: row.tierSetAt?.toISOString() ?? null,
+      addedFrom: row.addedFrom,
+      // Added by hand and not in the shared catalog: only this subscriber sees it.
+      private: row.practice.organizationId === tenant.organizationId && row.practice.organizationId !== CATALOG_ORGANIZATION_ID,
+    }));
     return NextResponse.json({
       clinic,
       practices,
@@ -55,7 +65,11 @@ export async function GET(_request: NextRequest, { params }: Params) {
   }
 }
 
-/** Add practices to the clinic's list. Already-listed practices are skipped. */
+/**
+ * Add practices to the clinic's list: catalog practices, or the subscriber's
+ * own hand-added ones. Already-listed practices are skipped.
+ * Body: { practiceIds, addedFrom?: 'market' | 'manual' | 'import' }.
+ */
 export async function POST(request: NextRequest, { params }: Params) {
   try {
     const tenant = await currentTenant();
@@ -63,14 +77,15 @@ export async function POST(request: NextRequest, { params }: Params) {
     const clinic = await clinicOr404(id, tenant.organizationId);
     if (!clinic) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 });
 
-    const body = (await request.json()) as { practiceIds?: unknown };
+    const body = (await request.json()) as { practiceIds?: unknown; addedFrom?: unknown };
     const practiceIds = idList(body.practiceIds);
     if (practiceIds.length === 0) {
       return NextResponse.json({ error: 'Choose at least one practice' }, { status: 400 });
     }
+    const addedFrom = typeof body.addedFrom === 'string' && ADDED_FROM.has(body.addedFrom) ? body.addedFrom : 'manual';
 
     const valid = await prisma.practice.findMany({
-      where: { id: { in: practiceIds }, organizationId: CATALOG_ORGANIZATION_ID },
+      where: { id: { in: practiceIds }, organizationId: { in: [CATALOG_ORGANIZATION_ID, tenant.organizationId] } },
       select: { id: true },
     });
     const result = await prisma.clinicPractice.createMany({
@@ -78,6 +93,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         clinicLocationId: id,
         practiceId: row.id,
         organizationId: tenant.organizationId,
+        addedFrom,
       })),
       skipDuplicates: true,
     });
@@ -91,6 +107,39 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (denied) return denied;
     console.error('Error adding practices to clinic:', error);
     return NextResponse.json({ error: 'Failed to add practices' }, { status: 500 });
+  }
+}
+
+/**
+ * Score practices on the clinic's list. Body: { practiceIds, tier } where tier
+ * is trusted, warm, cold, not_fit, or null to clear it.
+ */
+export async function PATCH(request: NextRequest, { params }: Params) {
+  try {
+    const tenant = await currentTenant();
+    const { id } = await params;
+    const clinic = await clinicOr404(id, tenant.organizationId);
+    if (!clinic) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 });
+
+    const body = (await request.json()) as { practiceIds?: unknown; tier?: unknown };
+    const practiceIds = idList(body.practiceIds);
+    if (practiceIds.length === 0) {
+      return NextResponse.json({ error: 'Choose at least one practice' }, { status: 400 });
+    }
+    const tier = parseTier(body.tier);
+    if (body.tier !== null && !tier) {
+      return NextResponse.json({ error: 'Choose Trusted, Warm, Cold, or Not a fit.' }, { status: 400 });
+    }
+    const result = await prisma.clinicPractice.updateMany({
+      where: { clinicLocationId: id, organizationId: tenant.organizationId, practiceId: { in: practiceIds } },
+      data: tier ? { tier, tierSetAt: new Date(), tierSetBy: tenant.actor } : { tier: null, tierSetAt: null, tierSetBy: null },
+    });
+    return NextResponse.json({ updated: result.count, tier });
+  } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
+    console.error('Error scoring practices:', error);
+    return NextResponse.json({ error: 'Failed to save the score' }, { status: 500 });
   }
 }
 

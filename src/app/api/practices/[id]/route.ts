@@ -17,8 +17,9 @@ function clean(field: Editable, value: string): string | null {
   return field === 'state' ? trimmed.toUpperCase() : trimmed;
 }
 
-async function load(id: string) {
-  return prisma.practice.findFirst({ where: { id, organizationId: CATALOG_ORGANIZATION_ID } });
+/** A catalog practice, or one the subscriber added by hand (theirs alone to edit). */
+async function load(id: string, organizationId: string) {
+  return prisma.practice.findFirst({ where: { id, organizationId: { in: [CATALOG_ORGANIZATION_ID, organizationId] } } });
 }
 
 /**
@@ -28,12 +29,12 @@ async function load(id: string) {
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    // The shared catalog is Paragon's to edit and delete.
     const tenant = await currentTenant();
-    requireParagon(tenant);
     const { id } = await params;
-    const existing = await load(id);
+    const existing = await load(id, tenant.organizationId);
     if (!existing) return NextResponse.json({ error: 'Referral source not found' }, { status: 404 });
+    // The shared catalog is Paragon's to edit and delete; a hand-added practice is its subscriber's.
+    if (existing.organizationId === CATALOG_ORGANIZATION_ID) requireParagon(tenant);
 
     const body = (await request.json()) as Record<string, unknown>;
     const data: Record<string, unknown> = {};
@@ -69,12 +70,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 /** Delete: hidden from the list and kept deleted by later pulls. Restore with PATCH { hidden: false }. */
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    // The shared catalog is Paragon's to edit and delete.
     const tenant = await currentTenant();
-    requireParagon(tenant);
     const { id } = await params;
-    const existing = await load(id);
+    const existing = await load(id, tenant.organizationId);
     if (!existing) return NextResponse.json({ error: 'Referral source not found' }, { status: 404 });
+    // The shared catalog is Paragon's to delete; a hand-added practice is its subscriber's.
+    if (existing.organizationId === CATALOG_ORGANIZATION_ID) requireParagon(tenant);
     await prisma.practice.update({ where: { id }, data: { hiddenAt: new Date() } });
     return NextResponse.json({ ok: true });
   } catch (error) {

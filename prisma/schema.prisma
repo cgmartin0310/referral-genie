@@ -572,6 +572,14 @@ model ClinicPractice {
   /// Optional override of the estimate for this relationship.
   expectedMonthlyReferrals Int?
   notes                    String?
+  /// The subscriber's score, which sets the outreach: trusted, warm, cold,
+  /// or not_fit (never faxed). Null until they score it.
+  tier                     String?
+  tierSetAt                DateTime?
+  tierSetBy                String?
+  /// How it got on the list: market (built from the clinic's counties),
+  /// manual (added by a person), or import (a CSV).
+  addedFrom                String   @default("manual")
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
   organizationId           String
@@ -582,6 +590,7 @@ model ClinicPractice {
   @@unique([clinicLocationId, practiceId])
   @@index([practiceId])
   @@index([organizationId])
+  @@index([clinicLocationId, tier])
 }
 
 /// One fax in a campaign. Built from a clinic's referral list: everyone at a

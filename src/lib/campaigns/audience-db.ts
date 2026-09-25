@@ -1,5 +1,6 @@
 import prisma from '../prisma';
 import { buildAudience, type Audience, type AudienceTarget } from './audience';
+import { FAXABLE_TIER } from '../referral-list/tiers';
 
 /** The faxes a campaign to this clinic's referral list would send. Null when the clinic is unknown. */
 export async function audienceForClinic(clinicId: string, organizationId: string): Promise<Audience | null> {
@@ -10,8 +11,8 @@ export async function audienceForClinic(clinicId: string, organizationId: string
   if (!clinic) return null;
 
   const rows = await prisma.clinicPractice.findMany({
-    // A deleted referral source or a removed provider is not faxed.
-    where: { clinicLocationId: clinicId, organizationId, practice: { hiddenAt: null } },
+    // A deleted referral source, a removed provider, and a practice scored Not a fit are not faxed.
+    where: { clinicLocationId: clinicId, organizationId, practice: { hiddenAt: null }, ...FAXABLE_TIER },
     include: {
       practice: {
         include: {

@@ -185,7 +185,8 @@ export default function ViewCampaignPage() {
               {campaign.audienceClinic && (
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   to {campaign.audienceClinic.name}’s referral list
-                  {campaign.audienceTiers?.length > 0 &&
+                  {campaign.audiencePracticeIds?.length > 0 && ` · ${campaign.audiencePracticeIds.length} chosen practice${campaign.audiencePracticeIds.length === 1 ? '' : 's'}`}
+                  {!(campaign.audiencePracticeIds?.length > 0) && campaign.audienceTiers?.length > 0 &&
                     ` · ${campaign.audienceTiers.map((tier: string) => (tier === 'cold' ? 'Cold and not yet scored' : TIER_INFO[tier as Tier]?.label ?? tier)).join(', ')}`}
                 </span>
               )}

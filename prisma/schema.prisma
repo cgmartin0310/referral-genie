@@ -396,6 +396,8 @@ model Campaign {
   audienceClinic        ClinicLocation?            @relation(fields: [audienceClinicId], references: [id], onDelete: SetNull)
   /// Tiers on that list to fax (trusted, warm, cold; cold takes in not-yet-scored). Empty: everyone but Not a fit.
   audienceTiers         String[]                   @default([])
+  /// Chosen practices on that list (a test fax, a handful); when set, only they are faxed and tiers are ignored.
+  audiencePracticeIds   String[]                   @default([])
   targets               CampaignTarget[]
 
   @@index([organizationId])

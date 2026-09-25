@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import prisma from '../../../lib/prisma';
 import { executeWithRetry } from '../../../lib/db-helpers';
 import { parseLocalDate } from '../../../lib/utils';
-import { audienceForClinic, targetRows } from '@/lib/campaigns/audience-db';
+import { audienceForClinic, parsePracticeIds, targetRows } from '@/lib/campaigns/audience-db';
 import { parseAudienceTiers } from '@/lib/referral-list/tiers';
 
 export async function GET() {
@@ -53,6 +53,7 @@ export async function POST(request: Request) {
     referralSourceIds?: string[];
     audienceClinicId?: string | null;
     audienceTiers?: unknown;
+    audiencePracticeIds?: unknown;
   } = { name: '', type: '' };
   
   try {
@@ -77,8 +78,9 @@ export async function POST(request: Request) {
     const audienceClinicId = typeof data.audienceClinicId === 'string' && data.audienceClinicId.trim()
       ? data.audienceClinicId.trim()
       : null;
-    const audienceTiers = audienceClinicId ? parseAudienceTiers(data.audienceTiers) : [];
-    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId, tenant.organizationId, audienceTiers) : null;
+    const audiencePracticeIds = audienceClinicId ? parsePracticeIds(data.audiencePracticeIds) : [];
+    const audienceTiers = audienceClinicId && audiencePracticeIds.length === 0 ? parseAudienceTiers(data.audienceTiers) : [];
+    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId, tenant.organizationId, audienceTiers, audiencePracticeIds) : null;
     if (audienceClinicId && !audience) {
       return NextResponse.json({ error: 'Clinic not found' }, { status: 400 });
     }
@@ -105,6 +107,7 @@ export async function POST(request: Request) {
         content: data.content || null,
         audienceClinicId,
         audienceTiers,
+        audiencePracticeIds,
       };
 
       // Add the document fields if available

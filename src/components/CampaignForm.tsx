@@ -46,6 +46,8 @@ interface CampaignFormProps {
   audienceClinicId?: string | null;
   /** Tiers on that list to fax; empty means everyone but Not a fit. */
   audienceTiers?: string[];
+  /** Chosen practices on that list; when set, only they are faxed. */
+  audiencePracticeIds?: string[];
 }
 
 export default function CampaignForm({ 
@@ -54,6 +56,7 @@ export default function CampaignForm({
   selectedReferralSources = [],
   audienceClinicId: initialAudienceClinicId = null,
   audienceTiers: initialAudienceTiers = [],
+  audiencePracticeIds: initialAudiencePracticeIds = [],
 }: CampaignFormProps) {
   const router = useRouter();
   const isEditMode = !!campaignId;
@@ -85,6 +88,12 @@ export default function CampaignForm({
     return chosen.length > 0 ? chosen : [...OUTREACH_TIERS];
   });
   const tierParam = tiers.length === OUTREACH_TIERS.length ? [] : tiers;
+  // Or chosen practices on the list: a test fax, a handful.
+  const [pickPractices, setPickPractices] = useState(initialAudiencePracticeIds.length > 0);
+  const [practiceIds, setPracticeIds] = useState<string[]>(initialAudiencePracticeIds);
+  const [listPractices, setListPractices] = useState<{ id: string; name: string; city: string | null; faxNumber: string | null }[]>([]);
+  const [practiceSearch, setPracticeSearch] = useState('');
+  const chosenIds = pickPractices ? practiceIds : [];
   const [audience, setAudience] = useState<Audience | null>(null);
   const [audienceLoading, setAudienceLoading] = useState(false);
   // The per-source picker stays for campaigns that were built with it.
@@ -97,15 +106,28 @@ export default function CampaignForm({
       .catch(() => toast.error('Failed to load clinics'));
   }, []);
 
+  // The clinic's list, to choose practices from.
   useEffect(() => {
-    if (!audienceClinicId) {
+    if (!audienceClinicId || !pickPractices) return;
+    axios
+      .get(`/api/clinic-locations/${audienceClinicId}/practices`)
+      .then(({ data }) => setListPractices(data.practices))
+      .catch(() => toast.error('Failed to load the clinic’s list'));
+  }, [audienceClinicId, pickPractices]);
+
+  useEffect(() => {
+    if (!audienceClinicId || (pickPractices && practiceIds.length === 0)) {
       setAudience(null);
       return;
     }
     let cancelled = false;
     setAudienceLoading(true);
     axios
-      .get<Audience>('/api/campaigns/audience', { params: { clinicId: audienceClinicId, tiers: tierParam.join(',') || undefined } })
+      .get<Audience>('/api/campaigns/audience', {
+        params: chosenIds.length > 0
+          ? { clinicId: audienceClinicId, practiceIds: chosenIds.join(',') }
+          : { clinicId: audienceClinicId, tiers: tierParam.join(',') || undefined },
+      })
       .then(({ data }) => {
         if (!cancelled) setAudience(data);
       })
@@ -117,7 +139,7 @@ export default function CampaignForm({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audienceClinicId, tierParam.join(',')]);
+  }, [audienceClinicId, tierParam.join(','), chosenIds.join(','), pickPractices]);
   
   const {
     register,
@@ -235,6 +257,10 @@ export default function CampaignForm({
       toast.error('Choose the clinic whose referral list this campaign goes to');
       return;
     }
+    if (audienceClinicId && pickPractices && practiceIds.length === 0) {
+      toast.error('Choose at least one practice, or send to everyone on the list');
+      return;
+    }
     
     const payload = {
       ...data,
@@ -242,7 +268,8 @@ export default function CampaignForm({
       documentName: uploadedDocument?.name || null,
       referralSourceIds: selectedSourceIds,
       audienceClinicId: audienceClinicId || null,
-      audienceTiers: tierParam,
+      audienceTiers: chosenIds.length > 0 ? [] : tierParam,
+      audiencePracticeIds: chosenIds,
     };
     
     setIsLoading(true);
@@ -463,6 +490,56 @@ export default function CampaignForm({
           </div>
 
           {audienceClinicId && (
+            <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-700" role="radiogroup" aria-label="Who to send to">
+              <label className="flex items-center gap-2">
+                <input type="radio" className="text-green-600 focus:ring-green-500" checked={!pickPractices} onChange={() => setPickPractices(false)} />
+                Everyone on the list, by score
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="radio" className="text-green-600 focus:ring-green-500" checked={pickPractices} onChange={() => setPickPractices(true)} />
+                Specific practices
+              </label>
+            </div>
+          )}
+
+          {audienceClinicId && pickPractices && (
+            <div className="mt-3 max-w-xl">
+              <input
+                type="search"
+                value={practiceSearch}
+                onChange={(e) => setPracticeSearch(e.target.value)}
+                placeholder="Search the list"
+                className="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-green-600 focus:ring-green-600"
+              />
+              <ul className="mt-2 max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-md border border-gray-200">
+                {listPractices
+                  .filter((practice) => !practiceSearch.trim() || `${practice.name} ${practice.city ?? ''}`.toLowerCase().includes(practiceSearch.trim().toLowerCase()))
+                  .map((practice) => (
+                    <li key={practice.id}>
+                      <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-gray-50">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                          checked={practiceIds.includes(practice.id)}
+                          onChange={() => setPracticeIds((current) => (current.includes(practice.id) ? current.filter((id) => id !== practice.id) : [...current, practice.id]))}
+                        />
+                        <span className="flex-1">
+                          <span className="font-medium text-gray-900">{practice.name}</span>
+                          {practice.city && <span className="text-gray-500"> · {practice.city}</span>}
+                        </span>
+                        <span className="font-mono text-xs text-gray-500">{practice.faxNumber ?? 'no fax'}</span>
+                      </label>
+                    </li>
+                  ))}
+                {listPractices.length === 0 && <li className="px-3 py-3 text-sm text-gray-500">Loading the list…</li>}
+              </ul>
+              <p className="mt-1 text-xs text-gray-500">
+                {practiceIds.length} chosen. Only these are faxed. A practice missing here can be added under Referral Sources.
+              </p>
+            </div>
+          )}
+
+          {audienceClinicId && !pickPractices && (
             <fieldset className="mt-4">
               <legend className="block text-sm font-medium text-gray-700">Who on the list</legend>
               <div className="mt-2 flex flex-wrap gap-4">

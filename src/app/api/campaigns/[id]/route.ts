@@ -1,7 +1,7 @@
 import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
 import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
 import { NextRequest, NextResponse } from 'next/server';
-import { audienceForClinic, targetRows } from '@/lib/campaigns/audience-db';
+import { audienceForClinic, parsePracticeIds, targetRows } from '@/lib/campaigns/audience-db';
 import { parseAudienceTiers } from '@/lib/referral-list/tiers';
 import prisma from '../../../../lib/prisma';
 import { executeWithRetry } from '../../../../lib/db-helpers';
@@ -66,6 +66,7 @@ export async function PUT(
     referralSourceIds?: string[];
     audienceClinicId?: string | null;
     audienceTiers?: unknown;
+    audiencePracticeIds?: unknown;
   } = {};
 
   try {
@@ -90,14 +91,17 @@ export async function PUT(
 
     // Audience change (the clinic or its tiers): null clears it, a clinic id
     // rebuilds the pending targets.
-    const audienceGiven = data.audienceClinicId !== undefined || data.audienceTiers !== undefined;
+    const audienceGiven = data.audienceClinicId !== undefined || data.audienceTiers !== undefined || data.audiencePracticeIds !== undefined;
     const audienceClinicId = data.audienceClinicId === undefined
       ? exists.audienceClinicId
       : typeof data.audienceClinicId === 'string' && data.audienceClinicId.trim() ? data.audienceClinicId.trim() : null;
-    const audienceTiers = !audienceClinicId
+    const audiencePracticeIds = !audienceClinicId
+      ? []
+      : data.audiencePracticeIds === undefined ? parsePracticeIds(exists.audiencePracticeIds) : parsePracticeIds(data.audiencePracticeIds);
+    const audienceTiers = !audienceClinicId || audiencePracticeIds.length > 0
       ? []
       : data.audienceTiers === undefined ? parseAudienceTiers(exists.audienceTiers) : parseAudienceTiers(data.audienceTiers);
-    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId, tenant.organizationId, audienceTiers) : null;
+    const audience = audienceClinicId ? await audienceForClinic(audienceClinicId, tenant.organizationId, audienceTiers, audiencePracticeIds) : null;
     if (audienceClinicId && !audience) {
       return NextResponse.json({ error: 'Clinic not found' }, { status: 400 });
     }
@@ -113,7 +117,7 @@ export async function PUT(
         status: data.status,
         type: data.type,
         content: data.content,
-        ...(audienceGiven ? { audienceClinicId, audienceTiers } : {}),
+        ...(audienceGiven ? { audienceClinicId, audienceTiers, audiencePracticeIds } : {}),
       };
 
       // Add document fields if provided

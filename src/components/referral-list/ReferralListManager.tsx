@@ -10,7 +10,7 @@ import { ArrowUpTrayIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/react
 import ImportSourcesDialog from '@/components/referral-list/ImportSourcesDialog';
 import MarketStatusNotice from '@/components/referral-list/MarketStatus';
 import type { PracticeView } from '@/lib/practices/present';
-import { TIER_INFO, TIERS, type Tier } from '@/lib/referral-list/tiers';
+import { parseTier, TIER_INFO, TIERS, type Tier } from '@/lib/referral-list/tiers';
 
 interface Entry {
   id: string;
@@ -254,6 +254,15 @@ export default function ReferralListManager({ heading = true }: { heading?: bool
   const [saving, setSaving] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  // A link can open a filter: ?tier=unscored, ?clinic=<id>.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const wanted = params.get('tier');
+    if (wanted === 'unscored' || parseTier(wanted)) setTier(wanted as TierFilter);
+    const clinic = params.get('clinic');
+    if (clinic) setClinicId(clinic);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(q.trim()), 250);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { CATALOG_ORGANIZATION_ID } from '@/lib/org';
+import { CATALOG_ORGANIZATION_ID, SHARED_PRACTICE } from '@/lib/org';
 import { practiceIncludeFor, presentPractice, presentProvider } from '@/lib/practices/present';
 import { currentTenant, requireParagon, tenantErrorResponse } from '@/lib/tenant';
 import { sumEstimates } from '@/lib/practices/estimate';
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     }
 
     const where: Prisma.PracticeWhereInput = {
-      organizationId: CATALOG_ORGANIZATION_ID,
+      ...SHARED_PRACTICE,
       hiddenAt: null,
       // A clinic's own list still shows a row a later pull retired; the catalog does not.
       ...(clinicId ? {} : { retiredAt: null }),
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.practice.groupBy({
         by: ['countyFips', 'countyName'],
-        where: { organizationId: CATALOG_ORGANIZATION_ID, countyFips: { not: null }, retiredAt: null, hiddenAt: null },
+        where: { ...SHARED_PRACTICE, countyFips: { not: null }, retiredAt: null, hiddenAt: null },
         _count: { _all: true },
         orderBy: { countyName: 'asc' },
       }),

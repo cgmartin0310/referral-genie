@@ -1,5 +1,4 @@
 import prisma from '../prisma';
-import { CATALOG_ORGANIZATION_ID } from '../org';
 
 /**
  * Moving clinics (and campaigns) from one organization to another, for
@@ -18,7 +17,7 @@ export interface MovePlan {
   faxPages: number;
   relationships: number;
   documents: string[];
-  /** Practices the old organization added by hand to these clinics' lists (never catalog rows). */
+  /** Practices the old organization added by hand to these clinics' lists (never pulled catalog rows). */
   ownPractices: string[];
 }
 
@@ -92,12 +91,19 @@ export async function planMove(input: {
     prisma.campaignToReferralSource.count({ where: { campaignId: { in: campaignIds } } }),
     prisma.sourceRelationship.count({ where: { organizationId: input.fromOrganizationId, clinicLocationId: { in: clinicIds } } }),
   ]);
-  const ownPractices = input.fromOrganizationId === CATALOG_ORGANIZATION_ID
-    ? []
-    : (await prisma.clinicPractice.findMany({
-        where: { clinicLocationId: { in: clinicIds }, practice: { organizationId: input.fromOrganizationId } },
-        select: { practiceId: true },
-      })).map((row) => row.practiceId);
+  // Practices added by hand (own:…) go with the clinics that list them, unless
+  // another of the old organization's clinics still lists one. Paragon's hand
+  // additions sit in the catalog organization, so the key tells them apart.
+  const handAdded = await prisma.clinicPractice.findMany({
+    where: { clinicLocationId: { in: clinicIds }, practice: { organizationId: input.fromOrganizationId, practiceKey: { startsWith: 'own:' } } },
+    select: { practiceId: true },
+  });
+  const stayingOn = await prisma.clinicPractice.findMany({
+    where: { organizationId: input.fromOrganizationId, clinicLocationId: { notIn: clinicIds }, practiceId: { in: handAdded.map((row) => row.practiceId) } },
+    select: { practiceId: true },
+  });
+  const staying = new Set(stayingOn.map((row) => row.practiceId));
+  const ownPractices = handAdded.map((row) => row.practiceId).filter((id) => !staying.has(id));
   const documents = campaigns
     .map((campaign) => (campaign.documentUrl ?? '').match(DOCUMENT_PATH)?.[1])
     .filter((id): id is string => Boolean(id));
@@ -128,7 +134,7 @@ export async function executeMove(plan: MovePlan, fromOrganizationId: string, to
     prisma.faxDocument.updateMany({ where: { id: { in: plan.documents }, organizationId: fromOrganizationId }, data: to }),
     // Hand-added practices go with the clinics that list them; the catalog never moves.
     prisma.practice.updateMany({
-      where: { id: { in: plan.ownPractices }, organizationId: { in: [fromOrganizationId], notIn: [CATALOG_ORGANIZATION_ID] } },
+      where: { id: { in: plan.ownPractices }, organizationId: fromOrganizationId, practiceKey: { startsWith: 'own:' } },
       data: to,
     }),
   ]);

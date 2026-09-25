@@ -1,3 +1,4 @@
+import { TIER_INFO, TIERS, type Tier } from '../referral-list/tiers';
 import { cleanAnswers, LAST_REFERRAL, ORIGIN, REFERRAL_VOLUME, STRENGTH, type RelationshipAnswers } from './trs';
 
 /**
@@ -61,6 +62,7 @@ const COLUMNS: Record<string, string[]> = {
   strength: ['relationship', 'relationship strength', 'strength'],
   origin: ['relationship origin', 'origin', 'developed', 'where developed'],
   clinic: ['location', 'clinic location', 'our clinic', 'your clinic'],
+  tier: ['tier', 'score', 'your score'],
 };
 
 function norm(value: string): string {
@@ -82,6 +84,8 @@ export interface ImportRow {
   zip: string | null;
   type: 'practice' | 'physician' | 'school' | 'other';
   clinic: string | null;
+  /** Trusted, Warm, Cold, or Not a fit, when the sheet says so. */
+  tier: Tier | null;
   answers: RelationshipAnswers;
 }
 
@@ -132,6 +136,12 @@ function optionKey(options: readonly { key: string; label: string }[], value: st
   const text = norm(value);
   if (!text) return null;
   return options.find((option) => option.key === text || norm(option.label) === text)?.key ?? null;
+}
+
+function tierKey(value: string): Tier | null {
+  const text = norm(value);
+  if (!text) return null;
+  return TIERS.find((tier) => norm(tier.replace('_', ' ')) === text || norm(TIER_INFO[tier].label) === text) ?? null;
 }
 
 function typeOf(value: string, hasNpi: boolean, practiceName: string | null): ImportRow['type'] {
@@ -198,6 +208,7 @@ export function parseImport(text: string, today: Date = new Date()): ImportParse
       zip: digits(cell('zip')).slice(0, 5) || null,
       type: typeOf(cell('type'), Boolean(npiDigits), practiceName),
       clinic: cell('clinic') || null,
+      tier: tierKey(cell('tier')),
       answers: cleanAnswers({
         lastReferral: lastReferralKey(cell('lastReferral'), today),
         referralVolume: volumeKey(cell('referralVolume')),
@@ -210,5 +221,5 @@ export function parseImport(text: string, today: Date = new Date()): ImportParse
 }
 
 export const TEMPLATE_CSV =
-  'Name,Practice,NPI,Specialty,Phone,Fax,Email,Address,City,State,ZIP,Type,Last referral,Referrals,Relationship,Location\n' +
-  'Joan Perry,Kinston Pediatric Associates,1234567893,Pediatrics,252-522-0335,252-522-4016,,2509 N Queen St,Kinston,NC,28501,Physician,2026-08-15,5,Knows us professionally,Kinston\n';
+  'Name,Practice,NPI,Phone,Fax,Address,City,State,ZIP,Location,Score\n' +
+  'Joan Perry,Kinston Pediatric Associates,1234567893,252-522-0335,252-522-4016,2509 N Queen St,Kinston,NC,28501,Kinston,Trusted\n';

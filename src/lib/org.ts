@@ -13,3 +13,10 @@ export const CATALOG_ORGANIZATION_ID = DEFAULT_ORGANIZATION_ID;
 export function isDefaultOrg(organizationId: string | null | undefined): boolean {
   return organizationId === DEFAULT_ORGANIZATION_ID;
 }
+
+/**
+ * Practice filter for the shared catalog: pulled practices only. A practice
+ * someone added by hand (key own:…) belongs to that organization alone, even
+ * Paragon's, which sit in the catalog organization.
+ */
+export const SHARED_PRACTICE = { organizationId: CATALOG_ORGANIZATION_ID, practiceKey: { not: { startsWith: 'own:' } } };

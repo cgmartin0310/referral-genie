@@ -46,7 +46,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
       tierSetAt: row.tierSetAt?.toISOString() ?? null,
       addedFrom: row.addedFrom,
       // Added by hand and not in the shared catalog: only this subscriber sees it.
-      private: row.practice.organizationId === tenant.organizationId && row.practice.organizationId !== CATALOG_ORGANIZATION_ID,
+      private: row.practice.practiceKey.startsWith('own:'),
     }));
     return NextResponse.json({
       clinic,

@@ -1,5 +1,5 @@
 import prisma from '../prisma';
-import { CATALOG_ORGANIZATION_ID } from '../org';
+import { CATALOG_ORGANIZATION_ID, SHARED_PRACTICE } from '../org';
 import { countyForZip } from '../npi/county-map';
 import { nearestClinic } from '../geo/distance';
 import { estimateMonthlyReferrals, ratesForDisciplines, type EstimateRates } from '../practices/estimate';
@@ -55,7 +55,7 @@ export async function prospectsFor(organizationId: string): Promise<{
   const [practices, sources, decisions, rates] = await Promise.all([
     prisma.practice.findMany({
       where: {
-        organizationId: CATALOG_ORGANIZATION_ID,
+        ...SHARED_PRACTICE,
         countyFips: { in: [...market.keys()] },
         hiddenAt: null,
         retiredAt: null,

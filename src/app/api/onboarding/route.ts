@@ -16,7 +16,7 @@ async function progress(organizationId: string) {
       select: { name: true, ownerName: true, ownerPhone: true, ownerEmail: true, contactName: true, contactPhone: true, contactEmail: true, onboardedAt: true },
     }),
     prisma.clinicLocation.count({ where: { organizationId } }),
-    prisma.sourceRelationship.count({ where: { organizationId } }),
+    prisma.clinicPractice.count({ where: { organizationId } }),
     loadFaxSettings(organizationId),
     prospectsFor(organizationId),
   ]);

@@ -1,13 +1,13 @@
 import type { SourceRelationship } from '@prisma/client';
 import prisma from '../prisma';
-import { CATALOG_ORGANIZATION_ID } from '../org';
+import { SHARED_PRACTICE } from '../org';
 import { buildCatalogIndex, type CatalogIndex } from './match';
 import { trustBand } from './trs';
 
 /** The shared catalog, indexed for matching. One read per request. */
 export async function loadCatalogIndex(): Promise<CatalogIndex> {
   const practices = await prisma.practice.findMany({
-    where: { organizationId: CATALOG_ORGANIZATION_ID, hiddenAt: null },
+    where: { ...SHARED_PRACTICE, hiddenAt: null },
     select: {
       id: true, name: true, placeName: true, zipCode: true, faxNumber: true, phone: true, orgNpis: true,
       providers: { where: { hiddenAt: null }, select: { npiNumber: true } },

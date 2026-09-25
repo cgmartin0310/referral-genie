@@ -133,13 +133,18 @@ function Sources({ progress }: { progress: Progress }) {
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [report, setReport] = useState<string | null>(null);
+  const { data: clinics } = useQuery({
+    queryKey: ['clinic-locations'],
+    queryFn: async () => (await axios.get<{ id: string; name: string }[]>('/api/clinic-locations')).data,
+  });
   const upload = useMutation({
+    // Rows without a Location column go on the first clinic's list.
     mutationFn: async (csv: string) =>
-      (await axios.post<{ accepted: number; merged: number; matched: number; rejected: unknown[] }>('/api/relationships/import', { csv })).data,
+      (await axios.post<{ added: number; alreadyListed: number; matched: number; rejected: unknown[] }>('/api/referral-list/import', { csv, clinicId: clinics?.[0]?.id })).data,
     onSuccess: (result) => {
-      setReport(`${result.accepted} added, ${result.merged} merged, ${result.rejected.length} rejected; ${result.matched} found in our catalog.`);
+      setReport(`${result.added} added, ${result.alreadyListed} already listed, ${result.rejected.length} rejected; ${result.matched} found in our catalog.`);
       queryClient.invalidateQueries({ queryKey: ['onboarding'] });
-      queryClient.invalidateQueries({ queryKey: ['relationships'] });
+      queryClient.invalidateQueries({ queryKey: ['referral-list'] });
     },
     onError: () => toast.error('Could not import the file'),
   });

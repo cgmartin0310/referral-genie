@@ -1,8 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import prisma from '@/lib/prisma';
 import { clerkEnabled } from '@/lib/clerk-config';
-import { currentTenant, requireParagon, tenantErrorResponse } from '@/lib/tenant';
+import { currentTenant, organizationForClerk, requireParagon, tenantErrorResponse } from '@/lib/tenant';
+import { addSubscriber } from '@/lib/subscribers';
+import { inviteRedirectUrl, subscriberInput } from '@/lib/subscriber-rules';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,13 +24,15 @@ interface Row {
 
 /**
  * Every subscriber, for Paragon: its Clerk organization and members, and how
- * much it has set up. A Clerk organization nobody has signed into yet is
- * listed too, as not signed in.
+ * much it has set up. A Clerk organization made outside Referral360 (in the
+ * Clerk dashboard) is set up here as it would be on its first sign-in, so it
+ * can be invited to and moved to right away.
  */
 export async function GET() {
   try {
     const tenant = await currentTenant();
     requireParagon(tenant, 'The subscriber list is for Paragon.');
+    const clerkError = clerkEnabled() ? await linkClerkOrganizations() : null;
 
     const organizations = await prisma.organization.findMany({
       orderBy: [{ kind: 'asc' }, { name: 'asc' }],
@@ -43,24 +47,13 @@ export async function GET() {
     });
 
     const members = new Map<string, number>();
-    const clerkOnly: Row[] = [];
-    let clerkError: string | null = null;
-    if (clerkEnabled()) {
+    if (clerkEnabled() && !clerkError) {
       try {
         const client = await clerkClient();
         const list = await client.organizations.getOrganizationList({ limit: 200, includeMembersCount: true });
-        const linked = new Set(organizations.map((row) => row.clerkOrgId).filter(Boolean));
-        for (const org of list.data) {
-          members.set(org.id, org.membersCount ?? 0);
-          if (!linked.has(org.id)) {
-            clerkOnly.push({
-              id: null, name: org.name, kind: 'subscriber', clerkOrgId: org.id, members: org.membersCount ?? 0,
-              signedIn: false, clinics: 0, listed: 0, campaigns: 0, activity: 0, createdAt: new Date(org.createdAt).toISOString(),
-            });
-          }
-        }
-      } catch (error) {
-        clerkError = error instanceof Error ? error.message : 'Could not reach Clerk';
+        for (const org of list.data) members.set(org.id, org.membersCount ?? 0);
+      } catch {
+        // Member counts are a nicety; the list still shows without them.
       }
     }
 
@@ -78,11 +71,52 @@ export async function GET() {
       createdAt: row.createdAt.toISOString(),
     }));
 
-    return NextResponse.json({ subscribers: [...rows, ...clerkOnly], clerk: clerkEnabled(), clerkError });
+    return NextResponse.json({ subscribers: rows, clerk: clerkEnabled(), clerkError });
   } catch (error) {
     const denied = tenantErrorResponse(error);
     if (denied) return denied;
     console.error('Error listing subscribers:', error);
     return NextResponse.json({ error: 'Failed to list subscribers' }, { status: 500 });
+  }
+}
+
+/** Give every Clerk organization its row here. Returns Clerk's error, if it could not be reached. */
+async function linkClerkOrganizations(): Promise<string | null> {
+  try {
+    const client = await clerkClient();
+    const list = await client.organizations.getOrganizationList({ limit: 200 });
+    const linked = new Set(
+      (await prisma.organization.findMany({ where: { clerkOrgId: { not: null } }, select: { clerkOrgId: true } })).map((row) => row.clerkOrgId),
+    );
+    for (const org of list.data) {
+      if (!linked.has(org.id)) await organizationForClerk(org.id);
+    }
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : 'Could not reach Clerk';
+  }
+}
+
+/**
+ * Add a subscriber: creates its Clerk organization and emails the owner an
+ * invitation to be its admin. Body: { name, ownerEmail }.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const tenant = await currentTenant();
+    requireParagon(tenant, 'Only Paragon adds subscribers.');
+    if (!clerkEnabled()) {
+      return NextResponse.json({ error: 'Clerk is not set up on this server, so subscribers cannot sign in yet.' }, { status: 400 });
+    }
+    const names = (await prisma.organization.findMany({ select: { name: true } })).map((row) => row.name);
+    const input = subscriberInput(await request.json().catch(() => ({})), names);
+    if ('error' in input) return NextResponse.json({ error: input.error }, { status: 400 });
+    const { organization, inviteError } = await addSubscriber({ ...input, redirectUrl: inviteRedirectUrl(request.headers) });
+    return NextResponse.json({ subscriber: organization, invited: inviteError ? null : input.ownerEmail, inviteError });
+  } catch (error) {
+    const denied = tenantErrorResponse(error);
+    if (denied) return denied;
+    console.error('Error adding subscriber:', error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to add the subscriber' }, { status: 500 });
   }
 }

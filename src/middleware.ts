@@ -13,6 +13,7 @@ const PUBLIC_PATHS = [
   /^\/api\/auth(\/|$)/,
   /^\/sign-in(\/|$)/,
   /^\/sign-up(\/|$)/,
+  /^\/accept-invite$/,
   /^\/__clerk(\/|$)/,
   // HumbleFax delivery callbacks carry no session; the route checks its own shared secret.
   /^\/api\/campaigns\/fax-webhook$/,

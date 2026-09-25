@@ -31,7 +31,8 @@ export class TenantError extends Error {
   }
 }
 
-async function organizationForClerk(clerkOrgId: string): Promise<{ id: string; name: string; kind: string }> {
+/** The subscriber row for a Clerk organization, created the first time it is seen. */
+export async function organizationForClerk(clerkOrgId: string): Promise<{ id: string; name: string; kind: string }> {
   const linked = await prisma.organization.findUnique({ where: { clerkOrgId }, select: { id: true, name: true, kind: true } });
   if (linked) return linked;
 

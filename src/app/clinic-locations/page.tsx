@@ -11,6 +11,8 @@ import ClinicFormFields, { clinicToForm, emptyClinicForm, type ClinicFormValues 
 import { PlusIcon, PencilIcon, TrashIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { Dialog } from '@headlessui/react';
 import type { MarketCountyView } from '@/lib/geo/market-view';
+import { useTenant } from '@/lib/use-tenant';
+import MoveToSubscriber from '@/components/admin/MoveToSubscriber';
 
 interface ClinicLocation {
   id: string;
@@ -32,6 +34,7 @@ interface ClinicLocation {
 export default function ClinicLocationsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { data: me } = useTenant();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<ClinicLocation | null>(null);
   const [formData, setFormData] = useState<ClinicFormValues>(emptyClinicForm());
@@ -132,6 +135,8 @@ export default function ClinicLocationsPage() {
               Your clinic sites. Each one keeps its own referral list, built from the practices under Referral Sources.
             </p>
           </div>
+          <div className="flex items-center gap-3">
+          {me?.isParagon && <MoveToSubscriber />}
           <button
             onClick={() => openModal()}
             className="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
@@ -139,6 +144,7 @@ export default function ClinicLocationsPage() {
             <PlusIcon className="-ml-0.5 mr-1.5 h-5 w-5" aria-hidden="true" />
             Add clinic
           </button>
+          </div>
         </div>
       </div>
 

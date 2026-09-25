@@ -70,15 +70,15 @@ export async function campaignDocument(
   return { name: saved.name, bytes };
 }
 
-/** The document with the opt-out line on every page, ready to attach to each fax. */
+/** The document with the opt-out line on every page (none when line is null), ready to attach to each fax. */
 export async function stampedCampaignDocument(
   campaign: { id: string; documentUrl: string | null; documentName: string | null },
   organizationId: string,
-  line: string,
+  line: string | null,
   repoint: (url: string) => Promise<unknown>,
 ): Promise<{ fileName: string; bytes: Buffer }> {
   const document = await campaignDocument(campaign, organizationId, repoint);
-  const stamped = await stampPdf(document.bytes, line).catch(() => {
+  const stamped = await (line ? stampPdf(document.bytes, line) : Promise.resolve(document.bytes)).catch(() => {
     throw new FaxDocumentError('The fax document could not be read as a PDF. Save it as PDF again and upload it on the campaign.');
   });
   const base = document.name.replace(/\.pdf$/i, '').replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 60) || 'document';

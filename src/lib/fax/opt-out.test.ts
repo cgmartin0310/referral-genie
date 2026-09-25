@@ -1,3 +1,4 @@
+import { faxNotice } from './opt-out';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { execFileSync } from 'node:child_process';
@@ -52,5 +53,19 @@ describe('fax opt-out line', () => {
       assert.equal(pages.length, 3);
       for (const page of pages) assert.match(page.replace(/\s+/g, ' '), /To stop receiving faxes from us, call \(704\) 240-3500/);
     }
+  });
+});
+
+describe('leaving the opt-out line off', () => {
+  const full = { senderName: 'Boom Therapy', optOutPhone: '704-240-3500', optOutFax: '888-555-0140' };
+  it('prints the line by default, and needs all three fields', () => {
+    assert.equal(faxNotice(full).ready, true);
+    assert.match(faxNotice(full).line ?? '', /To stop receiving faxes/);
+    assert.equal(faxNotice({ senderName: 'Boom Therapy' }).ready, false);
+  });
+  it('prints nothing when the company has consent, but still needs a sender', () => {
+    assert.deepEqual(faxNotice({ ...full, suppressOptOut: true }), { line: null, ready: true, problem: null });
+    assert.equal(faxNotice({ senderName: 'Boom Therapy', suppressOptOut: true }).ready, true);
+    assert.equal(faxNotice({ suppressOptOut: true }).ready, false);
   });
 });

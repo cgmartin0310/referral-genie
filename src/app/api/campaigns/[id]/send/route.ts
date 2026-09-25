@@ -1,5 +1,5 @@
 import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
-import { optOutLine, withOptOut } from '@/lib/fax/opt-out';
+import { faxNotice, withOptOut } from '@/lib/fax/opt-out';
 import { loadFaxSettings } from '@/lib/fax/settings';
 import { FaxDocumentError, stampedCampaignDocument } from '@/lib/fax/documents';
 import { NextRequest, NextResponse } from 'next/server';
@@ -56,15 +56,16 @@ export async function POST(
     // Every page carries the opt-out line: who sent it and a free phone and
     // fax to stop further faxes. Nothing goes out until those are set.
     const faxSettings = await loadFaxSettings(tenant.organizationId);
-    const optOut = optOutLine(faxSettings);
+    // The opt-out line on every page, unless the company stated it has
+    // permission from every practice it faxes (Settings).
+    const notice = faxNotice(faxSettings);
+    const optOut = notice.line;
     // The cover sheet is from the subscriber: its sender name unless the campaign names someone.
     const fromName = (campaign.coverSheetFromName || faxSettings.senderName).trim();
-    if (!optOut) {
-      return NextResponse.json(
-        { error: 'Set the sender name, opt-out phone, and opt-out fax in Settings before sending. Every fax page carries them.' },
-        { status: 400 }
-      );
+    if (!notice.ready) {
+      return NextResponse.json({ error: notice.problem }, { status: 400 });
     }
+    const coverMessage = (message: string) => (optOut ? withOptOut(message, optOut) : message);
     // The document comes from the database, is stamped once, and is attached
     // to each fax as bytes; nothing depends on files on the server's disk.
     let document: { fileName: string; bytes: Buffer };
@@ -158,7 +159,7 @@ export async function POST(
             companyInfo: campaign.coverSheetCompanyInfo || "",
             toName: referralSource.contactPerson || referralSource.name || "Provider",
             subject: campaign.coverSheetSubject || "Referral Information",
-            message: withOptOut(campaign.coverSheetMessage || "Please see the attached referral information.", optOut),
+            message: coverMessage(campaign.coverSheetMessage || "Please see the attached referral information."),
           } : {
             includeCoversheet: false
           }
@@ -369,7 +370,7 @@ export async function POST(
             companyInfo: campaign.coverSheetCompanyInfo || "",
             toName: target.toName,
             subject: campaign.coverSheetSubject || "Referral Information",
-            message: withOptOut(campaign.coverSheetMessage || "Please see the attached referral information.", optOut),
+            message: coverMessage(campaign.coverSheetMessage || "Please see the attached referral information."),
           } : { includeCoversheet: false },
         });
         if (result.success) {

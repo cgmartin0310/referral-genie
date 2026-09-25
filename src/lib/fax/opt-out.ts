@@ -25,6 +25,29 @@ export function optOutLine(settings: Partial<OptOutSettings> | null | undefined)
   return `Sent by ${sender}. To stop receiving faxes from us, call ${formatNumber(phone)} or fax ${formatNumber(fax)}, free of charge. We honor requests within 30 days.`;
 }
 
+/**
+ * What a company's faxes carry, and whether they can go out. Normally the
+ * opt-out line, which needs a sender, phone, and fax. A company that states it
+ * has prior express permission from every practice it faxes can leave the line
+ * off; its sender name still goes on the cover sheet.
+ */
+export function faxNotice(settings: (Partial<OptOutSettings> & { suppressOptOut?: boolean }) | null | undefined): {
+  line: string | null;
+  ready: boolean;
+  problem: string | null;
+} {
+  if (settings?.suppressOptOut) {
+    const ready = Boolean(settings.senderName?.trim());
+    return { line: null, ready, problem: ready ? null : 'Set the sender name in Settings before sending. It goes on the cover sheet.' };
+  }
+  const line = optOutLine(settings);
+  return {
+    line,
+    ready: line !== null,
+    problem: line ? null : 'Set the sender name, opt-out phone, and opt-out fax in Settings before sending. Every fax page carries them.',
+  };
+}
+
 /** The cover sheet message with the opt-out line after it. */
 export function withOptOut(message: string, line: string): string {
   const trimmed = message.trim();

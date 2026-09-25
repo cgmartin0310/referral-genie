@@ -170,6 +170,11 @@ model FaxSettings {
   senderName     String?
   optOutPhone    String?
   optOutFax      String?
+  /// No opt-out line on faxes: the company states it has prior express
+  /// permission from every practice it faxes. Who said so, and when, is kept.
+  suppressOptOut    Boolean   @default(false)
+  consentAttestedAt DateTime?
+  consentAttestedBy String?
   updatedAt      DateTime     @updatedAt
 }
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
 import { loadFaxSettings } from '@/lib/fax/settings';
-import { optOutLine } from '@/lib/fax/opt-out';
+import { faxNotice } from '@/lib/fax/opt-out';
 import { parseTier, TIERS } from '@/lib/referral-list/tiers';
 
 export const dynamic = 'force-dynamic';
@@ -36,7 +36,7 @@ async function progress(organizationId: string) {
     clinics: clinics.length > 0,
     market: clinics.length > 0 && clinics.every((clinic) => clinic._count.marketCounties > 0),
     sources: listed - byTier.unscored > 0,
-    fax: optOutLine(fax) !== null,
+    fax: faxNotice(fax).ready,
   };
   return {
     organizationName: organization.name,

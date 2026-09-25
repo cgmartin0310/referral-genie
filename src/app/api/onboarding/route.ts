@@ -3,39 +3,42 @@ import prisma from '@/lib/prisma';
 import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
 import { loadFaxSettings } from '@/lib/fax/settings';
 import { optOutLine } from '@/lib/fax/opt-out';
-import { prospectsFor } from '@/lib/prospects/db';
+import { parseTier, TIERS } from '@/lib/referral-list/tiers';
 
 export const dynamic = 'force-dynamic';
 
 const PROFILE_FIELDS = ['ownerName', 'ownerPhone', 'ownerEmail', 'contactName', 'contactPhone', 'contactEmail'] as const;
 
+/**
+ * Setup, in order: the company's contacts, its locations, each location's
+ * market (which builds its referral list), scoring that list, and the fax
+ * opt-out line. Each step's state is read fresh; nothing about it is stored.
+ */
 async function progress(organizationId: string) {
-  const [organization, clinics, sources, fax, prospects] = await Promise.all([
+  const [organization, clinics, tiers, fax] = await Promise.all([
     prisma.organization.findUniqueOrThrow({
       where: { id: organizationId },
       select: { name: true, ownerName: true, ownerPhone: true, ownerEmail: true, contactName: true, contactPhone: true, contactEmail: true, onboardedAt: true },
     }),
-    prisma.clinicLocation.count({ where: { organizationId } }),
-    prisma.clinicPractice.count({ where: { organizationId } }),
+    prisma.clinicLocation.findMany({ where: { organizationId }, select: { _count: { select: { marketCounties: true } } } }),
+    prisma.clinicPractice.groupBy({ by: ['tier'], where: { organizationId, practice: { hiddenAt: null } }, _count: { _all: true } }),
     loadFaxSettings(organizationId),
-    prospectsFor(organizationId),
   ]);
+  const byTier: Record<string, number> = { unscored: 0, ...Object.fromEntries(TIERS.map((tier) => [tier, 0])) };
+  for (const row of tiers) byTier[parseTier(row.tier) ?? 'unscored'] += row._count._all;
+  const listed = Object.values(byTier).reduce((sum, count) => sum + count, 0);
   const steps = {
     contacts: Boolean(organization.ownerName && (organization.ownerEmail || organization.ownerPhone)),
-    clinics: clinics > 0,
-    sources: sources > 0,
+    clinics: clinics.length > 0,
+    market: clinics.length > 0 && clinics.every((clinic) => clinic._count.marketCounties > 0),
+    sources: listed - byTier.unscored > 0,
     fax: optOutLine(fax) !== null,
   };
   return {
     organizationName: organization.name,
     profile: Object.fromEntries(PROFILE_FIELDS.map((field) => [field, organization[field] ?? ''])),
     steps,
-    counts: {
-      clinics,
-      sources,
-      prospects: prospects.prospects.filter((row) => row.status !== 'excluded').length,
-      prospectProviders: prospects.prospects.filter((row) => row.status !== 'excluded').reduce((sum, row) => sum + row.providers, 0),
-    },
+    counts: { clinics: clinics.length, listed, scored: listed - byTier.unscored, byTier },
     done: Object.values(steps).filter(Boolean).length,
     total: Object.keys(steps).length,
     onboardedAt: organization.onboardedAt?.toISOString() ?? null,

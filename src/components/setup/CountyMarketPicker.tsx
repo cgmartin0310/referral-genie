@@ -10,14 +10,6 @@ interface StateOption {
   name: string;
 }
 
-const LENOIR_EXAMPLE: MarketCountyView = {
-  fips: '37107',
-  name: 'Lenoir County',
-  state: 'NC',
-  pullReady: true,
-  seedCountyId: 'lenoir-nc',
-};
-
 function sameMarket(left: MarketCountyView[], right: MarketCountyView[]): boolean {
   const key = (counties: MarketCountyView[]) =>
     counties
@@ -107,15 +99,6 @@ export default function CountyMarketPicker({
     });
   };
 
-  const addExample = () => {
-    setStateCode('NC');
-    setQuery('Lenoir');
-    setSelected((current) => {
-      if (current.some((item) => item.fips === LENOIR_EXAMPLE.fips)) return current;
-      return [...current, LENOIR_EXAMPLE].sort((a, b) => a.state.localeCompare(b.state) || a.name.localeCompare(b.name));
-    });
-  };
-
   const save = async () => {
     setSaving(true);
     try {
@@ -142,17 +125,6 @@ export default function CountyMarketPicker({
       <p className="mt-1 text-sm text-gray-600">
         Choose one or more US counties as this clinic&apos;s market. Search by state, then county name.
       </p>
-
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={addExample}
-          className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-        >
-          Add example: Lenoir County, NC
-        </button>
-        <p className="text-xs text-gray-500">Lenoir County, NC is an example. Any other county can be saved too.</p>
-      </div>
 
       {selected.length > 0 && (
         <ul className="mt-4 flex flex-wrap gap-2">

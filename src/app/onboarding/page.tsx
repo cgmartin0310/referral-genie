@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,23 +10,29 @@ import { CheckCircleIcon } from '@heroicons/react/24/solid';
 import MainLayout from '@/components/layout/MainLayout';
 import ClinicFormFields, { emptyClinicForm, type ClinicFormValues } from '@/components/clinic/ClinicFormFields';
 import FaxOptOutSettings from '@/components/FaxOptOutSettings';
+import CountyMarketPicker from '@/components/setup/CountyMarketPicker';
+import MarketStatusNotice from '@/components/referral-list/MarketStatus';
+import ReferralListManager from '@/components/referral-list/ReferralListManager';
+import type { MarketCountyView } from '@/lib/geo/market-view';
+import { TIER_INFO, TIERS } from '@/lib/referral-list/tiers';
 
 interface Progress {
   organizationName: string;
   profile: Record<'ownerName' | 'ownerPhone' | 'ownerEmail' | 'contactName' | 'contactPhone' | 'contactEmail', string>;
-  steps: { contacts: boolean; clinics: boolean; sources: boolean; fax: boolean };
-  counts: { clinics: number; sources: number; prospects: number; prospectProviders: number };
+  steps: { contacts: boolean; clinics: boolean; market: boolean; sources: boolean; fax: boolean };
+  counts: { clinics: number; listed: number; scored: number; byTier: Record<string, number> };
   done: number;
   total: number;
   onboardedAt: string | null;
 }
 
 const STEPS = [
-  { key: 'contacts', title: 'Your practice' },
-  { key: 'clinics', title: 'Clinic locations' },
-  { key: 'sources', title: 'Your referral sources' },
+  { key: 'contacts', title: 'Your company' },
+  { key: 'clinics', title: 'Locations' },
+  { key: 'market', title: 'Market' },
+  { key: 'sources', title: 'Score your list' },
   { key: 'fax', title: 'Fax setup' },
-  { key: 'review', title: 'How we start' },
+  { key: 'review', title: 'How outreach starts' },
 ] as const;
 
 function classNames(...classes: (string | false | null | undefined)[]) {
@@ -129,79 +135,81 @@ function Clinics() {
   );
 }
 
-function Sources({ progress }: { progress: Progress }) {
+interface ClinicWithMarket {
+  id: string;
+  name: string;
+  city: string | null;
+  marketCounties?: MarketCountyView[];
+}
+
+/** Each location's counties. They build its referral list: every practice in them goes on it. */
+function Market() {
   const queryClient = useQueryClient();
-  const input = useRef<HTMLInputElement>(null);
-  const [report, setReport] = useState<string | null>(null);
   const { data: clinics } = useQuery({
     queryKey: ['clinic-locations'],
-    queryFn: async () => (await axios.get<{ id: string; name: string }[]>('/api/clinic-locations')).data,
+    queryFn: async () => (await axios.get<ClinicWithMarket[]>('/api/clinic-locations')).data,
   });
-  const upload = useMutation({
-    // Rows without a Location column go on the first clinic's list.
-    mutationFn: async (csv: string) =>
-      (await axios.post<{ added: number; alreadyListed: number; matched: number; rejected: unknown[] }>('/api/referral-list/import', { csv, clinicId: clinics?.[0]?.id })).data,
-    onSuccess: (result) => {
-      setReport(`${result.added} added, ${result.alreadyListed} already listed, ${result.rejected.length} rejected; ${result.matched} found in our catalog.`);
-      queryClient.invalidateQueries({ queryKey: ['onboarding'] });
-      queryClient.invalidateQueries({ queryKey: ['referral-list'] });
-    },
-    onError: () => toast.error('Could not import the file'),
-  });
+  if (!clinics) return <p className="text-sm text-gray-500">Loading…</p>;
+  if (clinics.length === 0) return <p className="text-sm text-gray-600">Add a location first.</p>;
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <p className="text-sm text-gray-600">
-        We start with gentle reminder outreach to providers and practices that already know you. Add as many existing
-        relationships as you can; each gets a trust score that shapes the tone and frequency of outreach.
+        Pick the counties each location draws patients from. We put every primary care and pediatric practice in them on
+        that location&rsquo;s referral list, ready for you to score. Counties we have not gathered yet take a few minutes.
       </p>
-      <p className="text-sm text-gray-800">
-        You have <strong>{progress.counts.sources}</strong> referral source{progress.counts.sources === 1 ? '' : 's'} so far.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <a href="/api/relationships/template" className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
-          Download the spreadsheet template
-        </a>
-        <button
-          type="button"
-          onClick={() => input.current?.click()}
-          disabled={upload.isPending}
-          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
-        >
-          {upload.isPending ? 'Importing…' : 'Upload your spreadsheet (CSV)'}
-        </button>
-        <input
-          ref={input}
-          type="file"
-          accept=".csv,text/csv"
-          className="hidden"
-          onChange={async (event) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-            if (!/\.csv$/i.test(file.name)) { toast.error('Save the spreadsheet as CSV first, then upload it.'); return; }
-            upload.mutate(await file.text());
-            event.target.value = '';
-          }}
-        />
-        <Link href="/relationships" className="rounded-md bg-[#0B2A5B] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#123a7a]">
-          Add them one at a time
-        </Link>
-      </div>
-      {report && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">{report}</p>}
+      <MarketStatusNotice />
+      {clinics.map((clinic) => (
+        <div key={clinic.id} className="rounded-md border border-gray-200 p-4">
+          <p className="mb-3 text-sm font-semibold text-gray-900">
+            {clinic.name}
+            {clinic.city && <span className="font-normal text-gray-500"> · {clinic.city}</span>}
+          </p>
+          <CountyMarketPicker
+            clinicId={clinic.id}
+            saved={clinic.marketCounties ?? []}
+            onSaved={() => {
+              queryClient.invalidateQueries({ queryKey: ['clinic-locations'] });
+              queryClient.invalidateQueries({ queryKey: ['market-status'] });
+              queryClient.invalidateQueries({ queryKey: ['referral-list'] });
+              queryClient.invalidateQueries({ queryKey: ['onboarding'] });
+            }}
+          />
+        </div>
+      ))}
     </div>
   );
 }
 
 function Review({ progress, onFinish, finishing }: { progress: Progress; onFinish: () => void; finishing: boolean }) {
+  const { byTier } = progress.counts;
   return (
     <div className="space-y-4 text-sm text-gray-700">
-      <ol className="space-y-3">
-        <li><strong className="text-gray-900">1. Start here.</strong> We begin marketing to your {progress.counts.sources} existing referral source{progress.counts.sources === 1 ? '' : 's'}, with outreach shaped by each one&rsquo;s trust score.</li>
-        <li>
-          <strong className="text-gray-900">2. As your program grows.</strong> We&rsquo;ve found {progress.counts.prospects} nearby practices
-          ({progress.counts.prospectProviders} providers) that are not among your sources yet.{' '}
-          <Link href="/prospects" className="font-medium text-green-700 hover:underline">Review them</Link> and exclude any we should skip.
+      <p>
+        {progress.counts.listed} practice{progress.counts.listed === 1 ? '' : 's'} on your lists, {progress.counts.scored} scored.
+        Each tier gets its own outreach:
+      </p>
+      <ul className="divide-y divide-gray-100 rounded-md border border-gray-200">
+        {TIERS.map((tier) => (
+          <li key={tier} className="flex items-baseline justify-between gap-4 px-4 py-2">
+            <span>
+              <span className="font-medium text-gray-900">{TIER_INFO[tier].label}</span>
+              <span className="text-gray-500"> · {TIER_INFO[tier].outreach}</span>
+            </span>
+            <span className="font-semibold text-gray-900">{byTier[tier] ?? 0}</span>
+          </li>
+        ))}
+        <li className="flex items-baseline justify-between gap-4 px-4 py-2">
+          <span>
+            <span className="font-medium text-gray-900">Not scored yet</span>
+            <span className="text-gray-500"> · treated as Cold until you score them.</span>
+          </span>
+          <span className="font-semibold text-gray-900">{byTier.unscored ?? 0}</span>
         </li>
-      </ol>
+      </ul>
+      <p>
+        You can keep scoring, add practices, or upload a list any time under{' '}
+        <Link href="/relationships" className="font-medium text-green-700 hover:underline">Your Sources</Link>.
+      </p>
       {progress.done < progress.total && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-800">
           {progress.total - progress.done} step{progress.total - progress.done === 1 ? '' : 's'} still open. You can finish now and come back to them.
@@ -219,7 +227,7 @@ function Review({ progress, onFinish, finishing }: { progress: Progress; onFinis
   );
 }
 
-/** A new subscriber's setup: practice, locations, existing sources, fax, and how outreach starts. */
+/** A new subscriber's setup: company, locations, market (which builds the lists), scoring, fax, and how outreach starts. */
 export default function OnboardingPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -272,8 +280,10 @@ export default function OnboardingPage() {
           <Contacts progress={progress} />
         ) : step === 'clinics' ? (
           <Clinics />
+        ) : step === 'market' ? (
+          <Market />
         ) : step === 'sources' ? (
-          <Sources progress={progress} />
+          <ReferralListManager heading={false} />
         ) : step === 'fax' ? (
           <div className="-mt-6"><FaxOptOutSettings /></div>
         ) : (

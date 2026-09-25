@@ -19,6 +19,8 @@ export interface MovePlan {
   documents: string[];
   /** Practices the old organization added by hand to these clinics' lists (never pulled catalog rows). */
   ownPractices: string[];
+  /** The old organization's scores for practices on these clinics' lists, copied to the new one. */
+  scores: { practiceId: string; tier: string; setAt: Date; setBy: string | null }[];
 }
 
 export interface MoveSummary {
@@ -104,6 +106,10 @@ export async function planMove(input: {
   });
   const staying = new Set(stayingOn.map((row) => row.practiceId));
   const ownPractices = handAdded.map((row) => row.practiceId).filter((id) => !staying.has(id));
+  const scores = await prisma.practiceScore.findMany({
+    where: { organizationId: input.fromOrganizationId, practice: { clinicPractices: { some: { clinicLocationId: { in: clinicIds } } } } },
+    select: { practiceId: true, tier: true, setAt: true, setBy: true },
+  });
   const documents = campaigns
     .map((campaign) => (campaign.documentUrl ?? '').match(DOCUMENT_PATH)?.[1])
     .filter((id): id is string => Boolean(id));
@@ -116,6 +122,7 @@ export async function planMove(input: {
     relationships,
     documents,
     ownPractices: [...new Set(ownPractices)],
+    scores,
   };
 }
 
@@ -136,6 +143,11 @@ export async function executeMove(plan: MovePlan, fromOrganizationId: string, to
     prisma.practice.updateMany({
       where: { id: { in: plan.ownPractices }, organizationId: fromOrganizationId, practiceKey: { startsWith: 'own:' } },
       data: to,
+    }),
+    // The new organization starts from the old one's scores; any it already has stay.
+    prisma.practiceScore.createMany({
+      data: plan.scores.map((score) => ({ ...score, organizationId: toOrganizationId })),
+      skipDuplicates: true,
     }),
   ]);
 }

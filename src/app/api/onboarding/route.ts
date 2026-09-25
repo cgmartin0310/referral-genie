@@ -15,18 +15,22 @@ const PROFILE_FIELDS = ['ownerName', 'ownerPhone', 'ownerEmail', 'contactName', 
  * opt-out line. Each step's state is read fresh; nothing about it is stored.
  */
 async function progress(organizationId: string) {
-  const [organization, clinics, tiers, fax] = await Promise.all([
+  const [organization, clinics, practices, fax] = await Promise.all([
     prisma.organization.findUniqueOrThrow({
       where: { id: organizationId },
       select: { name: true, ownerName: true, ownerPhone: true, ownerEmail: true, contactName: true, contactPhone: true, contactEmail: true, onboardedAt: true },
     }),
     prisma.clinicLocation.findMany({ where: { organizationId }, select: { _count: { select: { marketCounties: true } } } }),
-    prisma.clinicPractice.groupBy({ by: ['tier'], where: { organizationId, practice: { hiddenAt: null } }, _count: { _all: true } }),
+    // Each practice once, however many of the company's lists it is on, with the company's score.
+    prisma.practice.findMany({
+      where: { hiddenAt: null, clinicPractices: { some: { organizationId, excludedAt: null } } },
+      select: { scores: { where: { organizationId }, select: { tier: true } } },
+    }),
     loadFaxSettings(organizationId),
   ]);
   const byTier: Record<string, number> = { unscored: 0, ...Object.fromEntries(TIERS.map((tier) => [tier, 0])) };
-  for (const row of tiers) byTier[parseTier(row.tier) ?? 'unscored'] += row._count._all;
-  const listed = Object.values(byTier).reduce((sum, count) => sum + count, 0);
+  for (const practice of practices) byTier[parseTier(practice.scores[0]?.tier) ?? 'unscored'] += 1;
+  const listed = practices.length;
   const steps = {
     contacts: Boolean(organization.ownerName && (organization.ownerEmail || organization.ownerPhone)),
     clinics: clinics.length > 0,

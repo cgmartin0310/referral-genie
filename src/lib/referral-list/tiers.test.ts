@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { audienceTierFilter, FAXABLE_TIER, parseAudienceTiers, parseTier, tierFromTrustScore, TIER_INFO, TIERS } from './tiers';
+import { audienceTierFilter, faxableEntries, parseAudienceTiers, parseTier, tierFromTrustScore, TIER_INFO, TIERS } from './tiers';
 
 describe('referral-list tiers', () => {
   it('knows its four tiers, each with outreach', () => {
@@ -26,9 +26,19 @@ describe('campaign tiers', () => {
     assert.deepEqual(parseAudienceTiers(['trusted', 'warm', 'cold']), []);
     assert.deepEqual(parseAudienceTiers(undefined), []);
   });
-  it('faxes the chosen tiers, with not-yet-scored counted as Cold, and never Not a fit', () => {
-    assert.deepEqual(audienceTierFilter([]), FAXABLE_TIER);
-    assert.deepEqual(audienceTierFilter(['trusted']), { OR: [{ tier: 'trusted' }] });
-    assert.deepEqual(audienceTierFilter(['warm', 'cold']), { OR: [{ tier: 'warm' }, { tier: 'cold' }, { tier: null }] });
+  it('faxes the chosen tiers of the company score, with not-yet-scored counted as Cold, and never Not a fit', () => {
+    assert.deepEqual(audienceTierFilter('org1', []), faxableEntries('org1'));
+    assert.deepEqual(faxableEntries('org1'), { excludedAt: null, practice: { scores: { none: { organizationId: 'org1', tier: 'not_fit' } } } });
+    assert.deepEqual(audienceTierFilter('org1', ['trusted']), {
+      excludedAt: null,
+      OR: [{ practice: { scores: { some: { organizationId: 'org1', tier: { in: ['trusted'] } } } } }],
+    });
+    assert.deepEqual(audienceTierFilter('org1', ['warm', 'cold']), {
+      excludedAt: null,
+      OR: [
+        { practice: { scores: { some: { organizationId: 'org1', tier: { in: ['warm', 'cold'] } } } } },
+        { practice: { scores: { none: { organizationId: 'org1' } } } },
+      ],
+    });
   });
 });

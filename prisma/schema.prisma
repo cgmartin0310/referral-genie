@@ -45,6 +45,7 @@ model Organization {
   estimateSettings   EstimateSettings?
   faxSettings        FaxSettings?
   faxDocuments       FaxDocument[]
+  practiceScores     PracticeScore[]
   catalogSettings    CatalogSettings?
   relationships      SourceRelationship[]
   prospectDecisions  ProspectDecision[]
@@ -530,6 +531,7 @@ model Practice {
   organization   Organization @relation(fields: [organizationId], references: [id])
   providers      Provider[]
   clinicPractices ClinicPractice[]
+  scores          PracticeScore[]
   campaignTargets CampaignTarget[]
 
   @@unique([organizationId, practiceKey])
@@ -574,11 +576,8 @@ model ClinicPractice {
   /// Optional override of the estimate for this relationship.
   expectedMonthlyReferrals Int?
   notes                    String?
-  /// The subscriber's score, which sets the outreach: trusted, warm, cold,
-  /// or not_fit (never faxed). Null until they score it.
-  tier                     String?
-  tierSetAt                DateTime?
-  tierSetBy                String?
+  /// Taken off this clinic's list by a person. Kept, so a later pull does not add it back.
+  excludedAt               DateTime?
   /// How it got on the list: market (built from the clinic's counties),
   /// manual (added by a person), or import (a CSV).
   addedFrom                String   @default("manual")
@@ -592,7 +591,23 @@ model ClinicPractice {
   @@unique([clinicLocationId, practiceId])
   @@index([practiceId])
   @@index([organizationId])
-  @@index([clinicLocationId, tier])
+}
+
+/// A subscriber's score for a practice, once for the whole company, which
+/// sets its outreach: trusted, warm, cold, or not_fit (never faxed). A
+/// practice with no score is treated as cold.
+model PracticeScore {
+  id             String       @id @default(cuid())
+  organizationId String
+  practiceId     String
+  tier           String
+  setAt          DateTime     @default(now())
+  setBy          String?
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  practice       Practice     @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, practiceId])
+  @@index([practiceId])
 }
 
 /// One fax in a campaign. Built from a clinic's referral list: everyone at a

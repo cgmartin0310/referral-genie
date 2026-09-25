@@ -1,7 +1,7 @@
 /**
- * The subscriber's score for a practice on a clinic's referral list. One
- * click each, so a long list can be scored during onboarding. The tier sets
- * the outreach; Not a fit is never faxed.
+ * A subscriber's score for a practice, once for the whole company. One click
+ * each, so a long list can be scored during onboarding. The tier sets the
+ * outreach; Not a fit is never faxed; a practice not scored counts as Cold.
  */
 
 export const TIERS = ['trusted', 'warm', 'cold', 'not_fit'] as const;
@@ -25,8 +25,10 @@ export function tierFromTrustScore(trs: number): Tier {
   return 'cold';
 }
 
-/** Prisma filter for list entries a campaign may fax: unscored, or scored as anything but Not a fit. */
-export const FAXABLE_TIER = { OR: [{ tier: null }, { tier: { not: 'not_fit' } }] };
+/** Prisma filter for a clinic's list entries a campaign may fax: on the list, and not scored Not a fit. */
+export function faxableEntries(organizationId: string) {
+  return { excludedAt: null, practice: { scores: { none: { organizationId, tier: 'not_fit' } } } };
+}
 
 /** Tiers a campaign can be aimed at. Not a fit is never faxed. */
 export const OUTREACH_TIERS = ['trusted', 'warm', 'cold'] as const;
@@ -40,11 +42,17 @@ export function parseAudienceTiers(value: unknown): OutreachTier[] {
 }
 
 /**
- * Prisma filter for the list entries a campaign faxes: the chosen tiers, where
- * Cold takes in practices not scored yet; with no tiers chosen, everything
- * but Not a fit.
+ * Prisma filter for the list entries a campaign faxes: the chosen tiers of
+ * the company's scores, where Cold takes in practices not scored yet; with no
+ * tiers chosen, everything but Not a fit. Entries taken off a list never are.
  */
-export function audienceTierFilter(tiers: readonly OutreachTier[]) {
-  if (tiers.length === 0) return FAXABLE_TIER;
-  return { OR: [...tiers.map((tier) => ({ tier })), ...(tiers.includes('cold') ? [{ tier: null }] : [])] };
+export function audienceTierFilter(organizationId: string, tiers: readonly OutreachTier[]) {
+  if (tiers.length === 0) return faxableEntries(organizationId);
+  return {
+    excludedAt: null,
+    OR: [
+      { practice: { scores: { some: { organizationId, tier: { in: [...tiers] } } } } },
+      ...(tiers.includes('cold') ? [{ practice: { scores: { none: { organizationId } } } }] : []),
+    ],
+  };
 }

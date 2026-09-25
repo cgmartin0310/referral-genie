@@ -13,7 +13,7 @@ export async function audienceForClinic(clinicId: string, organizationId: string
   const rows = await prisma.clinicPractice.findMany({
     // A deleted referral source, a removed provider, and a practice scored Not a fit are not faxed.
     // Only the chosen tiers (Cold takes in not-yet-scored); never Not a fit.
-    where: { clinicLocationId: clinicId, organizationId, practice: { hiddenAt: null }, ...audienceTierFilter(tiers) },
+    where: { clinicLocationId: clinicId, organizationId, AND: [{ practice: { hiddenAt: null } }, audienceTierFilter(organizationId, tiers)] },
     include: {
       practice: {
         include: {

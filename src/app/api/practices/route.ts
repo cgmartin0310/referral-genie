@@ -7,6 +7,7 @@ import { currentTenant, requireParagon, tenantErrorResponse } from '@/lib/tenant
 import { sumEstimates } from '@/lib/practices/estimate';
 import { loadEstimateRates } from '@/lib/practices/estimate-settings';
 import { addressClusterKey } from '@/lib/ingest/duplicates';
+import { parseTier } from '@/lib/referral-list/tiers';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +15,15 @@ export const dynamic = 'force-dynamic';
  * Referral sources as practices, with their providers nested and the clinics
  * each one is already listed for.
  *
+ * A subscriber sees its market: the practices on its clinics' lists (built
+ * from their counties), including ones it added by hand. Paragon sees the
+ * whole shared catalog and its own lists.
+ *
  * Query: countyFips, hasFax=1, clinicId (only practices on that clinic's
- * list), notOnClinicId (only practices not yet on that clinic's list), q.
+ * list), notOnClinicId (only practices not yet on that clinic's list), q,
+ * tier (trusted, warm, cold, not_fit, or unscored: the viewer's score), and
+ * scope=catalog with q (search the shared catalog for practices not on any
+ * of the viewer's lists, to add a missing one).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -26,6 +34,8 @@ export async function GET(request: NextRequest) {
     const notOnClinicId = params.get('notOnClinicId')?.trim() || null;
     const q = params.get('q')?.trim() || null;
     const deleted = params.get('deleted') === '1';
+    const tierParam = params.get('tier');
+    const searchCatalog = params.get('scope') === 'catalog';
     const tenant = await currentTenant();
     const rates = await loadEstimateRates(tenant.organizationId);
     const practiceInclude = practiceIncludeFor(tenant.organizationId);
@@ -57,8 +67,22 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const onOurLists: Prisma.PracticeWhereInput = { clinicPractices: { some: { organizationId: tenant.organizationId, excludedAt: null } } };
+    if (searchCatalog && !q) return NextResponse.json({ error: 'Enter something to search for' }, { status: 400 });
+    // Whose practices: the viewer's market, Paragon's catalog, or the catalog outside the viewer's lists.
+    const scope: Prisma.PracticeWhereInput = searchCatalog
+      ? { ...SHARED_PRACTICE, clinicPractices: { none: { organizationId: tenant.organizationId, excludedAt: null } } }
+      : tenant.isParagon
+        ? { OR: [SHARED_PRACTICE, onOurLists] }
+        : onOurLists;
+    const tierWhere: Prisma.PracticeWhereInput =
+      tierParam === 'unscored'
+        ? { scores: { none: { organizationId: tenant.organizationId } } }
+        : parseTier(tierParam)
+          ? { scores: { some: { organizationId: tenant.organizationId, tier: tierParam! } } }
+          : {};
     const where: Prisma.PracticeWhereInput = {
-      ...SHARED_PRACTICE,
+      AND: [scope, tierWhere],
       hiddenAt: null,
       // A clinic's own list still shows a row a later pull retired; the catalog does not.
       ...(clinicId ? {} : { retiredAt: null }),
@@ -78,7 +102,12 @@ export async function GET(request: NextRequest) {
         : {}),
     };
 
-    const [rows, counties] = await Promise.all([
+    // Counts by the viewer's score for the filter chips: the same view without the score filter.
+    const scoredIn = prisma.practice.findMany({
+      where: { AND: [scope], hiddenAt: null, retiredAt: null, ...(countyFips ? { countyFips } : {}) },
+      select: { scores: { where: { organizationId: tenant.organizationId }, select: { tier: true } } },
+    });
+    const [rows, counties, scored] = await Promise.all([
       prisma.practice.findMany({
         where,
         include: practiceInclude,
@@ -86,11 +115,14 @@ export async function GET(request: NextRequest) {
       }),
       prisma.practice.groupBy({
         by: ['countyFips', 'countyName'],
-        where: { ...SHARED_PRACTICE, countyFips: { not: null }, retiredAt: null, hiddenAt: null },
+        where: { AND: [tenant.isParagon ? SHARED_PRACTICE : onOurLists], countyFips: { not: null }, retiredAt: null, hiddenAt: null },
         _count: { _all: true },
         orderBy: { countyName: 'asc' },
       }),
+      searchCatalog ? Promise.resolve([]) : scoredIn,
     ]);
+    const tierCounts: Record<string, number> = { unscored: 0, trusted: 0, warm: 0, cold: 0, not_fit: 0 };
+    for (const row of scored) tierCounts[parseTier(row.scores[0]?.tier) ?? 'unscored'] += 1;
 
     const practices = rows.map((row) => presentPractice(row, rates, clinics));
     const estimate = sumEstimates(practices.map((practice) => practice.estimate));
@@ -105,6 +137,7 @@ export async function GET(request: NextRequest) {
         withFax: practices.filter((practice) => practice.faxNumber).length,
         estimate,
       },
+      tierCounts,
       counties: counties.map((row) => ({
         fips: row.countyFips,
         name: row.countyName,

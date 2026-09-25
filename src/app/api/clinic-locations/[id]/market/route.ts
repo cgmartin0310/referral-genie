@@ -82,7 +82,7 @@ export async function PUT(
     // it first when no one has); a county removed takes its unscored ones.
     const before = new Set(clinic.marketCounties.map((row) => row.countyFips));
     const after = new Set(saved.map((row) => row.countyFips));
-    await dropUnscoredForCounties(clinic.id, [...before].filter((fips) => !after.has(fips)));
+    await dropUnscoredForCounties(clinic.id, tenant.organizationId, [...before].filter((fips) => !after.has(fips)));
     for (const fips of after) {
       await fillListsForCounty(fips, clinic.id);
       await ensureCountyPulled(fips);

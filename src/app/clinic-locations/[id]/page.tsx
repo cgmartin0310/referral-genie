@@ -349,8 +349,8 @@ export default function ClinicPage() {
                 <p className="text-sm text-gray-600">
                   The counties this clinic serves. They build its referral list: every practice in them goes on it, ready
                   to score under{' '}
-                  <Link href="/relationships" className="font-medium text-green-700 hover:text-green-600">
-                    Your Sources
+                  <Link href="/referral-sources" className="font-medium text-green-700 hover:text-green-600">
+                    Referral Sources
                   </Link>
                   . Removing a county takes off its practices you have not scored.
                 </p>

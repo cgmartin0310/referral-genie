@@ -1,13 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import MainLayout from '@/components/layout/MainLayout';
-import ReferralListManager from '@/components/referral-list/ReferralListManager';
-
-/** Your Sources: every practice on your clinics' referral lists, scored by tier. */
+/** Your Sources became scoring on Referral Sources. */
 export default function YourSourcesPage() {
-  return (
-    <MainLayout>
-      <ReferralListManager />
-    </MainLayout>
-  );
+  redirect('/referral-sources');
 }

@@ -47,14 +47,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         select: { id: true, name: true },
       });
       await tx.clinicPractice.create({
-        data: {
-          organizationId: tenant.organizationId,
-          clinicLocationId: id,
-          practiceId: created.id,
-          addedFrom: 'manual',
-          ...(tier ? { tier, tierSetAt: new Date(), tierSetBy: tenant.actor } : {}),
-        },
+        data: { organizationId: tenant.organizationId, clinicLocationId: id, practiceId: created.id, addedFrom: 'manual' },
       });
+      if (tier) {
+        await tx.practiceScore.create({
+          data: { organizationId: tenant.organizationId, practiceId: created.id, tier, setBy: tenant.actor },
+        });
+      }
       return created;
     });
     return NextResponse.json({ practice }, { status: 201 });

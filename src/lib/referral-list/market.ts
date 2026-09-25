@@ -53,15 +53,14 @@ export async function fillListsForCounty(fips: string, onlyClinicId?: string): P
   return added;
 }
 
-/** A county left the market: its market-built entries nobody scored leave the list. Scored ones stay. */
-export async function dropUnscoredForCounties(clinicId: string, fipsList: string[]): Promise<number> {
+/** A county left the market: its market-built entries the company never scored leave the list. Scored ones stay. */
+export async function dropUnscoredForCounties(clinicId: string, organizationId: string, fipsList: string[]): Promise<number> {
   if (fipsList.length === 0) return 0;
   const result = await prisma.clinicPractice.deleteMany({
     where: {
       clinicLocationId: clinicId,
       addedFrom: 'market',
-      tier: null,
-      practice: { countyFips: { in: fipsList.flatMap(variants) } },
+      practice: { countyFips: { in: fipsList.flatMap(variants) }, scores: { none: { organizationId } } },
     },
   });
   return result.count;

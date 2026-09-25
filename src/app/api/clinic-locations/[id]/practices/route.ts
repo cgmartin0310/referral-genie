@@ -6,6 +6,7 @@ import { practiceIncludeFor, presentPractice } from '@/lib/practices/present';
 import { ratesForDisciplines, sumEstimates } from '@/lib/practices/estimate';
 import { loadEstimateRates } from '@/lib/practices/estimate-settings';
 import { parseTier } from '@/lib/referral-list/tiers';
+import { setScores } from '@/lib/referral-list/scores';
 
 const ADDED_FROM = new Set(['market', 'manual', 'import']);
 
@@ -25,7 +26,7 @@ function idList(value: unknown): string[] {
   return [...new Set(value.filter((item): item is string => typeof item === 'string' && item.trim() !== ''))];
 }
 
-/** The clinic's referral list, each practice with the subscriber's tier. */
+/** The clinic's referral list, each practice with the company's score. */
 export async function GET(_request: NextRequest, { params }: Params) {
   try {
     const tenant = await currentTenant();
@@ -34,20 +35,13 @@ export async function GET(_request: NextRequest, { params }: Params) {
     if (!clinic) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 });
 
     const rows = await prisma.clinicPractice.findMany({
-      where: { clinicLocationId: id, organizationId: tenant.organizationId },
+      where: { clinicLocationId: id, organizationId: tenant.organizationId, excludedAt: null },
       include: { practice: { include: practiceIncludeFor(tenant.organizationId) } },
       orderBy: { practice: { providerCount: 'desc' } },
     });
     // Only the disciplines this clinic offers count toward its estimates.
     const rates = ratesForDisciplines(await loadEstimateRates(tenant.organizationId), clinic.disciplines);
-    const practices = rows.map((row) => ({
-      ...presentPractice(row.practice, rates),
-      tier: parseTier(row.tier),
-      tierSetAt: row.tierSetAt?.toISOString() ?? null,
-      addedFrom: row.addedFrom,
-      // Added by hand and not in the shared catalog: only this subscriber sees it.
-      private: row.practice.practiceKey.startsWith('own:'),
-    }));
+    const practices = rows.map((row) => ({ ...presentPractice(row.practice, rates), addedFrom: row.addedFrom }));
     return NextResponse.json({
       clinic,
       practices,
@@ -88,7 +82,12 @@ export async function POST(request: NextRequest, { params }: Params) {
       where: { id: { in: practiceIds }, organizationId: { in: [CATALOG_ORGANIZATION_ID, tenant.organizationId] } },
       select: { id: true },
     });
-    const result = await prisma.clinicPractice.createMany({
+    // One taken off this list before comes back.
+    const restored = await prisma.clinicPractice.updateMany({
+      where: { clinicLocationId: id, organizationId: tenant.organizationId, practiceId: { in: valid.map((row) => row.id) }, excludedAt: { not: null } },
+      data: { excludedAt: null },
+    });
+    const created = await prisma.clinicPractice.createMany({
       data: valid.map((row) => ({
         clinicLocationId: id,
         practiceId: row.id,
@@ -97,6 +96,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       })),
       skipDuplicates: true,
     });
+    const result = { count: created.count + restored.count };
     return NextResponse.json({
       added: result.count,
       alreadyListed: valid.length - result.count,
@@ -111,8 +111,8 @@ export async function POST(request: NextRequest, { params }: Params) {
 }
 
 /**
- * Score practices on the clinic's list. Body: { practiceIds, tier } where tier
- * is trusted, warm, cold, not_fit, or null to clear it.
+ * Score practices on the clinic's list, for the whole company. Body:
+ * { practiceIds, tier } where tier is trusted, warm, cold, not_fit, or null.
  */
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
@@ -130,11 +130,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if (body.tier !== null && !tier) {
       return NextResponse.json({ error: 'Choose Trusted, Warm, Cold, or Not a fit.' }, { status: 400 });
     }
-    const result = await prisma.clinicPractice.updateMany({
+    const listed = await prisma.clinicPractice.findMany({
       where: { clinicLocationId: id, organizationId: tenant.organizationId, practiceId: { in: practiceIds } },
-      data: tier ? { tier, tierSetAt: new Date(), tierSetBy: tenant.actor } : { tier: null, tierSetAt: null, tierSetBy: null },
+      select: { practiceId: true },
     });
-    return NextResponse.json({ updated: result.count, tier });
+    const updated = await setScores(tenant.organizationId, listed.map((row) => row.practiceId), tier, tenant.actor);
+    return NextResponse.json({ updated, tier });
   } catch (error) {
     const denied = tenantErrorResponse(error);
     if (denied) return denied;
@@ -156,17 +157,14 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     if (practiceIds.length === 0) {
       return NextResponse.json({ error: 'Choose at least one practice' }, { status: 400 });
     }
-    // A practice the market put on the list is kept as Not a fit, so a later
-    // pull does not add it back; anything else is removed.
+    // A practice the market put on the list is kept, marked taken off, so a
+    // later pull does not add it back; anything else is removed.
     const where = { clinicLocationId: id, organizationId: tenant.organizationId, practiceId: { in: practiceIds } };
     const [kept, result] = await prisma.$transaction([
-      prisma.clinicPractice.updateMany({
-        where: { ...where, addedFrom: 'market' },
-        data: { tier: 'not_fit', tierSetAt: new Date(), tierSetBy: tenant.actor },
-      }),
+      prisma.clinicPractice.updateMany({ where: { ...where, addedFrom: 'market', excludedAt: null }, data: { excludedAt: new Date() } }),
       prisma.clinicPractice.deleteMany({ where: { ...where, addedFrom: { not: 'market' } } }),
     ]);
-    return NextResponse.json({ removed: result.count + kept.count, markedNotFit: kept.count });
+    return NextResponse.json({ removed: result.count + kept.count });
   } catch (error) {
     const denied = tenantErrorResponse(error);
     if (denied) return denied;

@@ -12,7 +12,7 @@ import ClinicFormFields, { emptyClinicForm, type ClinicFormValues } from '@/comp
 import FaxOptOutSettings from '@/components/FaxOptOutSettings';
 import CountyMarketPicker from '@/components/setup/CountyMarketPicker';
 import MarketStatusNotice from '@/components/referral-list/MarketStatus';
-import ReferralListManager from '@/components/referral-list/ReferralListManager';
+import { SourceList, type Clinic } from '@/components/referral-sources/SourceList';
 import type { MarketCountyView } from '@/lib/geo/market-view';
 import { TIER_INFO, TIERS } from '@/lib/referral-list/tiers';
 
@@ -180,6 +180,25 @@ function Market() {
   );
 }
 
+/** Score the practices on the lists, right here: the Referral Sources view. */
+function ScoreList() {
+  const { data: clinics } = useQuery({
+    queryKey: ['clinic-locations'],
+    queryFn: async () => (await axios.get<Clinic[]>('/api/clinic-locations')).data,
+  });
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-600">
+        These are the practices in your locations&rsquo; counties. Score the ones you know: Trusted sends referrals now,
+        Warm knows you, Cold is new to you, and Not a fit is never contacted. Add any that are missing. You can keep
+        scoring later under Referral Sources.
+      </p>
+      <MarketStatusNotice />
+      <SourceList clinics={clinics ?? []} onPull={() => undefined} canEdit={false} />
+    </div>
+  );
+}
+
 function Review({ progress, onFinish, finishing }: { progress: Progress; onFinish: () => void; finishing: boolean }) {
   const { byTier } = progress.counts;
   return (
@@ -208,7 +227,7 @@ function Review({ progress, onFinish, finishing }: { progress: Progress; onFinis
       </ul>
       <p>
         You can keep scoring, add practices, or upload a list any time under{' '}
-        <Link href="/relationships" className="font-medium text-green-700 hover:underline">Your Sources</Link>.
+        <Link href="/referral-sources" className="font-medium text-green-700 hover:underline">Referral Sources</Link>.
       </p>
       {progress.done < progress.total && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-800">
@@ -283,7 +302,7 @@ export default function OnboardingPage() {
         ) : step === 'market' ? (
           <Market />
         ) : step === 'sources' ? (
-          <ReferralListManager heading={false} />
+          <ScoreList />
         ) : step === 'fax' ? (
           <div className="-mt-6"><FaxOptOutSettings /></div>
         ) : (

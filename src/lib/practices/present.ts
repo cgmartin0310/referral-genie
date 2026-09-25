@@ -1,3 +1,4 @@
+import { parseTier, type Tier } from '../referral-list/tiers';
 import type { Practice, Provider } from '@prisma/client';
 import { estimateMonthlyReferrals, DEFAULT_ESTIMATE_RATES, type EstimateRates, type ReferralEstimate } from './estimate';
 import { resolveFaxTarget } from './fax';
@@ -73,12 +74,18 @@ export interface PracticeView {
   taxonomyMix: Record<string, number>;
   estimate: ReferralEstimate | null;
   clinics: { id: string; name: string }[];
+  /** The viewer's score for it: trusted, warm, cold, not_fit, or none yet. */
+  score: Tier | null;
+  /** Added by hand by the viewer's organization, not pulled into the catalog. */
+  ownPractice: boolean;
   providers: ProviderView[];
 }
 
 type PracticeWithRelations = Practice & {
   providers: Provider[];
   clinicPractices: { clinicLocation: { id: string; name: string } }[];
+  /** The viewer's score, when included (practiceIncludeFor). */
+  scores?: { tier: string }[];
 };
 
 function mixOf(value: unknown): Record<string, number> {
@@ -154,6 +161,9 @@ export function presentPractice(
     taxonomyMix,
     estimate: estimateMonthlyReferrals(taxonomyMix, rates),
     clinics: practice.clinicPractices.map((row) => row.clinicLocation),
+    score: parseTier(practice.scores?.[0]?.tier),
+    // Added by hand (own:…): only that organization sees it.
+    ownPractice: practice.practiceKey.startsWith('own:'),
     providers: practice.providers.map((provider) => presentProvider(provider, practice)),
   };
 }
@@ -163,8 +173,9 @@ export function practiceIncludeFor(organizationId: string) {
   return {
     providers: { where: { hiddenAt: null }, orderBy: { name: 'asc' as const } },
     clinicPractices: {
-      where: { organizationId },
+      where: { organizationId, excludedAt: null },
       select: { clinicLocation: { select: { id: true, name: true } } },
     },
+    scores: { where: { organizationId }, select: { tier: true } },
   };
 }

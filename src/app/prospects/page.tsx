@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-/** Prospects became the unscored practices on each clinic's list, under Your Sources. */
+/** Prospects became the practices not yet scored, on Referral Sources. */
 export default function ProspectsPage() {
-  redirect('/relationships?tier=unscored');
+  redirect('/referral-sources?tier=unscored');
 }

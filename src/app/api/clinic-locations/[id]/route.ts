@@ -137,14 +137,9 @@ export async function DELETE(
   try {
     const tenant = await currentTenant();
     const { id } = await params;
-    // Check if location exists and has referral sources
     const existing = await prisma.clinicLocation.findFirst({
       where: { id, organizationId: tenant.organizationId },
-      include: {
-        _count: {
-          select: { referralSources: true }
-        }
-      }
+      select: { id: true },
     });
 
     if (!existing) {
@@ -154,20 +149,14 @@ export async function DELETE(
       );
     }
 
-    // Don't allow deletion if there are referral sources linked
-    if (existing._count.referralSources > 0) {
-      return NextResponse.json(
-        { 
-          error: `Cannot delete clinic location. ${existing._count.referralSources} referral source(s) are linked to this location.`,
-          count: existing._count.referralSources
-        },
-        { status: 400 }
-      );
-    }
-
-    await prisma.clinicLocation.delete({
-      where: { id }
-    });
+    // Its referral list and counties go with it; campaigns keep their fax
+    // history and lose only the link. Older records that named the clinic
+    // (catalog sources, relationships) just forget it.
+    await prisma.$transaction([
+      prisma.referralSource.updateMany({ where: { clinicLocationId: id }, data: { clinicLocationId: null } }),
+      prisma.sourceRelationship.updateMany({ where: { clinicLocationId: id }, data: { clinicLocationId: null } }),
+      prisma.clinicLocation.delete({ where: { id } }),
+    ]);
 
     return NextResponse.json(
       { message: 'Clinic location deleted successfully' },

@@ -119,9 +119,9 @@ export default function ClinicLocationsPage() {
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Delete this clinic?')) {
-      deleteMutation.mutate(id);
+  const handleDelete = (location: ClinicLocation) => {
+    if (confirm(`Delete ${location.name}? Its referral list and counties are deleted with it. Campaigns already sent keep their history.`)) {
+      deleteMutation.mutate(location.id);
     }
   };
 
@@ -261,18 +261,11 @@ export default function ClinicLocationsPage() {
                         <PencilIcon className="h-5 w-5" />
                       </button>
                       <button
-                        onClick={() => handleDelete(location.id)}
+                        onClick={() => handleDelete(location)}
                         className="text-red-600 hover:text-red-900"
-                        disabled={!!location._count?.referralSources && location._count.referralSources > 0}
                         aria-label={`Delete ${location.name}`}
                       >
-                        <TrashIcon
-                          className={`h-5 w-5 ${
-                            location._count?.referralSources && location._count.referralSources > 0
-                              ? 'opacity-50 cursor-not-allowed'
-                              : ''
-                          }`}
-                        />
+                        <TrashIcon className="h-5 w-5" />
                       </button>
                     </td>
                   </tr>

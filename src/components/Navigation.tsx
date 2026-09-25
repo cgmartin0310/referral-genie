@@ -13,6 +13,7 @@ import {
   Cog6ToothIcon,
   ShieldCheckIcon,
   GlobeAltIcon,
+  HomeIcon,
   PhoneIcon,
   BriefcaseIcon,
   MegaphoneIcon,
@@ -29,11 +30,12 @@ function isCurrent(pathname: string, href: string): boolean {
 }
 
 /**
- * Five destinations. Setup steps (counties, pull, enrich, research) live on a
+ * The dashboard and five destinations. Setup steps (counties, pull, enrich, research) live on a
  * clinic's page; Google keyword search and manual entry are ways to add a
  * practice, reached from Referral Sources.
  */
 export const navigation = [
+  { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Our Clinics', href: '/clinic-locations', icon: BuildingOffice2Icon },
   { name: 'Referral Sources', href: '/referral-sources', icon: UserGroupIcon },
   { name: 'Campaigns', href: '/campaigns', icon: MegaphoneIcon },

@@ -240,6 +240,8 @@ export default function ClinicLocationsPage() {
                       {location.referralList && location.referralList.practices > 0 ? (
                         <Link href={`/clinic-locations/${location.id}`} className="text-gray-900 hover:text-green-700">
                           {location.referralList.practices} practice{location.referralList.practices === 1 ? '' : 's'}
+                          {' · '}
+                          {location.referralList.providers} provider{location.referralList.providers === 1 ? '' : 's'}
                           <span className="block text-xs text-gray-500">
                             est. {location.referralList.estimate.low}–{location.referralList.estimate.high} / mo
                           </span>

@@ -13,7 +13,9 @@ const clinicInclude = {
   marketCounties: {
     orderBy: [{ state: 'asc' as const }, { countyName: 'asc' as const }],
   },
+  // What the clinic's list holds now: not taken off it, not deleted.
   clinicPractices: {
+    where: { excludedAt: null, practice: { hiddenAt: null } },
     select: { practice: { select: { providerCount: true, taxonomyMix: true } } },
   },
 };

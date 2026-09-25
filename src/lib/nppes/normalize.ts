@@ -62,6 +62,21 @@ function preferCountyLocation(hit: RawHit, county: CountyMarket): AddressParts |
   return inCounty ?? hit.locations[0] ?? null;
 }
 
+function townKey(parts: Pick<AddressParts, 'city' | 'state'>): string {
+  return `${parts.city.trim().toUpperCase().replace(/[^A-Z]/g, '')}|${parts.state.trim().toUpperCase()}`;
+}
+
+/**
+ * NPI's mailing-address fax, when mail goes to the practice's own town. A
+ * mailing address elsewhere is usually a billing office, not the practice.
+ */
+export function mailingFaxFor(location: AddressParts | null, mailing: AddressParts | null): string {
+  const fax = mailing?.fax.trim() ?? '';
+  if (!fax || !location || !mailing) return '';
+  if (!location.city.trim() || townKey(location) !== townKey(mailing)) return '';
+  return fax;
+}
+
 function flagsFor(location: AddressParts | null, deactivated: boolean, county: CountyMarket): string[] {
   const flags: string[] = [];
   if (deactivated) flags.push('deactivated');
@@ -153,6 +168,7 @@ export function classifyHit(hit: RawHit, county: CountyMarket, allowed: Set<stri
       zipCode: postal.valid ? postal.zip5 : '',
       phone: location?.phone ?? '',
       fax: location?.fax ?? '',
+      mailingFax: mailingFaxFor(location, hit.mailing),
       addressFlags,
       quarantined: isQuarantined(addressFlags),
     },

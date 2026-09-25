@@ -22,7 +22,8 @@ import {
  * their phone). Groups that match the same listing are one practice and
  * merge. An organization with no provider under it is not a row.
  *
- * The fax is the one the group's NPI records agree on; Google publishes none.
+ * The fax is the one the group's NPI records agree on (a location fax, else a
+ * mailing-address fax in the same town); Google publishes none.
  * Address identity comes from the street and town (suite when both give
  * one), with a shared phone settling spelling variants; a phone alone never
  * joins two addresses.
@@ -60,6 +61,7 @@ export interface PracticeSourceRow {
   countyFips: string | null;
   contactPhone: string | null;
   faxNumber: string | null;
+  mailingFax?: string | null;
   placeId: string | null;
   placeName?: string | null;
   website?: string | null;
@@ -325,7 +327,9 @@ export function buildPractices(rows: PracticeSourceRow[], places: PlaceRow[] = [
       ? null
       : matched;
     const placeId = place?.placeId ?? null;
-    const faxNumber = modal(members.map((row) => row.faxNumber));
+    // A location fax first. Only when no one here lists one does NPI's
+    // mailing-address fax stand in (it is kept only for mail to this town).
+    const faxNumber = modal(members.map((row) => row.faxNumber)) ?? modal(members.map((row) => row.mailingFax));
 
     const practiceOrgs = orgs.filter((org) => !systems.has(sameOrg(org.name)));
     let name: string;

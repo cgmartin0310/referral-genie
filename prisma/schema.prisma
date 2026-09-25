@@ -295,6 +295,9 @@ model ReferralSource {
   contactPhone             String?
   contactEmail             String?
   faxNumber                String?
+  /// NPI's mailing-address fax, kept apart from the location fax: used for the
+  /// practice only when no one there lists a location fax.
+  mailingFax               String?
   npiNumber                String?
   website                  String?
   notes                    String?
@@ -630,6 +633,11 @@ model NpiRecord {
   postalCode          String?
   phone               String?
   fax                 String?
+  /// The mailing address's town and fax. The fax stands in for a practice
+  /// that lists none at its location, when mail goes to the same town.
+  mailingCity         String?
+  mailingState        String?
+  mailingFax          String?
   primaryTaxonomyCode String
   taxonomyCodes       String[] @default([])
   countyFips          String?

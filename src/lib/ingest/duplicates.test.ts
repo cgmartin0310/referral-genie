@@ -103,6 +103,7 @@ describe('source writes', () => {
     zipCode: '28501',
     phone: '252-555-0100',
     fax: '252-555-0190',
+    mailingFax: '',
     addressFlags: ['boundary_zip'],
     quarantined: false,
   };

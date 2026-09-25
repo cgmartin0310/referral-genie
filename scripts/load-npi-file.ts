@@ -80,6 +80,9 @@ interface Row {
   postalCode: string | null;
   phone: string | null;
   fax: string | null;
+  mailingCity: string | null;
+  mailingState: string | null;
+  mailingFax: string | null;
   primaryTaxonomyCode: string;
   taxonomyCodes: string[];
   countyFips: string | null;
@@ -95,16 +98,17 @@ const text = (value: string | undefined): string | null => {
 async function upsertBatch(rows: Row[], loadedAt: Date, loadId: string): Promise<void> {
   if (rows.length === 0) return;
   const values = rows.map(
-    (r) => Prisma.sql`(${r.npi}, ${r.entityType}, ${r.name}, ${r.firstName}, ${r.lastName}, ${r.credential}, ${r.address1}, ${r.address2}, ${r.city}, ${r.state}, ${r.zip}, ${r.postalCode}, ${r.phone}, ${r.fax}, ${r.primaryTaxonomyCode}, ${r.taxonomyCodes}::text[], ${r.countyFips}, ${r.countyMatch}, ${r.lastUpdated}, ${loadedAt.toISOString()}::timestamp, ${loadId})`,
+    (r) => Prisma.sql`(${r.npi}, ${r.entityType}, ${r.name}, ${r.firstName}, ${r.lastName}, ${r.credential}, ${r.address1}, ${r.address2}, ${r.city}, ${r.state}, ${r.zip}, ${r.postalCode}, ${r.phone}, ${r.fax}, ${r.mailingCity}, ${r.mailingState}, ${r.mailingFax}, ${r.primaryTaxonomyCode}, ${r.taxonomyCodes}::text[], ${r.countyFips}, ${r.countyMatch}, ${r.lastUpdated}, ${loadedAt.toISOString()}::timestamp, ${loadId})`,
   );
   await prisma.$executeRaw`
-    INSERT INTO "NpiRecord" ("npi","entityType","name","firstName","lastName","credential","address1","address2","city","state","zip","postalCode","phone","fax","primaryTaxonomyCode","taxonomyCodes","countyFips","countyMatch","lastUpdated","loadedAt","loadId")
+    INSERT INTO "NpiRecord" ("npi","entityType","name","firstName","lastName","credential","address1","address2","city","state","zip","postalCode","phone","fax","mailingCity","mailingState","mailingFax","primaryTaxonomyCode","taxonomyCodes","countyFips","countyMatch","lastUpdated","loadedAt","loadId")
     VALUES ${Prisma.join(values)}
     ON CONFLICT ("npi") DO UPDATE SET
       "entityType" = EXCLUDED."entityType", "name" = EXCLUDED."name", "firstName" = EXCLUDED."firstName",
       "lastName" = EXCLUDED."lastName", "credential" = EXCLUDED."credential", "address1" = EXCLUDED."address1",
       "address2" = EXCLUDED."address2", "city" = EXCLUDED."city", "state" = EXCLUDED."state", "zip" = EXCLUDED."zip",
       "postalCode" = EXCLUDED."postalCode", "phone" = EXCLUDED."phone", "fax" = EXCLUDED."fax",
+      "mailingCity" = EXCLUDED."mailingCity", "mailingState" = EXCLUDED."mailingState", "mailingFax" = EXCLUDED."mailingFax",
       "primaryTaxonomyCode" = EXCLUDED."primaryTaxonomyCode", "taxonomyCodes" = EXCLUDED."taxonomyCodes",
       "countyFips" = EXCLUDED."countyFips", "countyMatch" = EXCLUDED."countyMatch",
       "lastUpdated" = EXCLUDED."lastUpdated", "loadedAt" = EXCLUDED."loadedAt", "loadId" = EXCLUDED."loadId"`;
@@ -157,6 +161,9 @@ async function main() {
         postal: header('Provider Business Practice Location Address Postal Code'),
         phone: header('Provider Business Practice Location Address Telephone Number'),
         fax: header('Provider Business Practice Location Address Fax Number'),
+        mailCity: header('Provider Business Mailing Address City Name'),
+        mailState: header('Provider Business Mailing Address State Name'),
+        mailFax: header('Provider Business Mailing Address Fax Number'),
         updated: header('Last Update Date'),
         deactivated: header('NPI Deactivation Date'),
       };
@@ -217,6 +224,9 @@ async function main() {
       postalCode,
       phone: text(fields[cols.phone]),
       fax: text(fields[cols.fax]),
+      mailingCity: text(fields[cols.mailCity]),
+      mailingState: text(fields[cols.mailState]),
+      mailingFax: text(fields[cols.mailFax]),
       primaryTaxonomyCode: primary,
       taxonomyCodes,
       countyFips: placed?.fips ?? null,

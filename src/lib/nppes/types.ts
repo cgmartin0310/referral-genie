@@ -38,6 +38,8 @@ export interface KeptProvider {
   zipCode: string;
   phone: string;
   fax: string;
+  /** The mailing address's fax when mail goes to the practice's own town; else ''. */
+  mailingFax: string;
   addressFlags: string[];
   quarantined: boolean;
 }

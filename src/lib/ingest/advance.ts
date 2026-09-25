@@ -283,7 +283,7 @@ const SOURCE_FIELDS = {
   primaryTaxonomyCode: true, taxonomyCodes: true, sourceType: true,
   address: true, city: true, state: true, zipCode: true,
   countyName: true, countyFips: true, contactPhone: true,
-  faxNumber: true, placeId: true, placeName: true, website: true, rating: true, reviewCount: true,
+  faxNumber: true, mailingFax: true, placeId: true, placeName: true, website: true, rating: true, reviewCount: true,
   placesMatchStatus: true,
 } as const;
 

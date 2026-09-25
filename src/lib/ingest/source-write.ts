@@ -13,6 +13,7 @@ export interface SourceWrite {
   zipCode?: string | null;
   contactPhone?: string | null;
   faxNumber?: string | null;
+  mailingFax?: string | null;
   website?: string | null;
   rating?: number | null;
   npiNumber?: string | null;
@@ -74,6 +75,8 @@ export function buildNppesUpsert(
   // when it is actually there: an absent value must not wipe a fax that research
   // or a person already found.
   if (kept.fax) create.faxNumber = kept.fax;
+  // Always written: it only ever comes from NPI, so NPI clearing it clears it.
+  create.mailingFax = kept.mailingFax || null;
 
   const rest: Record<string, unknown> = { ...create };
   delete rest.organizationId;

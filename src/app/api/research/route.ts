@@ -10,6 +10,7 @@ import {
   clinicScope,
   countyScope,
   createOrResumeResearchRun,
+  faxGapsForCounty,
   latestResearchRun,
   presentResearchRun,
   sourceIdsForClinic,
@@ -53,6 +54,7 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({
       ...counts,
+      faxGaps: countyFips && !clinicId && !sourceId ? await faxGapsForCounty(countyFips) : null,
       latestRun,
       runError,
       configError: readResearchLlmConfig() ? null : researchConfigMessage(),

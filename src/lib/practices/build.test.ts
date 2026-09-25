@@ -54,6 +54,19 @@ const LA_GRANGE_LISTINGS = [
 ];
 
 describe('practice formation, NPI first', () => {
+  it('uses a mailing-address fax only when no one lists a location fax', () => {
+    const none = buildPractices([
+      row({ id: 'a', faxNumber: null, mailingFax: '252-555-0170' }),
+      row({ id: 'b', faxNumber: null }),
+    ]);
+    assert.equal(none[0].faxNumber, '252-555-0170');
+    const located = buildPractices([
+      row({ id: 'a', faxNumber: null, mailingFax: '252-555-0170' }),
+      row({ id: 'b', faxNumber: '252-555-0190', mailingFax: '252-555-0170' }),
+    ]);
+    assert.equal(located[0].faxNumber, '252-555-0190');
+    assert.equal(located[0].providers.find((provider) => provider.npiNumber === 'npi-a')?.faxNumber ?? null, null);
+  });
   it('nests providers at one address under its organization', () => {
     const practices = buildPractices([
       row({ id: 'a' }), row({ id: 'b' }), row({ id: 'c' }),

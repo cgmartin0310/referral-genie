@@ -451,6 +451,68 @@ export async function practicesNeedingFax(ids: string[]): Promise<string[]> {
   return [...reader.values()].map((row) => row.id).sort();
 }
 
+export type FaxGapReason = 'not_on_google' | 'no_website' | 'not_read_yet' | 'read_no_fax';
+
+export interface FaxGaps {
+  /** Practices in the county with no fax. */
+  total: number;
+  /** Of those, how many have a website research can read. */
+  readable: number;
+  practices: { id: string; name: string; reason: FaxGapReason }[];
+}
+
+/**
+ * Every practice in the county still without a fax, and why research has not
+ * filled it: no Google listing, a listing with no website, a website not read
+ * yet, or a website read that showed no fax. Nothing is left out silently.
+ */
+export async function faxGapsForCounty(countyFips: string): Promise<FaxGaps> {
+  const fips = researchCountyFips([countyFips]);
+  if (fips.length === 0) return { total: 0, readable: 0, practices: [] };
+  const missing = await prisma.practice.findMany({
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, faxNumber: null, hiddenAt: null, retiredAt: null, countyFips: { not: null } },
+    select: { id: true, name: true, countyFips: true, placeId: true, orgNpis: true, providers: { where: { hiddenAt: null }, select: { npiNumber: true } } },
+    orderBy: { name: 'asc' },
+  });
+  const inCounty = new Set(sourceIdsMatchingFips(missing, fips));
+  const practices = missing.filter((practice) => inCounty.has(practice.id));
+  if (practices.length === 0) return { total: 0, readable: 0, practices: [] };
+
+  // The record research reads for each practice (see practicesNeedingFax).
+  const practiceByNpi = new Map<string, string>();
+  for (const practice of practices) {
+    for (const npi of practice.orgNpis) practiceByNpi.set(npi, practice.id);
+    for (const provider of practice.providers) practiceByNpi.set(provider.npiNumber, practice.id);
+  }
+  const readerSources = await prisma.referralSource.findMany({
+    where: { id: { in: await sourceIdsForCounty(countyFips) } },
+    select: { id: true, npiNumber: true },
+  });
+  const readers = new Map<string, string>();
+  for (const source of readerSources) {
+    const practiceId = source.npiNumber ? practiceByNpi.get(source.npiNumber) : undefined;
+    if (practiceId) readers.set(practiceId, source.id);
+  }
+  const lastRun = await prisma.researchRun.findFirst({
+    where: { organizationId: DEFAULT_ORGANIZATION_ID, scopeKey: countyScope(countyFips), status: 'COMPLETED' },
+    orderBy: { createdAt: 'desc' },
+    select: { cursor: true },
+  });
+  const read = new Set(lastRun ? parseCursor(lastRun.cursor).sourceIds : []);
+
+  return {
+    total: practices.length,
+    readable: readers.size,
+    practices: practices.map((practice) => {
+      const reader = readers.get(practice.id);
+      const reason: FaxGapReason = reader
+        ? read.has(reader) ? 'read_no_fax' : 'not_read_yet'
+        : practice.placeId ? 'no_website' : 'not_on_google';
+      return { id: practice.id, name: practice.name, reason };
+    }),
+  };
+}
+
 export async function sourceIdsForCounty(countyFips: string): Promise<string[]> {
   const fips = researchCountyFips([countyFips]);
   if (fips.length === 0) return [];

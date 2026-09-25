@@ -81,6 +81,28 @@ function classNames(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(' ');
 }
 
+interface FaxGaps {
+  total: number;
+  readable: number;
+  practices: { id: string; name: string; reason: 'not_on_google' | 'no_website' | 'not_read_yet' | 'read_no_fax' }[];
+}
+
+const GAP_REASON: Record<FaxGaps['practices'][number]['reason'], string> = {
+  not_on_google: 'not found on Google, so no website to read',
+  no_website: 'Google lists no website',
+  not_read_yet: 'website not read yet',
+  read_no_fax: 'website read; no fax on it',
+};
+
+function gapDetail(gaps: FaxGaps): string {
+  if (gaps.total === 0) return 'Every practice has a fax.';
+  const cannot = gaps.total - gaps.readable;
+  const parts = [`${gaps.total} practice${gaps.total === 1 ? '' : 's'} with no fax`];
+  parts.push(`${gaps.readable} with a website to read`);
+  if (cannot > 0) parts.push(`${cannot} with no website, left for you`);
+  return parts.join(' · ');
+}
+
 function researchDetail(s: ResearchRun['summary']): string {
   const parts = [`${s.researched}/${s.total} sites read`, `${s.fieldsFilled} fields filled`];
   if (s.alreadyFilled) parts.push(`${s.alreadyFilled} already known from NPI or Places`);
@@ -180,7 +202,7 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
   const [countyRun, setCountyRun] = useState<CountyRun | null>(null);
   const [placesPending, setPlacesPending] = useState(0);
   const [researchRun, setResearchRun] = useState<ResearchRun | null>(null);
-  const [withWebsite, setWithWebsite] = useState<number | null>(null);
+  const [faxGaps, setFaxGaps] = useState<FaxGaps | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -203,7 +225,7 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
         setCountyRun(seed.data.latestRun ?? null);
         setPlacesPending(seed.data.placesPending ?? 0);
         setResearchRun(research.data.latestRun ?? null);
-        setWithWebsite(research.data.withWebsite ?? null);
+        setFaxGaps(research.data.faxGaps ?? null);
         setConfigError(research.data.configError ?? null);
       })
       .catch(() => {
@@ -277,6 +299,11 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
       toast.error(message);
     } finally {
       setWorking(false);
+      // What is still missing a fax, and why, after this run.
+      axios
+        .get(`/api/research?countyFips=${encodeURIComponent(countyFips)}`)
+        .then(({ data }) => setFaxGaps(data.faxGaps ?? null))
+        .catch(() => undefined);
     }
   };
 
@@ -357,17 +384,29 @@ export default function CountyPullRunner({ countyId, countyFips, countyName }: P
           detail={
             researchState === 'skipped'
               ? `Skipped — ${configError}`
-              : researchRun
-                ? researchDetail(researchRun.summary)
-                : withWebsite !== null
-                  ? withWebsite === 0
-                    ? 'Every practice with a website already has a fax.'
-                    : `${withWebsite} practice${withWebsite === 1 ? '' : 's'} with no fax on NPI have a website to read.`
-                  : 'Reads the website of each practice with no fax on NPI.'
+              : [researchRun && researchRun.summary.total > 0 ? researchDetail(researchRun.summary) : null, faxGaps ? gapDetail(faxGaps) : null]
+                  .filter(Boolean)
+                  .join(' — ') || 'Reads the website of each practice with no fax on NPI.'
           }
           error={researchState === 'failed' ? researchRun?.error : null}
         />
       </ol>
+
+      {faxGaps && faxGaps.practices.length > 0 && (
+        <details className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <summary className="cursor-pointer font-medium">
+            Still missing a fax ({faxGaps.practices.length})
+          </summary>
+          <ul className="mt-2 space-y-1">
+            {faxGaps.practices.map((practice) => (
+              <li key={practice.id}>
+                <span className="font-medium">{practice.name}</span> — {GAP_REASON[practice.reason]}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-amber-800">A fax typed on the practice (Edit) is kept through later pulls.</p>
+        </details>
+      )}
 
       {researchRun && (researchRun.summary.notes?.length || researchRun.summary.errors.length) ? (
         <details className="mt-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { LENOIR_NC } from './counties';
 import { hitFromApiResult } from './api-shape';
-import { classifyHit } from './normalize';
+import { classifyHit, mailingFaxFor } from './normalize';
 import { TAXONOMY_ALLOW_LIST } from './taxonomies';
 import type { RawHit } from './types';
 
@@ -170,5 +170,22 @@ describe('Lenoir allow-list', () => {
     const decision = classifyHit(parsed, LENOIR_NC);
     assert.equal(decision.action, 'keep');
     if (decision.action === 'keep') assert.equal(decision.provider.fax, '');
+  });
+});
+
+describe('mailing-address fax', () => {
+  const location = { address1: '100 King St', address2: '', city: 'Kinston', state: 'NC', postalCode: '28501', phone: '', fax: '' };
+  const mailing = (city: string, state = 'NC', fax = '252-555-0170') => ({ address1: 'PO Box 9', address2: '', city, state, postalCode: '', phone: '', fax });
+  it('is kept when mail goes to the same town', () => {
+    assert.equal(mailingFaxFor(location, mailing('KINSTON')), '252-555-0170');
+  });
+  it('is dropped when mail goes elsewhere, usually a billing office', () => {
+    assert.equal(mailingFaxFor(location, mailing('Greenville')), '');
+    assert.equal(mailingFaxFor(location, mailing('Kinston', 'VA')), '');
+  });
+  it('is empty without a mailing fax or a location town', () => {
+    assert.equal(mailingFaxFor(location, mailing('Kinston', 'NC', '')), '');
+    assert.equal(mailingFaxFor({ ...location, city: '' }, mailing('')), '');
+    assert.equal(mailingFaxFor(location, null), '');
   });
 });

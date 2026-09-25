@@ -37,7 +37,17 @@ export function hitFromNpiRecord(record: NpiRecord): RawHit {
         fax: record.fax ?? '',
       },
     ],
-    mailing: null,
+    mailing: record.mailingFax
+      ? {
+          address1: '',
+          address2: '',
+          city: record.mailingCity ?? '',
+          state: record.mailingState ?? '',
+          postalCode: '',
+          phone: '',
+          fax: record.mailingFax,
+        }
+      : null,
   };
 }
 

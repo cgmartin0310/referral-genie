@@ -1,3 +1,4 @@
+import { countyForZip } from '../npi/county-map';
 import { Prisma, type CountyIngestRun } from '@prisma/client';
 import prisma from '../prisma';
 import { DEFAULT_ORGANIZATION_ID } from '../org';
@@ -163,6 +164,11 @@ async function keepHit(
   const kept = decision.provider;
   const npiNumber = normalizeNpiNumber(kept.npi);
   if (!npiNumber) return;
+  // A ZIP that crosses a county line belongs to one county: the one the
+  // crosswalk gives it, as in the NPI file. Otherwise pulling a neighbor
+  // would take this county's practices.
+  const home = kept.zipCode ? countyForZip(kept.zipCode) : null;
+  if (home && home.fips !== county.fips) return;
   const existing = await prisma.referralSource.findFirst({
     where: { organizationId: DEFAULT_ORGANIZATION_ID, npiNumber },
   });

@@ -1,5 +1,6 @@
 'use client';
 
+import MarketStatusNotice from '@/components/referral-list/MarketStatus';
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -346,13 +347,14 @@ export default function ClinicPage() {
             ) : (
               <div className="max-w-3xl space-y-6">
                 <p className="text-sm text-gray-600">
-                  The counties this clinic serves. This is a label for the clinic; it does not pull any data. Referral
-                  sources are pulled by county under{' '}
-                  <Link href="/referral-sources" className="font-medium text-green-700 hover:text-green-600">
-                    Referral Sources
+                  The counties this clinic serves. They build its referral list: every practice in them goes on it, ready
+                  to score under{' '}
+                  <Link href="/relationships" className="font-medium text-green-700 hover:text-green-600">
+                    Your Sources
                   </Link>
-                  .
+                  . Removing a county takes off its practices you have not scored.
                 </p>
+                <MarketStatusNotice clinicId={clinic.id} />
                 <CountyMarketPicker
                   clinicId={clinic.id}
                   saved={counties}
@@ -361,6 +363,9 @@ export default function ClinicPage() {
                       current ? { ...current, marketCounties: next } : current,
                     );
                     queryClient.invalidateQueries({ queryKey: ['clinic-locations'] });
+                    queryClient.invalidateQueries({ queryKey: ['market-status'] });
+                    queryClient.invalidateQueries({ queryKey: ['referral-list'] });
+                    queryClient.invalidateQueries({ queryKey: ['clinic-referral-list', id] });
                   }}
                 />
               </div>

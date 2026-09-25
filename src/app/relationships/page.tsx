@@ -9,6 +9,7 @@ import { toast } from 'react-hot-toast';
 import { ArrowUpTrayIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/24/outline';
 import MainLayout from '@/components/layout/MainLayout';
 import ImportSourcesDialog from '@/components/referral-list/ImportSourcesDialog';
+import MarketStatusNotice from '@/components/referral-list/MarketStatus';
 import type { PracticeView } from '@/lib/practices/present';
 import { TIER_INFO, TIERS, type Tier } from '@/lib/referral-list/tiers';
 
@@ -332,6 +333,8 @@ export default function YourSourcesPage() {
           </button>
         </div>
       </div>
+
+      <MarketStatusNotice clinicId={clinicId || undefined} />
 
       {data && clinics.length === 0 ? (
         <div className="mt-8 rounded-lg bg-white px-6 py-12 text-center shadow-sm ring-1 ring-gray-900/5">

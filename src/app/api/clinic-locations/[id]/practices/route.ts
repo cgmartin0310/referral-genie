@@ -156,10 +156,17 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     if (practiceIds.length === 0) {
       return NextResponse.json({ error: 'Choose at least one practice' }, { status: 400 });
     }
-    const result = await prisma.clinicPractice.deleteMany({
-      where: { clinicLocationId: id, organizationId: tenant.organizationId, practiceId: { in: practiceIds } },
-    });
-    return NextResponse.json({ removed: result.count });
+    // A practice the market put on the list is kept as Not a fit, so a later
+    // pull does not add it back; anything else is removed.
+    const where = { clinicLocationId: id, organizationId: tenant.organizationId, practiceId: { in: practiceIds } };
+    const [kept, result] = await prisma.$transaction([
+      prisma.clinicPractice.updateMany({
+        where: { ...where, addedFrom: 'market' },
+        data: { tier: 'not_fit', tierSetAt: new Date(), tierSetBy: tenant.actor },
+      }),
+      prisma.clinicPractice.deleteMany({ where: { ...where, addedFrom: { not: 'market' } } }),
+    ]);
+    return NextResponse.json({ removed: result.count + kept.count, markedNotFit: kept.count });
   } catch (error) {
     const denied = tenantErrorResponse(error);
     if (denied) return denied;

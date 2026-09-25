@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { listCounties, getCounty } from '@/lib/nppes/counties';
 import { advanceCountyIngest, createOrResumeRun, latestRun, presentRun } from '@/lib/ingest/advance';
 import { pulledCodes } from '@/lib/catalog-settings';
+import { fillListsForCounty } from '@/lib/referral-list/market';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +62,8 @@ export async function POST(request: NextRequest) {
     const mode = body.mode === 'continue' ? 'continue' : 'refresh';
     const run = await createOrResumeRun({ countyId, mode, runId: body.runId });
     const step = await advanceCountyIngest(run.id);
+    // Every clinic whose market includes the county gets its practices.
+    if (step.run.status === 'COMPLETED') await fillListsForCounty(step.run.countyFips);
     return NextResponse.json(step);
   } catch (error) {
     const denied = tenantErrorResponse(error);

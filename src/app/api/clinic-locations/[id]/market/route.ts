@@ -2,6 +2,7 @@ import { currentTenant, tenantErrorResponse } from '@/lib/tenant';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { presentMarketCounty, resolveMarketFips } from '@/lib/geo/market';
+import { dropUnscoredForCounties, ensureCountyPulled, fillListsForCounty } from '@/lib/referral-list/market';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,6 +77,16 @@ export async function PUT(
       where: { clinicLocationId: clinic.id },
       orderBy: [{ state: 'asc' }, { countyName: 'asc' }],
     });
+
+    // The market builds the list: a county added brings its practices (pulling
+    // it first when no one has); a county removed takes its unscored ones.
+    const before = new Set(clinic.marketCounties.map((row) => row.countyFips));
+    const after = new Set(saved.map((row) => row.countyFips));
+    await dropUnscoredForCounties(clinic.id, [...before].filter((fips) => !after.has(fips)));
+    for (const fips of after) {
+      await fillListsForCounty(fips, clinic.id);
+      await ensureCountyPulled(fips);
+    }
 
     return NextResponse.json({
       clinicId: clinic.id,
